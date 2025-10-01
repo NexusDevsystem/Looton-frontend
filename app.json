@@ -1,0 +1,10 @@
+{
+  "expo": {
+    "name": "Looton",
+    "slug": "looton",
+    "scheme": "looton",
+    "plugins": [
+      ["expo-notifications"]
+    ]
+  }
+}
