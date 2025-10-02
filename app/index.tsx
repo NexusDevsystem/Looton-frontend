@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, ActivityIndicator, Image, TouchableOpacity, Dimensions, TextInput, Modal, SafeAreaView, FlatList, Animated } from 'react-native'
+import { View, Text, ScrollView, ActivityIndicator, Image, TouchableOpacity, Dimensions, TextInput, Modal, SafeAreaView, FlatList, Animated, RefreshControl } from 'react-native'
 import { StatusBar } from 'expo-status-bar'
 import { useEffect, useState, useRef } from 'react'
 import { LinearGradient } from 'expo-linear-gradient'
@@ -23,6 +23,8 @@ import { FavoriteButton } from '../src/components/FavoriteButton'
 import { AddToListModal } from '../src/components/AddToListModal'
 import { FilterChips } from '../src/components/FilterChips'
 import { useFilters } from '../src/hooks/useFilters'
+import { SteamGenresPreferencesModal } from '../src/components/SteamGenresPreferencesModal'
+import { fetchCuratedFeed, SteamGenre, UserPreferences } from '../src/services/SteamGenresService'
 
 interface Deal {
   _id: string
@@ -31,37 +33,68 @@ interface Deal {
   priceBase: number
   priceFinal: number
   discountPct: number
+  steamGenres?: Array<{ id: string; name: string }>
   game: {
     title: string
     coverUrl: string
+    genres?: string[]
+    tags?: string[]
   }
   store: {
     name: string
   }
+  score?: number
 }
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000'
+
+
+import Constants from 'expo-constants'
+import { router } from 'expo-router'
+
+const API_URL = (() => {
+  const fromEnv = process.env.EXPO_PUBLIC_API_URL
+  if (fromEnv && !fromEnv.includes('localhost')) return fromEnv
+  try {
+    const hostUri: any = (Constants as any)?.expoConfig?.hostUri
+    if (hostUri) {
+      const host = String(hostUri).split(':')[0]
+      if (host && host !== 'localhost') return `http://${host}:3000`
+    }
+  } catch {}
+  return fromEnv || 'http://localhost:3000'
+})()
 const { width, height } = Dimensions.get('window')
 
 // Small component to render a price using CurrencyContext so it updates reactively
 const PriceText: React.FC<{ value?: number | null; style?: any }> = ({ value, style }) => {
   try {
-    const { formatPrice } = useCurrency() as any
-    const display = value === null || value === undefined || isNaN(value) || value === 0 ? 'Grátis' : formatPrice(value)
-    return <Text style={style}>{display}</Text>
+    const { formatPrice, currency } = useCurrency() as any
+    let display = value === null || value === undefined || isNaN(value) || value === 0 ? 'Grátis' : formatPrice(value)
+
+    // Normalize BRL rendering to avoid edge-cases like "RS2,00" and enforce single space after R$
+    if (display !== 'Grátis' && currency === 'BRL') {
+      // Fix cases where $ became S (uppercase side-effect), and ensure single space after symbol
+      display = String(display)
+        .replace(/^RS/, 'R$')
+        .replace(/^R\$\s*/, 'R$ ')
+    }
+
+    return <Text style={[style, { textTransform: 'none' }]}>{display}</Text>
   } catch (e) {
     // fallback: use Intl for pt-BR
     try {
-      if (value === null || value === undefined || isNaN(value) || value === 0) return <Text style={style}>Grátis</Text>
+      if (value === null || value === undefined || isNaN(value) || value === 0) return <Text style={[style, { textTransform: 'none' }]}>Grátis</Text>
       const display = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value))
-      return <Text style={style}>{display}</Text>
+      const normalized = String(display).replace(/^R\$\s*/, 'R$ ')
+      return <Text style={[style, { textTransform: 'none' }]}>{normalized}</Text>
     } catch (e2) {
-      if (value === null || value === undefined || isNaN(value) || value === 0) return <Text style={style}>Grátis</Text>
+      if (value === null || value === undefined || isNaN(value) || value === 0) return <Text style={[style, { textTransform: 'none' }]}>Grátis</Text>
       try {
         const display = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value))
-        return <Text style={style}>{display}</Text>
+        const normalized = String(display).replace(/^R\$\s*/, 'R$ ')
+        return <Text style={[style, { textTransform: 'none' }]}>{normalized}</Text>
       } catch (e3) {
-        return <Text style={style}>{`${Number(value).toFixed(2)} BRL`}</Text>
+        return <Text style={[style, { textTransform: 'none' }]}>{`${Number(value).toFixed(2)} BRL`}</Text>
       }
     }
   }
@@ -71,7 +104,7 @@ export default function Home() {
   const [deals, setDeals] = useState<Deal[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'home' | 'search' | 'favorites' | 'profile' | 'wishlist'>('home')
+  const [activeTab, setActiveTab] = useState<'home' | 'search' | 'favorites' | 'profile' | 'wishlist' | 'hardware'>('home')
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null)
   const [showGameDetails, setShowGameDetails] = useState(false)
@@ -86,8 +119,13 @@ export default function Home() {
   const [searchResults, setSearchResults] = useState<Deal[]>([])
   const [isSearching, setIsSearching] = useState(false)
   const fadeAnim = useRef(new Animated.Value(0)).current
+  const [refreshing, setRefreshing] = useState(false)
   const [showAddToListModal, setShowAddToListModal] = useState(false)
   const [selectedGameForList, setSelectedGameForList] = useState<{id: string, title: string} | null>(null)
+  const [userPreferredSteamGenres, setUserPreferredSteamGenres] = useState<string[]>([])
+  const [showPreferencesModal, setShowPreferencesModal] = useState(false)
+  const [availableSteamGenres, setAvailableSteamGenres] = useState<SteamGenre[]>([])
+  const [loadingGenres, setLoadingGenres] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
   const [showCurrencyModal, setShowCurrencyModal] = useState(false)
   const [showOnboarding, setShowOnboarding] = useState(false)
@@ -135,26 +173,36 @@ export default function Home() {
         const uid = raw ? (JSON.parse(raw)._id || JSON.parse(raw).id || '') : ''
         console.debug('Auth check - loaded userId:', uid)
         if (!uid) {
+          // Mostra login, mas não interrompe o carregamento do feed da Home
           setShowLogin(true)
-          return
+        } else {
+          // persist loaded userId into state
+          setUserId(uid)
         }
-        // persist loaded userId into state
-        setUserId(uid)
 
         // Prefer server-stored onboarding prefs for this user. If server has them, save locally
         const localPrefs = await OnboardingService.loadLocalPrefs()
-        if (!localPrefs) {
+        if (uid && !localPrefs) {
           try {
             const serverPrefs = await OnboardingService.getServerPrefs(uid)
             const sp: any = serverPrefs
             if (sp && ((Array.isArray(sp.favoriteGenres) && sp.favoriteGenres.length > 0) || (sp.genreWeights && Object.keys(sp.genreWeights).length > 0))) {
               await OnboardingService.saveLocalPrefs(sp)
+              // Definir as preferências de gêneros do usuário
+              if (Array.isArray(sp.favoriteGenres)) {
+                setUserPreferredSteamGenres(sp.favoriteGenres)
+              }
             } else {
               setShowSingleOnboarding(true)
             }
           } catch (e) {
             // if server call fails, fall back to showing onboarding
             setShowSingleOnboarding(true)
+          }
+        } else if (localPrefs) {
+          // Se já tem preferências locais, carregá-las
+          if (Array.isArray(localPrefs.favoriteGenres)) {
+            setUserPreferredSteamGenres(localPrefs.favoriteGenres)
           }
         }
       } catch (e) {}
@@ -208,41 +256,239 @@ export default function Home() {
     if (activeTab === 'home') {
       applyFilters()
     }
-  }, [deals, selectedGenres, selectedTags, activeTab])
+  }, [deals, selectedGenres, selectedTags, activeTab, userPreferredSteamGenres])
 
-  // Função para aplicar filtros (filtragem local por enquanto)
+  // Função para organizar jogos com filtro de gênero e destaque da melhor oferta
   const applyFilters = () => {
-    if (!hasActiveFilters()) {
-      setDisplayDeals(deals)
-      return
+    console.log('=== Aplicando Filtros ===');
+    console.log('Total de jogos:', deals.length);
+    console.log('Gêneros preferidos selecionados:', userPreferredSteamGenres);
+    
+    let filteredDeals = deals;
+    
+    // SISTEMA SIMPLIFICADO: Backend já faz boost, aqui só filtros de UI se necessário
+    if (userPreferredSteamGenres && userPreferredSteamGenres.length > 0) {
+      console.log('Gêneros Steam preferidos para filtro de UI:', userPreferredSteamGenres.join(', '));
+      
+      filteredDeals = deals.filter(deal => {
+        const gameGenres = deal.game?.genres || [];
+        const gameTitle = (deal.game?.title || '').toLowerCase();
+        
+        // Debug apenas alguns jogos para não poluir o console
+        if (Math.random() < 0.1) {
+          console.log(`Jogo: ${deal.game?.title}, Gêneros: [${gameGenres.join(', ')}]`);
+        }
+        
+        // Mapeamento expandido de gêneros em português para keywords
+        const genreMapping: Record<string, string[]> = {
+          'Ação': [
+            'action', 'shooter', 'combat', 'fighting', 'fps', 'tps', 'third person shooter', 'first person shooter',
+            'call of duty', 'battlefield', 'counter-strike', 'doom', 'halo', 'gears of war', 'mortal kombat',
+            'tekken', 'street fighter', 'overwatch', 'apex', 'valorant', 'csgo', 'cod', 'pubg', 'fortnite',
+            'gun', 'weapon', 'war', 'battle', 'military', 'zombie', 'survival horror', 'beat em up',
+            'hack and slash', 'stealth', 'ninja', 'assassin', 'metal gear', 'hitman'
+          ],
+          'Aventura': [
+            'adventure', 'exploration', 'story rich', 'narrative', 'puzzle', 'mystery', 'detective',
+            'tomb raider', 'uncharted', 'zelda', 'assassins creed', 'life is strange', 'telltale',
+            'point and click', 'visual novel', 'interactive fiction', 'walking simulator',
+            'open world', 'exploration', 'quest', 'journey', 'discovery', 'treasure', 'indiana jones'
+          ],
+          'Corrida': [
+            'racing', 'driving', 'automobile', 'motorcycle', 'car', 'race', 'speed', 'drift', 'rally',
+            'forza', 'need for speed', 'gran turismo', 'f1', 'formula', 'nfs', 'burnout', 'dirt',
+            'wreckfest', 'assetto corsa', 'project cars', 'crew', 'driver', 'midnight club',
+            'track', 'circuit', 'nascar', 'motogp', 'bikes', 'supercars', 'street racing',
+            'arcade racing', 'simulation racing', 'kart', 'go kart', 'mario kart'
+          ],
+          'RPG': [
+            'rpg', 'role-playing', 'jrpg', 'character action', 'leveling', 'stats', 'experience',
+            'witcher', 'elder scrolls', 'fallout', 'final fantasy', 'dragon age', 'mass effect',
+            'divinity', 'baldurs gate', 'pillars of eternity', 'pathfinder', 'cyberpunk',
+            'fantasy', 'medieval', 'magic', 'wizard', 'warrior', 'rogue', 'mage', 'knight',
+            'dungeon', 'dragon', 'sword', 'sorcery', 'turn-based rpg', 'action rpg', 'crpg'
+          ],
+          'Estratégia': [
+            'strategy', 'rts', 'real time strategy', 'turn-based', 'turn based strategy', 'tower defense',
+            '4x', 'grand strategy', 'tactical', 'management', 'base building', 'resource management',
+            'civilization', 'age of empires', 'starcraft', 'command and conquer', 'total war',
+            'cities skylines', 'anno', 'tropico', 'crusader kings', 'europa universalis',
+            'xcom', 'chess', 'board game', 'war game', 'empire', 'conquest'
+          ],
+          'Esportes': [
+            'sports', 'football', 'soccer', 'basketball', 'baseball', 'tennis', 'golf', 'hockey',
+            'fifa', 'nba', '2k', 'madden', 'nhl', 'mlb', 'pes', 'pro evolution soccer',
+            'olympics', 'swimming', 'athletics', 'boxing', 'wrestling', 'ufc', 'mma',
+            'skateboarding', 'snowboarding', 'skiing', 'surfing', 'volleyball', 'american football'
+          ],
+          'Simulação': [
+            'simulation', 'sim', 'simulator', 'life sim', 'farming', 'farm', 'city builder',
+            'cities skylines', 'simcity', 'euro truck', 'american truck', 'flight simulator',
+            'farming simulator', 'construction', 'tycoon', 'business', 'management',
+            'train simulator', 'bus simulator', 'cooking', 'medical', 'surgery simulator',
+            'goat simulator', 'job simulator', 'realistic', 'educational'
+          ],
+          'Indie': [
+            'indie', 'independent', 'pixel art', 'retro', 'artistic', 'experimental', 'creative',
+            'minimalist', 'abstract', 'unique', 'innovative', 'small developer', 'art game',
+            'atmospheric', 'emotional', 'personal', 'stylized', 'hand drawn', '2d', 'pixel'
+          ],
+          'Casual': [
+            'casual', 'family friendly', 'relaxing', 'chill', 'simple', 'easy', 'accessible',
+            'puzzle', 'match 3', 'hidden object', 'time management', 'card game', 'board game',
+            'trivia', 'word game', 'educational', 'kids', 'children', 'all ages', 'cute'
+          ],
+          'Acesso Antecipado': [
+            'early access', 'alpha', 'beta', 'preview', 'development', 'work in progress',
+            'upcoming', 'unreleased', 'in development', 'pre-release'
+          ]
+        };
+
+        const matchesFilter = userPreferredSteamGenres.some((selectedGenre: string) => {
+          const keywords = genreMapping[selectedGenre] || [selectedGenre.toLowerCase()];
+          
+          // Debug específico para Corrida
+          if (selectedGenre === 'Corrida') {
+            console.log(`🏎️ Verificando ${deal.game?.title} para Corrida:`);
+            console.log(`   - Gêneros do jogo: [${gameGenres.join(', ')}]`);
+            console.log(`   - Keywords de busca: [${keywords.join(', ')}]`);
+            console.log(`   - Título: ${gameTitle}`);
+          }
+          
+          // Verifica gêneros primeiro com match mais flexível
+          let hasMatch = false;
+          let matchReason = '';
+          
+          if (gameGenres.length > 0) {
+            hasMatch = gameGenres.some(gameGenre => {
+              const gameGenreLower = gameGenre.toLowerCase();
+              const matchFound = keywords.some(keyword => {
+                const keywordLower = keyword.toLowerCase();
+                // Match mais flexível: permite palavras parciais
+                return gameGenreLower.includes(keywordLower) || 
+                       keywordLower.includes(gameGenreLower) ||
+                       gameGenreLower.startsWith(keywordLower.substring(0, 4)) ||
+                       keywordLower.startsWith(gameGenreLower.substring(0, 4));
+              });
+              
+              if (matchFound && selectedGenre === 'Corrida') {
+                const matchedKeyword = keywords.find(k => {
+                  const kLower = k.toLowerCase();
+                  return gameGenreLower.includes(kLower) || kLower.includes(gameGenreLower) ||
+                         gameGenreLower.startsWith(kLower.substring(0, 4)) || kLower.startsWith(gameGenreLower.substring(0, 4));
+                });
+                console.log(`   ✅ Match no gênero: "${gameGenre}" ↔ "${matchedKeyword}"`);
+                matchReason = `gênero: ${gameGenre}`;
+              }
+              
+              return matchFound;
+            });
+          }
+          
+          // Verifica no título com match flexível
+          if (!hasMatch) {
+            hasMatch = keywords.some(keyword => {
+              const keywordLower = keyword.toLowerCase();
+              // Match no título com diferentes estratégias
+              const titleMatch = gameTitle.includes(keywordLower) ||
+                               keywordLower.includes(gameTitle.split(' ')[0]) ||
+                               gameTitle.split(' ').some(word => word.length > 3 && keywordLower.includes(word));
+              
+              if (titleMatch && selectedGenre === 'Corrida') {
+                console.log(`   ✅ Match no título: "${gameTitle}" ↔ "${keyword}"`);
+                matchReason = `título: ${keyword}`;
+              }
+              return titleMatch;
+            });
+          }
+          
+          if (hasMatch) {
+            console.log(`✅ ${deal.game?.title} PASSA no filtro (${selectedGenre})`);
+          }
+          
+          return hasMatch;
+        });
+        
+        return matchesFilter;
+      });
+      
+      console.log(`Filtrados por gênero: ${deals.length} -> ${filteredDeals.length} jogos`);
+      
+      // Sistema de fallback: se encontrou poucos jogos, expandir criterios
+      if (filteredDeals.length < 10) {
+        console.log(`⚠️ Poucos jogos encontrados (${filteredDeals.length}), aplicando fallback...`);
+        
+        const fallbackDeals = deals.filter(deal => {
+          const gameTitle = (deal.game?.title || '').toLowerCase();
+          const gameGenres = deal.game?.genres || [];
+          
+          // Já incluído no filtro principal
+          if (filteredDeals.some(fd => fd._id === deal._id)) return false;
+          
+          // Fallback com keywords mais gerais para cada gênero
+          const fallbackKeywords: Record<string, string[]> = {
+            'Ação': ['action', 'combat', 'fight', 'war', 'gun', 'battle'],
+            'Aventura': ['adventure', 'story', 'quest', 'explore'],
+            'Corrida': ['car', 'drive', 'speed', 'race', 'motor', 'vehicle'],
+            'RPG': ['rpg', 'role', 'fantasy', 'magic', 'level'],
+            'Estratégia': ['strategy', 'tactical', 'management', 'build'],
+            'Esportes': ['sport', 'football', 'soccer', 'basket'],
+            'Simulação': ['sim', 'simulator', 'real', 'life'],
+            'Indie': ['indie', 'pixel', 'art', 'small'],
+            'Casual': ['casual', 'puzzle', 'simple', 'easy'],
+            'Acesso Antecipado': ['early', 'alpha', 'beta', 'preview']
+          };
+          
+          return userPreferredSteamGenres.some((selectedGenre: string) => {
+            const fallbackKeys = fallbackKeywords[selectedGenre] || [];
+            return fallbackKeys.some(keyword => 
+              gameTitle.includes(keyword) || 
+              gameGenres.some(genre => genre.toLowerCase().includes(keyword))
+            );
+          });
+        });
+        
+        // Adiciona os jogos do fallback
+        filteredDeals = [...filteredDeals, ...fallbackDeals.slice(0, 15)];
+        console.log(`Fallback adicionou ${fallbackDeals.length} jogos. Total: ${filteredDeals.length}`);
+      }
+      
+      // Debug especial se ainda há poucos jogos
+      if (userPreferredSteamGenres.includes('Corrida') && filteredDeals.length < 5) {
+        console.log('🚨 AINDA POUCOS JOGOS DE CORRIDA! Verificando primeiros 10 jogos:');
+        deals.slice(0, 10).forEach(deal => {
+          console.log(`   - ${deal.game?.title}: gêneros [${deal.game?.genres?.join(', ') || 'nenhum'}]`);
+        });
+      }
+    } else {
+      console.log('Nenhum gênero selecionado, mostrando todos os jogos');
     }
     
-    // Filtrar localmente por enquanto - pode ser melhorado com API depois
-    const filtered = deals.filter(deal => {
-      // Por enquanto, filtros simples baseados no título
-      const title = deal.game?.title?.toLowerCase() || ''
-      
-      // Filtros de gênero (busca no título por palavras-chave)
-      const genreMatch = selectedGenres.length === 0 || selectedGenres.some(genre => {
-        const keywords = {
-          'RPG': ['rpg', 'role', 'adventure'],
-          'Ação': ['action', 'combat', 'fight', 'war'],
-          'Aventura': ['adventure', 'quest', 'journey'],
-          'Estratégia': ['strategy', 'tactical', 'empire'],
-          'Simulação': ['simulator', 'farming', 'city', 'tycoon'],
-          'Esportes': ['sport', 'football', 'soccer', 'racing'],
-          'FPS': ['shooter', 'fps', 'gun'],
-          'Puzzle': ['puzzle', 'brain', 'logic'],
-          'Indie': ['indie', 'pixel']
-        }[genre] || [genre.toLowerCase()]
-        
-        return keywords.some(keyword => title.includes(keyword))
-      })
-      
-      return genreMatch
-    })
+    // Processar ofertas com destaque
+    const processedDeals = filteredDeals.map(deal => {
+      return {
+        ...deal,
+        isBestDeal: deal.discountPct >= 50, // Marcar como melhor oferta se desconto >= 50%
+        highlightColor: deal.discountPct >= 70 ? '#FFD700' : deal.discountPct >= 50 ? '#ff8800' : null
+      };
+    });
     
-    setDisplayDeals(filtered)
+    // Ordenar para colocar as melhores ofertas primeiro (maior desconto)
+    const sortedDeals = processedDeals.sort((a, b) => {
+      // Primeiro, ordenar por maior desconto
+      if (a.discountPct !== b.discountPct) {
+        return b.discountPct - a.discountPct; // Maior desconto primeiro
+      }
+      
+      // Se empate no desconto, ordenar por menor preço
+      return a.priceFinal - b.priceFinal;
+    });
+    
+    console.log('Jogos finais após processamento:', sortedDeals.length);
+    console.log('Melhores ofertas encontradas (>=50%):', sortedDeals.filter(d => d.isBestDeal).length);
+    console.log('Super ofertas encontradas (>=70%):', sortedDeals.filter(d => d.discountPct >= 70).length);
+    
+    setDisplayDeals(sortedDeals);
   }
 
   useEffect(() => {
@@ -264,20 +510,13 @@ export default function Home() {
       return
     }
 
-    setIsSearching(true)
-    
     try {
+      setIsSearching(true)
       console.log('Buscando jogos na Steam:', query)
-  // Use aggregated /search endpoint (returns normalized offers and enriched prices)
-  const response = await fetch(`${API_URL}/search?q=${encodeURIComponent(query)}&stores=steam&limit=20`)
-      
-      if (!response.ok) {
-        throw new Error(`Erro ${response.status}: ${response.statusText}`)
-      }
-      
-      const data = await response.json()
-      // Prefer using aggregated /search endpoint (returns normalized OfferDTO[])
-      console.log('Resultados da busca raw:', data)
+
+      const resp = await fetch(`${API_URL}/search?q=${encodeURIComponent(query)}&limit=50`)
+      if (!resp.ok) throw new Error(`Erro ${resp.status}: ${resp.statusText}`)
+      const data = await resp.json()
 
       // If backend returned an array (adapter-level /search), use it directly
       let sourceArray: any[] = []
@@ -288,46 +527,44 @@ export default function Home() {
       }
 
       // Mapeia para o formato esperado
-  const mappedResults = sourceArray.map((item: any, index: number) => {
+      const mappedResults = sourceArray.map((item: any, index: number) => {
         // Parse dos preços vindos como strings da busca
         const parsePriceString = (priceStr: string): number => {
-          if (!priceStr || priceStr === 'Grátis' || priceStr === 'N/A') return 0;
-          // Remove R$, espaços e vírgulas, depois substitui vírgula decimal por ponto
-          const cleaned = priceStr.replace(/[R$\s]/g, '');
-          // Se tem vírgula como separador decimal (ex: "74,97")
+          if (!priceStr || priceStr === 'Grátis' || priceStr === 'N/A') return 0
+          const cleaned = priceStr.replace(/[R$\s]/g, '')
           if (cleaned.indexOf(',') > cleaned.indexOf('.') || (cleaned.indexOf(',') !== -1 && cleaned.indexOf('.') === -1)) {
-            return parseFloat(cleaned.replace(',', '.')) || 0;
+            return parseFloat(cleaned.replace(',', '.')) || 0
           }
-          return parseFloat(cleaned) || 0;
-        };
+          return parseFloat(cleaned) || 0
+        }
 
         // If item already has numeric priceFinal (from /search), prefer it
-        const priceFinal = typeof item.priceFinal === 'number' ? item.priceFinal : parsePriceString(item.price || item.formattedPrice || '');
-        const priceBase = typeof item.priceBase === 'number' ? item.priceBase : (item.originalPrice === item.price ? 0 : parsePriceString(item.originalPrice || ''));
+        const priceFinal = typeof item.priceFinal === 'number' ? item.priceFinal : parsePriceString(item.price || item.formattedPrice || '')
+        const priceBase = typeof item.priceBase === 'number' ? item.priceBase : (item.originalPrice === item.price ? 0 : parsePriceString(item.originalPrice || ''))
 
         // Normalize appId field (some adapters use storeAppId)
-        const appIdVal = item.appId || item.storeAppId || item.appid || item.app_id || null;
-        const urlVal = item.url || (appIdVal ? `https://store.steampowered.com/app/${appIdVal}` : '');
+        const appIdVal = item.appId || item.storeAppId || item.appid || item.app_id || null
+        const urlVal = item.url || (appIdVal ? `https://store.steampowered.com/app/${appIdVal}` : '')
 
         // Tenta extrair appId do url se ainda não tivermos um appId
-        let finalAppId: any = appIdVal;
+        let finalAppId: any = appIdVal
         if (!finalAppId && urlVal) {
-          const mUrl = String(urlVal).match(/\/app\/(\d+)/);
-          if (mUrl) finalAppId = mUrl[1];
+          const mUrl = String(urlVal).match(/\/app\/(\d+)/)
+          if (mUrl) finalAppId = mUrl[1]
         }
 
         // fallback: extrai uma sequência de dígitos longa do próprio item se presente
         if (!finalAppId && item._id) {
-          const mId = String(item._id).match(/(\d{4,})/);
-          if (mId) finalAppId = mId[1];
+          const mId = String(item._id).match(/(\d{4,})/)
+          if (mId) finalAppId = mId[1]
         }
 
         // Normalize cover URL and force https quando possível
-        let cover = item.coverUrl || item.imageUrl || item.header_image || null;
+        let cover = item.coverUrl || item.imageUrl || item.header_image || null
         if (cover && typeof cover === 'string') {
-          cover = cover.trim();
-          if (cover.startsWith('//')) cover = `https:${cover}`;
-          if (cover.startsWith('http://')) cover = cover.replace('http://', 'https://');
+          cover = cover.trim()
+          if (cover.startsWith('//')) cover = `https:${cover}`
+          if (cover.startsWith('http://')) cover = cover.replace('http://', 'https://')
         }
 
         return {
@@ -350,11 +587,9 @@ export default function Home() {
           }
         }
       })
-      
-  // Debug: log first mapped results to help diagnose missing coverUrl/appId
-  try { console.debug('Mapped search results (preview):', mappedResults.slice(0, 6)) } catch (e) {}
-  setSearchResults(mappedResults)
-      
+
+      try { console.debug('Mapped search results (preview):', mappedResults.slice(0, 6)) } catch (e) {}
+      setSearchResults(mappedResults)
     } catch (err) {
       console.error('Erro na busca Steam:', err)
       setSearchResults([])
@@ -397,42 +632,83 @@ export default function Home() {
       setLoading(true)
       setError(null)
       
-      console.log('Buscando ofertas da Steam...')
-      const response = await fetch(`${API_URL}/steam/featured`)
+      console.log('Buscando ofertas da automação (curadoria) ...')
       
-      if (!response.ok) {
-        throw new Error(`Erro ${response.status}: ${response.statusText}`)
+      // Curadoria: sem uso de /deals. Apenas resultados do feed automatizado
+      const curated = await fetchCuratedFeed(50)
+      if (!Array.isArray(curated) || curated.length === 0) {
+        console.log('Curated feed veio vazio. Não exibiremos fallback de /deals conforme solicitado.')
+        setDeals([])
+        return
       }
-      
-      const data = await response.json()
-      console.log('Ofertas recebidas:', data.length)
-      
-      // Mapeia para o formato esperado pelo mobile
-      const mappedDeals = data.map((item: any, index: number) => {
-        // A API sempre retorna preços em centavos, então sempre divide por 100
-        const priceBaseCents = item.priceBaseCents || 0
-        const priceFinalCents = item.priceFinalCents || 0
-        
-        // Converte centavos para reais (sempre divide por 100)
-        const priceBase = priceBaseCents / 100
-        const priceFinal = priceFinalCents / 100
-        
+
+      // Mapear itens do curated para o formato Deal
+      const sourceDeals: any[] = curated.map((item: any, index: number) => {
+        const id = item.appId ? `steam-${item.appId}` : `cur-${index}-${Date.now()}`
+        const priceBase = typeof item.priceBase === 'number' ? item.priceBase : (item.priceBaseCents ? item.priceBaseCents / 100 : 0)
+        const priceFinal = typeof item.priceFinal === 'number' ? item.priceFinal : (item.priceFinalCents ? item.priceFinalCents / 100 : 0)
         return {
-          _id: item.appId ? `steam-${item.appId}` : `game-${index}-${Date.now()}`,
+          _id: id,
+          appId: item.appId,
           url: item.url,
           priceBase,
           priceFinal,
-          discountPct: item.discountPct || 0,
+          discountPct: item.discountPct ?? (priceBase > 0 ? Math.round(((priceBase - priceFinal) / priceBase) * 100) : 0),
+          game: {
+            title: item.title,
+            coverUrl: item.coverUrl || (item.appId ? `https://cdn.akamai.steamstatic.com/steam/apps/${item.appId}/header.jpg` : undefined),
+            genres: item.genres || [],
+            tags: []
+          },
+          store: { name: 'Steam' },
+          score: item.score
+        }
+      })
+      
+      // Mapear para formato esperado se vier da nova API
+      const mappedDeals = sourceDeals.map((item: any, index: number) => {
+        // Detect unit: if clearly cents (>= 100 and integer), divide; if small (< 100) assume already in reais
+        const toReais = (v: any) => {
+          if (v === null || v === undefined) return 0
+          const n = Number(v)
+          if (!isFinite(n) || isNaN(n)) return 0
+          return n >= 100 && Number.isInteger(n) ? n / 100 : n
+        }
+
+        // Prices can arrive either in cents (price*Cents) or already in reais (price*)
+        const priceBase = toReais(item.priceBaseCents ?? item.priceBase ?? item.originalPriceCents ?? item.originalPrice ?? 0)
+        const priceFinal = toReais(item.priceFinalCents ?? item.priceFinal ?? item.priceCents ?? item.price ?? 0)
+
+        // Robust title/cover extraction: prefer nested game fields from backend shape
+        const title = (item.game?.title || item.title || 'Jogo sem título')
+        const cover = (item.game?.coverUrl || item.coverUrl || item.header_image || null)
+
+        // Ensure discountPct consistency if backend didn't provide
+        const discountPct = typeof item.discountPct === 'number' && isFinite(item.discountPct)
+          ? item.discountPct
+          : (priceBase > 0 ? Math.round(((priceBase - priceFinal) / priceBase) * 100) : 0)
+
+        // Build id preferring appId when present
+        const id = item._id || (item.appId ? `steam-${item.appId}` : `game-${index}-${Date.now()}`)
+
+        return {
+          _id: id,
+          url: item.url,
+          priceBase,
+          priceFinal,
+          discountPct,
           // keep numeric prices and let the UI format according to selected currency
           formattedPrice: priceFinal === 0 ? 'GRÁTIS' : undefined,
           originalFormattedPrice: priceBase > 0 && priceBase !== priceFinal ? undefined : null,
           appId: item.appId,
           game: {
-            title: item.title || 'Jogo sem título',
-            coverUrl: item.coverUrl || null  // Usa coverUrl do backend
+            title,
+            coverUrl: cover,
+            genres: item.game?.genres || item.genres || [],
+            tags: item.game?.tags || item.tags || []
           },
           store: {
-            name: 'Steam'
+            name: item.store?.name || 'Steam'
           }
         }
       })
@@ -442,8 +718,38 @@ export default function Home() {
         index === self.findIndex((d: any) => d._id === deal._id)
       )
       
+      // Garantir placeholders mínimos para UI
+      uniqueDeals.forEach((d: any) => {
+        if (!d.game?.title) d.game.title = 'Jogo sem título'
+        if (!d.game?.coverUrl || typeof d.game.coverUrl !== 'string' || d.game.coverUrl.trim() === '') {
+          // Try to build a Steam header image if appId is present; otherwise leave null
+          if (d.appId) d.game.coverUrl = `https://cdn.akamai.steamstatic.com/steam/apps/${d.appId}/header.jpg`
+        }
+      })
+
       // Ordena por melhor desconto (base)
       const sortedDeals = uniqueDeals.sort((a: Deal, b: Deal) => b.discountPct - a.discountPct)
+      
+      // Coletar todos os gêneros únicos para atualizar as opções do modal
+      const allGenres = new Set<string>();
+      sortedDeals.forEach((deal: Deal) => {
+        if (deal.game?.genres) {
+          deal.game.genres.forEach((genre: string) => allGenres.add(genre));
+        }
+      });
+      const sortedGenres = Array.from(allGenres).sort();
+      console.log('=== DEBUG GÊNEROS ===');
+      console.log('Total de gêneros únicos coletados:', sortedGenres.length);
+      console.log('Gêneros únicos coletados:', sortedGenres);
+      
+      // Só atualiza se realmente encontrou gêneros, senão mantém o fallback
+      if (sortedGenres.length > 0) {
+        console.log('Setando gêneros coletados da API...');
+        // Nota: setAvailableGenresFromGames removido - usando availableSteamGenres agora
+        console.log('Gêneros disponíveis:', sortedGenres.slice(0, 10));
+      } else {
+        console.log('Nenhum gênero coletado da API, mantendo fallback...');
+      }
 
       // Attempt to apply personalization based on onboarding prefs (favoriteGenres / genreWeights)
       ;(async () => {
@@ -511,6 +817,16 @@ export default function Home() {
       setDeals([])
     } finally {
       setLoading(false)
+    }
+  }
+
+  // Pull-to-refresh handler for Home
+  const onRefresh = async () => {
+    try {
+      setRefreshing(true)
+      await fetchDeals()
+    } finally {
+      setRefreshing(false)
     }
   }
 
@@ -652,19 +968,22 @@ export default function Home() {
           </Text>
         </View>
 
-        {/* Dev: quick set userId to test wishlist sync */}
-        <View style={{ padding: 8, alignItems: 'flex-end' }}>
-          <TouchableOpacity
-            onPress={() => {
-                  setUserId('64a7f6b2c2f1a5d8b3e7c9a1')
-                  // re-open onboarding for testing
-                  setShowSingleOnboarding(true)
-            }}
-            style={{ backgroundColor: '#111827', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}
-          >
-            <Text style={{ color: '#9CA3AF', fontSize: 12 }}>Dev: Set test user</Text>
-          </TouchableOpacity>
-        </View>
+        {/* Ícone de configurações */}
+        <TouchableOpacity
+          onPress={() => setShowPreferencesModal(true)}
+          style={{ 
+            backgroundColor: '#374151', 
+            padding: 12, 
+            borderRadius: 12,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.3,
+            shadowRadius: 4,
+            elevation: 4
+          }}
+        >
+          <Ionicons name="settings" size={24} color="#E5E7EB" />
+        </TouchableOpacity>
 
       </View>
     </View>
@@ -672,9 +991,10 @@ export default function Home() {
 
 
 
-  const renderGameCard = ({ item: deal }: { item: Deal }) => {
-    const bestDeal = getBestDeal()
-    const isBestDeal = bestDeal && bestDeal.game?.title === deal.game?.title
+  const renderGameCard = ({ item: deal }: { item: Deal & { isBestDeal?: boolean, highlightColor?: string } }) => {
+    const isHighlighted = deal.discountPct >= 50;
+    const isSuperDeal = deal.discountPct >= 70;
+    const highlightColor = deal.highlightColor || (isSuperDeal ? '#FFD700' : isHighlighted ? '#ff8800' : '#FFD700');
     
     return (
       <TouchableOpacity
@@ -685,27 +1005,27 @@ export default function Home() {
           borderRadius: 16,
           marginBottom: 16,
           overflow: 'hidden',
-          shadowColor: isBestDeal ? '#FFD700' : '#000',
-          shadowOffset: { width: 0, height: isBestDeal ? 0 : 4 },
-          shadowOpacity: isBestDeal ? 0.8 : 0.3,
-          shadowRadius: isBestDeal ? 12 : 8,
-          elevation: isBestDeal ? 16 : 8,
-          borderWidth: isBestDeal ? 2 : 0,
-          borderColor: isBestDeal ? '#FFD700' : 'transparent'
+          shadowColor: isHighlighted ? highlightColor : '#000',
+          shadowOffset: { width: 0, height: isHighlighted ? 0 : 4 },
+          shadowOpacity: isHighlighted ? 0.8 : 0.3,
+          shadowRadius: isHighlighted ? 12 : 8,
+          elevation: isHighlighted ? 16 : 8,
+          borderWidth: isHighlighted ? 2 : 0,
+          borderColor: isHighlighted ? highlightColor : 'transparent'
         }}
       >
-  {isBestDeal && (
+  {isHighlighted && (
         <View style={{ position: 'absolute', top: 10, right: 10, zIndex: 20, alignItems: 'center' }}>
           <View
             accessible
-            accessibilityLabel="Oferta do Dia"
+            accessibilityLabel={isSuperDeal ? "Super Oferta!" : "Ótima Oferta!"}
             style={{
               backgroundColor: '#111827',
               padding: 6,
               borderRadius: 20,
               borderWidth: 1,
-              borderColor: '#FFD700',
-              shadowColor: '#FFD700',
+              borderColor: highlightColor,
+              shadowColor: highlightColor,
               shadowOffset: { width: 0, height: 2 },
               shadowOpacity: 0.6,
               shadowRadius: 6,
@@ -714,9 +1034,11 @@ export default function Home() {
               justifyContent: 'center'
             }}
           >
-            <Ionicons name="star" size={20} color="#FFD700" />
+            <Ionicons name={isSuperDeal ? "flash" : "star"} size={20} color={highlightColor} />
           </View>
-          <Text style={{ color: '#FFD700', fontSize: 11, marginTop: 6, fontWeight: '600' }}>Oferta do Dia</Text>
+          <Text style={{ color: highlightColor, fontSize: 11, marginTop: 6, fontWeight: '600' }}>
+            {isSuperDeal ? "Super Oferta!" : "Ótima Oferta!"}
+          </Text>
         </View>
       )}
       {/* Removido: botões de favorito e adicionar à lista foram movidos para o botão 'Desejar' no modal */}
@@ -946,11 +1268,12 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
       elevation: 12
     }}>
       {[
-  { key: 'home', icon: 'home', label: 'Início' },
-  { key: 'search', icon: 'search', label: 'Buscar' },
-  { key: 'favorites', icon: 'heart', label: 'Desejos' },
-  { key: 'profile', icon: 'person', label: 'Perfil' }
-      ].map((tab) => (
+        { key: 'home', icon: 'home', label: 'Início' },
+        { key: 'hardware', icon: 'cube', label: 'Hardware' },
+        { key: 'search', icon: 'search', label: 'Buscar' },
+        { key: 'favorites', icon: 'heart', label: 'Desejos' },
+        { key: 'profile', icon: 'person', label: 'Perfil' }
+      ].map((tab: { key: string; icon: string; label: string }) => (
         <TouchableOpacity
           key={tab.key}
           onPress={() => setActiveTab(tab.key as any)}
@@ -961,7 +1284,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
           }}
         >
           <Ionicons 
-            name={activeTab === tab.key ? tab.icon as any : `${tab.icon}-outline` as any} 
+            name={activeTab === tab.key ? (tab.icon as any) : (`${tab.icon}-outline` as any)} 
             size={24} 
             color={activeTab === tab.key ? '#3B82F6' : '#9CA3AF'} 
           />
@@ -995,6 +1318,14 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
             <ScrollView 
               style={{ flex: 1 }}
               showsVerticalScrollIndicator={false}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={onRefresh}
+                  tintColor="#3B82F6"
+                  colors={["#3B82F6"]}
+                />
+              }
             >
               {loading && (
                 <View style={{ padding: 50, alignItems: 'center' }}>
@@ -1233,6 +1564,18 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
           <FavoritesAndLists />
         )}
 
+        {activeTab === 'hardware' && (
+          // Embed hardware screen content to keep it as a regular tab
+          <View style={{ flex: 1, paddingTop: 60 }}>
+            {/* The inner component brings its own header and list */}
+            {(() => {
+              const { HardwareInner } = require('./hardware')
+              const Comp = HardwareInner
+              return <Comp />
+            })()}
+          </View>
+        )}
+
         {activeTab === 'profile' && (
           <ScrollView style={{ flex: 1, paddingTop: 60 }}>
             <View style={{ paddingHorizontal: 20 }}>
@@ -1383,17 +1726,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                 })}
               </View>
 
-              {/* Editar preferências (onboarding) */}
-              <TouchableOpacity onPress={async () => {
-                try {
-                  const prefs = await OnboardingService.getServerPrefs(userId)
-                  if (prefs) await OnboardingService.saveLocalPrefs(prefs)
-                } catch (e) { /* ignore */ }
-                setShowOnboarding(true)
-              }} style={{ backgroundColor: '#111827', padding: 16, borderRadius: 12, alignItems: 'center' }}>
-                <Text style={{ color: '#E5E7EB', fontSize: 16, fontWeight: '700' }}>Editar Preferências</Text>
-                <Text style={{ color: '#9CA3AF', fontSize: 12 }}>Re-executar onboarding / editar gêneros</Text>
-              </TouchableOpacity>
+
 
               {/* Sobre o App */}
               <View style={{
@@ -1589,6 +1922,43 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
           </View>
         </SafeAreaView>
       </Modal>
+
+      {/* Modal de Preferências - Steam Genres */}
+      <SteamGenresPreferencesModal
+        visible={showPreferencesModal}
+        onClose={() => setShowPreferencesModal(false)}
+        currentPreferences={userPreferredSteamGenres}
+        onSave={async (selectedGenreIds: string[]) => {
+          try {
+            console.log('=== SALVANDO PREFERÊNCIAS STEAM ===')
+            console.log('Gêneros selecionados:', selectedGenreIds)
+            
+            // Atualizar estado local
+            setUserPreferredSteamGenres(selectedGenreIds)
+            
+            // Salvar localmente como fallback
+            const preferences = {
+              preferredSteamGenreIds: selectedGenreIds,
+              favoriteGenres: selectedGenreIds, // compatibilidade com sistema antigo
+              minDiscount: 0,
+              stores: []
+            }
+            
+            // Salvar localmente (usar método disponível)
+            await OnboardingService.saveLocalPrefs(preferences)
+            
+            // Recarregar deals com novo boost
+            await fetchDeals()
+            
+            setShowPreferencesModal(false)
+            showToast('Preferências salvas! 🎮')
+            
+          } catch (error) {
+            console.error('Erro ao salvar preferências:', error)
+            showToast('Erro ao salvar preferências')
+          }
+        }}
+      />
       </View>
     </CurrencyProvider>
   )

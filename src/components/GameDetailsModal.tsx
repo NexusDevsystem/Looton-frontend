@@ -330,6 +330,46 @@ export const GameDetailsModal: React.FC<GameDetailsProps> = ({
   const renderSystemRequirements = (requirements?: { minimum: string; recommended?: string }) => {
     if (!requirements) return null;
 
+    const toList = (raw?: string): string[] => {
+      if (!raw || typeof raw !== 'string') return []
+      let s = raw
+        // keep line breaks before stripping tags
+        .replace(/<br\s*\/?\s*>/gi, '\n')
+        .replace(/<\/?li\s*>/gi, '\n')
+        .replace(/<\/?p\s*>/gi, '\n')
+        .replace(/&quot;/g, '"')
+      // strip remaining tags
+      s = s.replace(/<[^>]*>/g, '')
+      // insert breaks before common labels (pt/en)
+      s = s.replace(/\s*(M[íi]nimos?:)/gi, '\n$1 ')
+           .replace(/\s*(Recomendados?:)/gi, '\n$1 ')
+           .replace(/\s*(Sistema Operativo:|Sistema operacional:|OS:|Processor:|Processador:|CPU:|Mem[óo]ria:|Memory:|RAM:|Gr[áa]ficos?:|Placa (de )?v[íi]deo:|Graphics?:|GPU:|DirectX:|Rede:|Network:|Armazenamento:|Espa[çc]o (no )?disco:|Storage:|Som:|Sound:|Notas adicionais:|Additional Notes:|Vers[ãa]o:|Version:)/gi, '\n$1 ')
+      // normalize whitespace
+      s = s.replace(/\r?\n+/g, '\n').replace(/\s{2,}/g, ' ').trim()
+      // split into lines
+      const lines = s.split('\n')
+        .map(l => l.trim())
+        .filter(l => l && l.length > 2)
+
+      // remove headers like "Mínimos:" or "Recomendados:" as items
+      const cleaned = lines.map(l => l.replace(/^(M[íi]nimos?|Recomendados?):\s*/i, ''))
+      return cleaned
+    }
+
+    const minItems = toList(requirements.minimum)
+    const recItems = toList(requirements.recommended)
+
+    const BulletList = ({ items }: { items: string[] }) => (
+      <View>
+        {items.map((line, idx) => (
+          <View key={idx} style={{ flexDirection: 'row', marginBottom: 6 }}>
+            <Text style={{ color: '#9CA3AF', marginRight: 8 }}>•</Text>
+            <Text style={{ color: '#D1D5DB', fontSize: 14, lineHeight: 20, flex: 1 }}>{line}</Text>
+          </View>
+        ))}
+      </View>
+    )
+
     return (
       <View style={{ marginVertical: 16 }}>
         <Text style={{ color: '#E5E7EB', fontSize: 18, fontWeight: 'bold', marginBottom: 12 }}>
@@ -337,22 +377,22 @@ export const GameDetailsModal: React.FC<GameDetailsProps> = ({
         </Text>
         
         <View style={{ backgroundColor: '#374151', borderRadius: 12, padding: 16 }}>
-          <Text style={{ color: '#F9FAFB', fontSize: 16, fontWeight: '600', marginBottom: 8 }}>
-            Requisitos Mínimos:
-          </Text>
-          <Text style={{ color: '#D1D5DB', fontSize: 14, lineHeight: 20 }}>
-            {requirements.minimum.replace(/<[^>]*>/g, '').replace(/&quot;/g, '"')}
-          </Text>
-          
-          {requirements.recommended && (
-            <>
-              <Text style={{ color: '#F9FAFB', fontSize: 16, fontWeight: '600', marginBottom: 8, marginTop: 16 }}>
+          {minItems.length > 0 && (
+            <View style={{ marginBottom: recItems.length > 0 ? 16 : 0 }}>
+              <Text style={{ color: '#F9FAFB', fontSize: 16, fontWeight: '600', marginBottom: 8 }}>
+                Requisitos Mínimos:
+              </Text>
+              <BulletList items={minItems} />
+            </View>
+          )}
+
+          {recItems.length > 0 && (
+            <View>
+              <Text style={{ color: '#F9FAFB', fontSize: 16, fontWeight: '600', marginBottom: 8 }}>
                 Requisitos Recomendados:
               </Text>
-              <Text style={{ color: '#D1D5DB', fontSize: 14, lineHeight: 20 }}>
-                {requirements.recommended.replace(/<[^>]*>/g, '').replace(/&quot;/g, '"')}
-              </Text>
-            </>
+              <BulletList items={recItems} />
+            </View>
           )}
         </View>
       </View>

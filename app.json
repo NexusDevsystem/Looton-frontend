@@ -3,8 +3,28 @@
     "name": "Looton",
     "slug": "looton",
     "scheme": "looton",
+    "version": "0.1.0",
+    "orientation": "portrait",
     "plugins": [
       ["expo-notifications"]
-    ]
+    ],
+    "android": {
+      "package": "com.nexusdevsystem.looton",
+      "versionCode": 1,
+      "permissions": [
+        "INTERNET",
+        
+        "POST_NOTIFICATIONS"
+      ]
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.nexusdevsystem.looton"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "looton-mobile"
+      }
+    }
   }
 }

@@ -1,6 +1,19 @@
 import * as AuthService from '../services/AuthService'
+import Constants from 'expo-constants'
 
-export const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000'
+// Prefer EXPO_PUBLIC_API_URL when set and not pointing to localhost. Otherwise, try Expo host for device testing.
+export const API_URL = (() => {
+  const fromEnv = process.env.EXPO_PUBLIC_API_URL as string | undefined
+  if (fromEnv && !fromEnv.includes('localhost')) return fromEnv
+  try {
+    const hostUri: any = (Constants as any)?.expoConfig?.hostUri
+    if (hostUri) {
+      const host = String(hostUri).split(':')[0]
+      if (host && host !== 'localhost') return `http://${host}:3000`
+    }
+  } catch {}
+  return fromEnv || 'http://localhost:3000'
+})()
 
 async function buildInit(init?: RequestInit) {
   const token = await AuthService.loadToken?.()
