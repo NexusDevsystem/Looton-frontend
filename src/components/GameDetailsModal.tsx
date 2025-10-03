@@ -17,7 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { WishlistService, WishlistItem } from '../services/WishlistService';
 import { AddToListModal } from './AddToListModal';
-import { PriceAnalysisModal } from './PriceAnalysisModal';
+import PriceAnalysisModal from './PriceAnalysisModal';
 
 const { width, height } = Dimensions.get('window');
 

@@ -3,15 +3,17 @@ import {
   View,
   Text,
   TouchableOpacity,
+  Modal,
+  ScrollView,
   ActivityIndicator,
   StyleSheet
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-// Função helper para formatação segura de moeda
-function formatSafePrice(cents?: number, currency = 'BRL'): string {
-  if (cents == null || !Number.isFinite(cents)) return '—';
-  return (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency });
+interface PriceHistory {
+  date: string;
+  price: number;
+  storeName: string;
 }
 
 interface PriceAnalysisModalProps {
@@ -22,119 +24,261 @@ interface PriceAnalysisModalProps {
   currentPrice?: number;
 }
 
-// 🔥 VERSÃO ULTRA-SIMPLES - SEM MODAL, SEM COMPLEXIDADE
-export function PriceAnalysisModal({ 
-  visible, 
-  onClose, 
-  gameId, 
-  gameTitle, 
-  currentPrice 
-}: PriceAnalysisModalProps) {
-  const [loading, setLoading] = useState(false);
-  const [priceInfo, setPriceInfo] = useState<string>('');
+// Função para formatar preço
+const formatPrice = (cents: number): string => {
+  return (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+};
+
+// Função para formatar data
+const formatDate = (dateString: string): string => {
+  return new Date(dateString).toLocaleDateString('pt-BR');
+};
+
+// Função para gerar dados mock dos últimos 30 dias
+const generateMockPriceHistory = (basePrice: number): PriceHistory[] => {
+  const history: PriceHistory[] = [];
+  const stores = ['Steam', 'Epic Games', 'GOG', 'Microsoft Store'];
+  const today = new Date();
+  
+  for (let i = 29; i >= 0; i--) {
+    const date = new Date(today);
+    date.setDate(date.getDate() - i);
+    
+    // Simula variação de preço de -20% a +15%
+    const variation = (Math.random() - 0.5) * 0.35;
+    const price = Math.round(basePrice * (1 + variation));
+    const store = stores[Math.floor(Math.random() * stores.length)];
+    
+    history.push({
+      date: date.toISOString().split('T')[0],
+      price,
+      storeName: store
+    });
+  }
+  
+  return history.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+};
+
+const PriceAnalysisModal: React.FC<PriceAnalysisModalProps> = ({
+  visible,
+  onClose,
+  gameId,
+  gameTitle,
+  currentPrice = 4999 // valor padrão para teste
+}) => {
+  const [loading, setLoading] = useState(true);
+  const [priceHistory, setPriceHistory] = useState<PriceHistory[]>([]);
 
   useEffect(() => {
-    if (visible && gameId) {
-      loadSimpleHistory();
-    }
-  }, [visible, gameId]);
-
-  const loadSimpleHistory = async () => {
-    setLoading(true);
-    try {
-      // Simulação simples - substituir por API real depois
+    if (visible) {
+      setLoading(true);
+      
+      // Simula carregamento dos dados
       setTimeout(() => {
-        setPriceInfo(`Histórico de preços para ${gameTitle}
-
-Preço atual: ${formatSafePrice(currentPrice)}
-
-Esta é uma versão simplificada.
-Sem crashes, sem complexidade.
-
-📊 Histórico básico disponível
-🔄 Versão completa em breve`);
+        const history = generateMockPriceHistory(currentPrice);
+        setPriceHistory(history);
         setLoading(false);
       }, 1000);
-    } catch (err) {
-      setPriceInfo('Erro ao carregar dados');
-      setLoading(false);
     }
+  }, [visible, currentPrice]);
+
+  const getLowestPrice = () => {
+    if (priceHistory.length === 0) return 0;
+    return Math.min(...priceHistory.map(h => h.price));
+  };
+
+  const getHighestPrice = () => {
+    if (priceHistory.length === 0) return 0;
+    return Math.max(...priceHistory.map(h => h.price));
   };
 
   if (!visible) return null;
 
   return (
-    <View style={styles.simpleContainer}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Histórico de Preços</Text>
-        <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-          <Ionicons name="close" size={24} color="#fff" />
-        </TouchableOpacity>
-      </View>
-      
-      <View style={styles.content}>
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
+      <View style={styles.container}>
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.title}>Histórico de Preços</Text>
+          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+            <Ionicons name="close" size={24} color="#fff" />
+          </TouchableOpacity>
+        </View>
+
+        {/* Game Info */}
+        <View style={styles.gameInfo}>
+          <Text style={styles.gameTitle} numberOfLines={2}>{gameTitle}</Text>
+          <Text style={styles.currentPrice}>
+            Preço Atual: {formatPrice(currentPrice)}
+          </Text>
+        </View>
+
         {loading ? (
-          <View style={styles.loading}>
-            <ActivityIndicator size="large" color="#3B82F6" />
-            <Text style={styles.loadingText}>Carregando...</Text>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#007AFF" />
+            <Text style={styles.loadingText}>Carregando histórico...</Text>
           </View>
         ) : (
-          <Text style={styles.priceText}>{priceInfo}</Text>
+          <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+            {/* Resumo */}
+            <View style={styles.summaryContainer}>
+              <View style={styles.summaryItem}>
+                <Text style={styles.summaryLabel}>Menor Preço (30 dias)</Text>
+                <Text style={styles.summaryValue}>{formatPrice(getLowestPrice())}</Text>
+              </View>
+              <View style={styles.summaryItem}>
+                <Text style={styles.summaryLabel}>Maior Preço (30 dias)</Text>
+                <Text style={styles.summaryValue}>{formatPrice(getHighestPrice())}</Text>
+              </View>
+            </View>
+
+            {/* Lista de Histórico */}
+            <View style={styles.historyContainer}>
+              <Text style={styles.sectionTitle}>Últimos 30 dias</Text>
+              {priceHistory.map((item, index) => (
+                <View key={index} style={styles.historyItem}>
+                  <View style={styles.historyLeft}>
+                    <Text style={styles.historyDate}>{formatDate(item.date)}</Text>
+                    <Text style={styles.historyStore}>{item.storeName}</Text>
+                  </View>
+                  <Text style={[
+                    styles.historyPrice,
+                    item.price === getLowestPrice() && styles.lowestPrice,
+                    item.price === getHighestPrice() && styles.highestPrice
+                  ]}>
+                    {formatPrice(item.price)}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </ScrollView>
         )}
       </View>
-    </View>
+    </Modal>
   );
-}
+};
 
 const styles = StyleSheet.create({
-  simpleContainer: {
-    position: 'absolute',
-    top: 100,
-    left: 20,
-    right: 20,
-    backgroundColor: '#1F2937',
-    borderRadius: 16,
-    maxHeight: 400,
-    elevation: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
+  container: {
+    flex: 1,
+    backgroundColor: '#1a1a1a',
   },
   header: {
-    flexDirection: 'row', 
+    flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
-    backgroundColor: '#374151',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
+    paddingHorizontal: 20,
+    paddingTop: 60,
+    paddingBottom: 20,
+    backgroundColor: '#2a2a2a',
+    borderBottomWidth: 1,
+    borderBottomColor: '#333',
   },
   title: {
-    color: '#fff',
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
+    color: '#fff',
   },
   closeButton: {
-    padding: 4,
+    padding: 8,
   },
-  content: {
+  gameInfo: {
     padding: 20,
-    minHeight: 200,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333',
   },
-  loading: {
-    alignItems: 'center',
+  gameTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#fff',
+    marginBottom: 8,
+  },
+  currentPrice: {
+    fontSize: 16,
+    color: '#007AFF',
+    fontWeight: '500',
+  },
+  loadingContainer: {
+    flex: 1,
     justifyContent: 'center',
-    paddingVertical: 40,
+    alignItems: 'center',
   },
   loadingText: {
-    color: '#9CA3AF',
-    marginTop: 12,
-    fontSize: 14,
-  },
-  priceText: {
-    color: '#E5E7EB',
+    marginTop: 16,
     fontSize: 16,
-    lineHeight: 24,
+    color: '#999',
+  },
+  content: {
+    flex: 1,
+  },
+  summaryContainer: {
+    flexDirection: 'row',
+    padding: 20,
+    justifyContent: 'space-between',
+  },
+  summaryItem: {
+    flex: 1,
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: '#2a2a2a',
+    borderRadius: 8,
+    marginHorizontal: 4,
+  },
+  summaryLabel: {
+    fontSize: 12,
+    color: '#999',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  summaryValue: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  historyContainer: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#fff',
+    marginBottom: 16,
+  },
+  historyItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#2a2a2a',
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  historyLeft: {
+    flex: 1,
+  },
+  historyDate: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#fff',
+  },
+  historyStore: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 2,
+  },
+  historyPrice: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  lowestPrice: {
+    color: '#4CAF50',
+  },
+  highestPrice: {
+    color: '#F44336',
   },
 });
+
+export default PriceAnalysisModal;
