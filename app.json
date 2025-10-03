@@ -18,19 +18,19 @@
     "assetBundlePatterns": [
       "**/*"
     ],
+    "jsEngine": "hermes",
+    "runtimeVersion": {
+      "policy": "sdkVersion"
+    },
     "android": {
       "package": "com.nexusdevsystem.looton",
-      "runtimeVersion": "1.0.0",
       "permissions": [
         "android.permission.RECEIVE_BOOT_COMPLETED",
         "android.permission.WAKE_LOCK"
       ]
     },
     "ios": {
-      "bundleIdentifier": "com.nexusdevsystem.looton",
-      "runtimeVersion": {
-        "policy": "appVersion"
-      }
+      "bundleIdentifier": "com.nexusdevsystem.looton"
     },
     "web": {
       "bundler": "metro",
@@ -61,7 +61,9 @@
     },
     "owner": "nyill",
     "updates": {
-      "enabled": false
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
     }
   }
 }

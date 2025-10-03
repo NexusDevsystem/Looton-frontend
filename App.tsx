@@ -1,6 +1,11 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import Home from './app/index'
+import { checkUpdatesOnce } from './src/utils/updates-manager'
 
 export default function App() {
-  return <Home />
+  useEffect(() => {
+    checkUpdatesOnce(true);
+  }, []);
+
+  return <Home />;
 }

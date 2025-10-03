@@ -300,7 +300,7 @@ export default function Home() {
       setFilteredDeals(deals)
       setSearchResults([])
     } else {
-      const filtered = deals.filter(deal => 
+      const filtered = deals.filter((deal: any) => 
         deal.game?.title?.toLowerCase().includes(searchQuery.toLowerCase())
       )
       setFilteredDeals(filtered)
@@ -648,7 +648,7 @@ export default function Home() {
   }
 
   const getBestDeal = () => {
-    return deals.reduce((best, current) => 
+    return deals.reduce((best: any, current: any) => 
       current.discountPct > best.discountPct ? current : best, deals[0])
   }
 
@@ -847,7 +847,7 @@ const OnboardingModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ 
         )}
         {step === 2 && (
           <OnboardingStep2
-            initial={selected.map(s => ({ genre: s, weight: 1 }))}
+            initial={selected.map((s: string) => ({ genre: s, weight: 1 }))}
             onSubmit={async (weights: { genre: string; weight: number }[]) => {
               // transform to answers shape and POST
               const answers = weights.map((w: { genre: string; weight: number }) => ({ questionId: w.genre, genres: [w.genre], weight: w.weight }))
