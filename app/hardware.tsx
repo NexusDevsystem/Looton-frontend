@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { View, Text, FlatList, RefreshControl, SafeAreaView, TextInput } from 'react-native'
+import { View, Text, FlatList, RefreshControl, SafeAreaView, TextInput, Pressable } from 'react-native'
 import { tokens } from '../src/theme/tokens'
 import { fetchPcDeals, PcOffer } from '../src/services/HardwareService'
 import { PcDealCard } from '../src/components/PcDealCard'
@@ -167,8 +167,36 @@ export function HardwareInner() {
           />
         }
         ListEmptyComponent={!loading ? (
-          <View style={{ padding: 16 }}>
-            <Text style={{ color: tokens.colors.textDim }}>Vitrine vazia. Use a busca acima para encontrar produtos específicos.</Text>
+          <View style={{ padding: 20, alignItems: 'center' }}>
+            <Text style={{ color: tokens.colors.text, fontSize: 16, fontWeight: '600', marginBottom: 8 }}>
+              {debounced ? 'Nenhum produto encontrado' : 'Nenhuma oferta disponível'}
+            </Text>
+            <Text style={{ color: tokens.colors.textDim, textAlign: 'center', lineHeight: 20, marginBottom: 12 }}>
+              {debounced 
+                ? 'Tente buscar por outros termos como "RTX", "GPU", "SSD" ou "memória"'
+                : 'As ofertas de hardware são atualizadas a cada 30 minutos. Puxe para baixo para tentar novamente ou use a busca acima.'
+              }
+            </Text>
+            {!debounced && (
+              <Pressable style={{ 
+                backgroundColor: tokens.colors.chip,
+                paddingHorizontal: 16,
+                paddingVertical: 8,
+                borderRadius: 8
+              }} onPress={() => {
+                setRefreshing(true)
+                loadCurated()
+                setRefreshing(false)
+              }}>
+                <Text style={{ 
+                  color: tokens.colors.primary, 
+                  fontSize: 14, 
+                  textAlign: 'center'
+                }}>
+                  🔄 Atualizar Agora
+                </Text>
+              </Pressable>
+            )}
           </View>
         ) : null}
       />
