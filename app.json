@@ -8,9 +8,9 @@
     "platforms": ["ios", "android"],
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-    "icon": "./assets/icon.png",
+    "icon": "./assets/images/favicon.png",
     "splash": {
-      "image": "./assets/splash.png",
+      "image": "./assets/images/favicon.png",
       "resizeMode": "contain",
       "backgroundColor": "#111827"
     },
@@ -20,7 +20,10 @@
     "android": {
       "package": "com.nexusdevsystem.looton",
       "runtimeVersion": "1.0.0",
-      "permissions": []
+      "permissions": [
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.WAKE_LOCK"
+      ]
     },
     "ios": {
       "bundleIdentifier": "com.nexusdevsystem.looton",
@@ -34,6 +37,7 @@
     },
     "plugins": [
       "expo-router",
+      "expo-notifications",
       [
         "expo-build-properties",
         {
