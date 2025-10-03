@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Looton",
-    "slug": "looton",
+    "slug": "looton-app",
     "version": "0.1.0",
     "orientation": "portrait",
     "scheme": "looton",
@@ -55,12 +55,12 @@
     },
     "extra": {
       "eas": {
-        "projectId": "7692ed00-6149-41bd-9778-6f40d9d69bc5"
+        "projectId": "9f504692-ecb1-4a42-9949-15bd6789b1ec"
       }
     },
     "owner": "nexusdevsystem",
     "updates": {
-      "url": "https://u.expo.dev/7692ed00-6149-41bd-9778-6f40d9d69bc5"
+      "url": "https://u.expo.dev/9f504692-ecb1-4a42-9949-15bd6789b1ec"
     }
   }
 }
