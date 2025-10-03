@@ -37,7 +37,6 @@
       "output": "static"
     },
     "plugins": [
-      "expo-router",
       "expo-notifications",
       [
         "expo-build-properties",

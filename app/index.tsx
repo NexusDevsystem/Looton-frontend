@@ -18,6 +18,8 @@ import { WishlistService } from '../src/services/WishlistService'
 import { WishlistSyncService } from '../src/services/WishlistSyncService'
 import { GameCover } from '../src/components/GameCover'
 import { FavoriteButton } from '../src/components/FavoriteButton'
+import { DonationBanner, DonationModal } from '../src/components/DonationComponents'
+import { useDonationBanner } from '../src/hooks/useDonationBanner'
 import { AddToListModal } from '../src/components/AddToListModal'
 import { FilterChips } from '../src/components/FilterChips'
 import { useFilters } from '../src/hooks/useFilters'
@@ -51,7 +53,6 @@ interface Deal {
 
 
 import Constants from 'expo-constants'
-import { router } from 'expo-router'
 
 const API_URL = (() => {
   const fromEnv = process.env.EXPO_PUBLIC_API_URL
@@ -144,6 +145,9 @@ export default function Home() {
   const searchTimeout = useRef<NodeJS.Timeout | null>(null)
   const searchInputRef = useRef<any | null>(null)
 
+  // Hook de doação
+  const donation = useDonationBanner()
+  
   // Hook de filtros
   const {
     selectedGenres,
@@ -1636,6 +1640,20 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
             showToast('Erro ao salvar preferências')
           }
         }}
+      />
+      
+      {/* Banner de Doação */}
+      {donation.shouldShow && (
+        <DonationBanner
+          onPress={donation.handleDonatePress}
+          onDismiss={donation.handleDismiss}
+        />
+      )}
+      
+      {/* Modal de Doação */}
+      <DonationModal
+        visible={donation.isModalVisible}
+        onClose={donation.handleModalClose}
       />
       
       </View>
