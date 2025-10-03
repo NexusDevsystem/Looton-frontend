@@ -34,13 +34,13 @@ const formatDate = (dateString: string): string => {
   return new Date(dateString).toLocaleDateString('pt-BR');
 };
 
-// Função para gerar dados mock dos últimos 30 dias
+// Função para gerar dados mock dos últimos 15 dias (otimizado para modal menor)
 const generateMockPriceHistory = (basePrice: number): PriceHistory[] => {
   const history: PriceHistory[] = [];
   const stores = ['Steam', 'Epic Games', 'GOG', 'Microsoft Store'];
   const today = new Date();
   
-  for (let i = 29; i >= 0; i--) {
+  for (let i = 14; i >= 0; i--) {
     const date = new Date(today);
     date.setDate(date.getDate() - i);
     
@@ -95,27 +95,28 @@ const PriceAnalysisModal: React.FC<PriceAnalysisModalProps> = ({
   if (!visible) return null;
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
-      <View style={styles.container}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.title}>Histórico de Preços</Text>
-          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <Ionicons name="close" size={24} color="#fff" />
-          </TouchableOpacity>
-        </View>
+    <Modal visible={visible} animationType="fade" transparent={true}>
+      <View style={styles.overlay}>
+        <View style={styles.container}>
+          {/* Header */}
+          <View style={styles.header}>
+            <Text style={styles.title}>Histórico de Preços</Text>
+            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+              <Ionicons name="close" size={20} color="#9CA3AF" />
+            </TouchableOpacity>
+          </View>
 
-        {/* Game Info */}
-        <View style={styles.gameInfo}>
-          <Text style={styles.gameTitle} numberOfLines={2}>{gameTitle}</Text>
-          <Text style={styles.currentPrice}>
-            Preço Atual: {formatPrice(currentPrice)}
-          </Text>
-        </View>
+          {/* Game Info */}
+          <View style={styles.gameInfo}>
+            <Text style={styles.gameTitle} numberOfLines={2}>{gameTitle}</Text>
+            <Text style={styles.currentPrice}>
+              Preço Atual: {formatPrice(currentPrice)}
+            </Text>
+          </View>
 
         {loading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#007AFF" />
+            <ActivityIndicator size="large" color="#3B82F6" />
             <Text style={styles.loadingText}>Carregando histórico...</Text>
           </View>
         ) : (
@@ -123,18 +124,18 @@ const PriceAnalysisModal: React.FC<PriceAnalysisModalProps> = ({
             {/* Resumo */}
             <View style={styles.summaryContainer}>
               <View style={styles.summaryItem}>
-                <Text style={styles.summaryLabel}>Menor Preço (30 dias)</Text>
+                <Text style={styles.summaryLabel}>Menor Preço (15 dias)</Text>
                 <Text style={styles.summaryValue}>{formatPrice(getLowestPrice())}</Text>
               </View>
               <View style={styles.summaryItem}>
-                <Text style={styles.summaryLabel}>Maior Preço (30 dias)</Text>
+                <Text style={styles.summaryLabel}>Maior Preço (15 dias)</Text>
                 <Text style={styles.summaryValue}>{formatPrice(getHighestPrice())}</Text>
               </View>
             </View>
 
             {/* Lista de Histórico */}
             <View style={styles.historyContainer}>
-              <Text style={styles.sectionTitle}>Últimos 30 dias</Text>
+              <Text style={styles.sectionTitle}>Últimos 15 dias</Text>
               {priceHistory.map((item, index) => (
                 <View key={index} style={styles.historyItem}>
                   <View style={styles.historyLeft}>
@@ -153,125 +154,140 @@ const PriceAnalysisModal: React.FC<PriceAnalysisModalProps> = ({
             </View>
           </ScrollView>
         )}
+        </View>
       </View>
     </Modal>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  overlay: {
     flex: 1,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  container: {
+    backgroundColor: '#1F2937',
+    borderRadius: 16,
+    width: '90%',
+    maxWidth: 400,
+    maxHeight: '80%',
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 20,
-    backgroundColor: '#2a2a2a',
+    paddingTop: 20,
+    paddingBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#333',
+    borderBottomColor: '#374151',
   },
   title: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
-  closeButton: {
-    padding: 8,
-  },
-  gameInfo: {
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#333',
-  },
-  gameTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#fff',
-    marginBottom: 8,
+    color: '#F9FAFB',
+  },
+  closeButton: {
+    padding: 4,
+  },
+  gameInfo: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#374151',
+  },
+  gameTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#F9FAFB',
+    marginBottom: 6,
   },
   currentPrice: {
-    fontSize: 16,
-    color: '#007AFF',
+    fontSize: 14,
+    color: '#3B82F6',
     fontWeight: '500',
   },
   loadingContainer: {
-    flex: 1,
+    paddingVertical: 40,
     justifyContent: 'center',
     alignItems: 'center',
   },
   loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: '#999',
+    marginTop: 12,
+    fontSize: 14,
+    color: '#9CA3AF',
   },
   content: {
-    flex: 1,
+    maxHeight: 400,
   },
   summaryContainer: {
     flexDirection: 'row',
-    padding: 20,
+    padding: 16,
     justifyContent: 'space-between',
   },
   summaryItem: {
     flex: 1,
     alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#2a2a2a',
+    padding: 12,
+    backgroundColor: '#374151',
     borderRadius: 8,
     marginHorizontal: 4,
   },
   summaryLabel: {
-    fontSize: 12,
-    color: '#999',
+    fontSize: 11,
+    color: '#9CA3AF',
     textAlign: 'center',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   summaryValue: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: 'bold',
-    color: '#fff',
+    color: '#F9FAFB',
   },
   historyContainer: {
-    paddingHorizontal: 20,
-    paddingBottom: 20,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
-    color: '#fff',
-    marginBottom: 16,
+    color: '#F9FAFB',
+    marginBottom: 12,
   },
   historyItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    backgroundColor: '#2a2a2a',
-    borderRadius: 8,
-    marginBottom: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: '#374151',
+    borderRadius: 6,
+    marginBottom: 6,
   },
   historyLeft: {
     flex: 1,
   },
   historyDate: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '500',
-    color: '#fff',
+    color: '#F9FAFB',
   },
   historyStore: {
-    fontSize: 12,
-    color: '#999',
-    marginTop: 2,
+    fontSize: 11,
+    color: '#9CA3AF',
+    marginTop: 1,
   },
   historyPrice: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: 'bold',
-    color: '#fff',
+    color: '#F9FAFB',
   },
   lowestPrice: {
     color: '#4CAF50',
