@@ -1,6 +1,7 @@
 {
   "cli": {
-    "version": ">= 13.0.0"
+    "version": ">= 13.0.0",
+    "appVersionSource": "remote"
   },
   "build": {
     "production": {
@@ -10,7 +11,7 @@
         "withoutCredentials": false
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://api.seudominio.com" 
+        "EXPO_PUBLIC_API_URL": "https://looton-backend.onrender.com"
       }
     },
     "preview": {
@@ -20,13 +21,27 @@
         "withoutCredentials": true
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://api.seudominio.com" 
+        "EXPO_PUBLIC_API_URL": "https://looton-backend.onrender.com"
       }
     },
     "development": {
       "developmentClient": true,
       "android": {
-        "buildType": "apk"
+        "buildType": "apk",
+        "withoutCredentials": true
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://looton-backend.onrender.com"
+      }
+    },
+    "simple": {
+      "android": {
+        "buildType": "apk",
+        "withoutCredentials": true,
+        "gradleCommand": ":app:assembleDebug"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://looton-backend.onrender.com"
       }
     }
   },

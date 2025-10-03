@@ -1,4 +1,5 @@
 {
+  "extends": "./node_modules/expo/tsconfig.base",
   "compilerOptions": {
     "target": "ES2022",
     "module": "ESNext",
@@ -13,7 +14,8 @@
     "app",
     "src",
     "*.ts",
-    "*.tsx"
-  ],
-  "extends": "expo/tsconfig.base"
+    "*.tsx",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts"
+  ]
 }

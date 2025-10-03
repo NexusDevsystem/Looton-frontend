@@ -1,0 +1,20 @@
+{
+  "expo": {
+    "name": "Looton",
+    "slug": "looton",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "android": {
+      "package": "com.nexusdevsystem.looton"
+    },
+    "ios": {
+      "bundleIdentifier": "com.nexusdevsystem.looton"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "7692ed00-6149-41bd-9778-6f40d9d69bc5"
+      }
+    },
+    "owner": "nexusdevsystem"
+  }
+}

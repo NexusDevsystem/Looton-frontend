@@ -2,29 +2,55 @@
   "expo": {
     "name": "Looton",
     "slug": "looton",
-    "scheme": "looton",
     "version": "0.1.0",
     "orientation": "portrait",
-    "plugins": [
-      ["expo-notifications"]
+    "scheme": "looton",
+    "platforms": ["ios", "android"],
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "assetBundlePatterns": [
+      "**/*"
     ],
     "android": {
       "package": "com.nexusdevsystem.looton",
-      "versionCode": 1,
-      "permissions": [
-        "INTERNET",
-        
-        "POST_NOTIFICATIONS"
-      ]
+      "runtimeVersion": "1.0.0",
+      "permissions": []
     },
     "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.nexusdevsystem.looton"
+      "bundleIdentifier": "com.nexusdevsystem.looton",
+      "runtimeVersion": {
+        "policy": "appVersion"
+      }
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "newArchEnabled": true
+          },
+          "ios": {
+            "newArchEnabled": true
+          }
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
     },
     "extra": {
       "eas": {
-        "projectId": "looton-mobile"
+        "projectId": "7692ed00-6149-41bd-9778-6f40d9d69bc5"
       }
+    },
+    "owner": "nexusdevsystem",
+    "updates": {
+      "url": "https://u.expo.dev/7692ed00-6149-41bd-9778-6f40d9d69bc5"
     }
   }
 }

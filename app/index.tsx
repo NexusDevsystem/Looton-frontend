@@ -15,7 +15,6 @@ import { CurrencyProvider, useCurrency } from '../src/contexts/CurrencyContext'
 import { WishlistTab } from '../src/components/WishlistTab'
 import FavoritesAndLists from './favorites'
 import { WishlistService } from '../src/services/WishlistService'
-import { showToast } from '../src/utils/SimpleToast'
 import { WishlistSyncService } from '../src/services/WishlistSyncService'
 import { GameCover } from '../src/components/GameCover'
 import { useImagePrefetch } from '../src/hooks/useImagePrefetch'
@@ -25,6 +24,7 @@ import { FilterChips } from '../src/components/FilterChips'
 import { useFilters } from '../src/hooks/useFilters'
 import { SteamGenresPreferencesModal } from '../src/components/SteamGenresPreferencesModal'
 import { fetchCuratedFeed, SteamGenre, UserPreferences } from '../src/services/SteamGenresService'
+import { showToast } from '../src/utils/SimpleToast'
 
 interface Deal {
   _id: string
@@ -128,12 +128,6 @@ export default function Home() {
   const [loadingGenres, setLoadingGenres] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
   const [showCurrencyModal, setShowCurrencyModal] = useState(false)
-  const [showOnboarding, setShowOnboarding] = useState(false)
-  const [onboardingStep, setOnboardingStep] = useState(1)
-  const [onboardingSelected, setOnboardingSelected] = useState<string[]>([])
-  const [showLogin, setShowLogin] = useState(false)
-  const [showSingleOnboarding, setShowSingleOnboarding] = useState(false)
-  const [loadingOnboarding, setLoadingOnboarding] = useState(false)
   
   // Mock user ID - em um app real viria do contexto de autenticação
   // Leave empty to treat as unauthenticated in dev by default
@@ -164,77 +158,13 @@ export default function Home() {
   useImagePrefetch(deals.map(deal => ({ coverUrl: deal.game?.coverUrl })))
 
   useEffect(() => {
-    // Check onboarding prefs and authentication first. If the user isn't logged in,
-    // show the login screen and avoid firing fetches that assume a valid API connection.
-    ;(async () => {
-      try {
-        // If user hasn't logged in before, show login first
-        const raw = await AuthService.loadUser()
-        const uid = raw ? (JSON.parse(raw)._id || JSON.parse(raw).id || '') : ''
-        console.debug('Auth check - loaded userId:', uid)
-        if (!uid) {
-          // Mostra login, mas não interrompe o carregamento do feed da Home
-          setShowLogin(true)
-        } else {
-          // persist loaded userId into state
-          setUserId(uid)
-        }
-
-        // Prefer server-stored onboarding prefs for this user. If server has them, save locally
-        const localPrefs = await OnboardingService.loadLocalPrefs()
-        if (uid && !localPrefs) {
-          try {
-            const serverPrefs = await OnboardingService.getServerPrefs(uid)
-            const sp: any = serverPrefs
-            if (sp && ((Array.isArray(sp.favoriteGenres) && sp.favoriteGenres.length > 0) || (sp.genreWeights && Object.keys(sp.genreWeights).length > 0))) {
-              await OnboardingService.saveLocalPrefs(sp)
-              // Definir as preferências de gêneros do usuário
-              if (Array.isArray(sp.favoriteGenres)) {
-                setUserPreferredSteamGenres(sp.favoriteGenres)
-              }
-            } else {
-              setShowSingleOnboarding(true)
-            }
-          } catch (e) {
-            // if server call fails, fall back to showing onboarding
-            setShowSingleOnboarding(true)
-          }
-        } else if (localPrefs) {
-          // Se já tem preferências locais, carregá-las
-          if (Array.isArray(localPrefs.favoriteGenres)) {
-            setUserPreferredSteamGenres(localPrefs.favoriteGenres)
-          }
-        }
-      } catch (e) {}
-
-      // After auth check, perform normal initial loads
-      fetchDeals()
-      loadWishlistCount()
-      loadWishlistGames()
-    })()
-
-    // If in dev we can auto-sync local wishlist after a short delay when a userId is set
-    // (This is just a convenience hook for testing; replace with proper login flow in production.)
-    let mounted = true
-    const trySync = async () => {
-      if (!mounted) return
-      if (userId) {
-        try {
-          const res = await WishlistSyncService.syncToServer(userId)
-          // refresh local counters and lists
-          await loadWishlistCount()
-          await loadWishlistGames()
-          // small toast feedback
-          try { showToast(`Wishlist sincronizada: ${res.synced} items`) } catch(e) {}
-        } catch (err: any) {
-          console.warn('Wishlist sync failed:', err)
-          try { showToast('Erro ao sincronizar wishlist') } catch(e) {}
-        }
-      }
-    }
-
-    // run once on mount (user likely empty) and then whenever userId changes
-    trySync()
+    // Iniciar o app diretamente sem onboarding ou login
+    console.log('🚀 Iniciando app diretamente...')
+    
+    // Carregar dados básicos
+    fetchDeals()
+    loadWishlistCount()
+    loadWishlistGames()
     
     // Animação de entrada
     Animated.parallel([
@@ -632,89 +562,72 @@ export default function Home() {
       setLoading(true)
       setError(null)
       
-      console.log('Buscando ofertas da automação (curadoria) ...')
+      console.log('🚀 Iniciando busca de ofertas...')
+      console.log('📡 API_URL:', API_URL)
+      console.log('🔗 Fazendo requisição para:', `${API_URL}/deals?limit=50`)
       
-      // Curadoria: sem uso de /deals. Apenas resultados do feed automatizado
-      const curated = await fetchCuratedFeed(50)
-      if (!Array.isArray(curated) || curated.length === 0) {
-        console.log('Curated feed veio vazio. Não exibiremos fallback de /deals conforme solicitado.')
-        setDeals([])
-        return
-      }
-
-      // Mapear itens do curated para o formato Deal
-      const sourceDeals: any[] = curated.map((item: any, index: number) => {
-        const id = item.appId ? `steam-${item.appId}` : `cur-${index}-${Date.now()}`
-        const priceBase = typeof item.priceBase === 'number' ? item.priceBase : (item.priceBaseCents ? item.priceBaseCents / 100 : 0)
-        const priceFinal = typeof item.priceFinal === 'number' ? item.priceFinal : (item.priceFinalCents ? item.priceFinalCents / 100 : 0)
-        return {
-          _id: id,
-          appId: item.appId,
-          url: item.url,
-          priceBase,
-          priceFinal,
-          discountPct: item.discountPct ?? (priceBase > 0 ? Math.round(((priceBase - priceFinal) / priceBase) * 100) : 0),
-          game: {
-            title: item.title,
-            coverUrl: item.coverUrl || (item.appId ? `https://cdn.akamai.steamstatic.com/steam/apps/${item.appId}/header.jpg` : undefined),
-            genres: item.genres || [],
-            tags: []
-          },
-          store: { name: 'Steam' },
-          score: item.score
+      // Timeout personalizado para debug
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => {
+        controller.abort()
+        console.log('⏰ Timeout da requisição (15s)')
+      }, 15000)
+      
+      // Usar diretamente a rota /deals que sabemos que funciona
+      const response = await fetch(`${API_URL}/deals?limit=50`, {
+        signal: controller.signal,
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
         }
       })
       
-      // Mapear para formato esperado se vier da nova API
-      const mappedDeals = sourceDeals.map((item: any, index: number) => {
-        // Detect unit: if clearly cents (>= 100 and integer), divide; if small (< 100) assume already in reais
-        const toReais = (v: any) => {
-          if (v === null || v === undefined) return 0
-          const n = Number(v)
-          if (!isFinite(n) || isNaN(n)) return 0
-          return n >= 100 && Number.isInteger(n) ? n / 100 : n
-        }
+      clearTimeout(timeoutId)
+      
+      console.log('📥 Resposta recebida:', response.status, response.statusText)
+      
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error(`❌ Erro na resposta: ${response.status} - ${errorText}`)
+        throw new Error(`Erro ${response.status}: ${response.statusText}`)
+      }
+      
+      const curated = await response.json()
+      console.log('📦 Dados recebidos:', curated?.length || 'não é array', typeof curated)
+      
+      if (!Array.isArray(curated) || curated.length === 0) {
+        console.log('⚠️ API /deals retornou vazio ou não é array')
+        setDeals([])
+        setError('Nenhuma oferta encontrada no momento')
+        return
+      }
+      
+      console.log('✅ Processando', curated.length, 'ofertas...')
+      console.log('📋 Primeiro item para debug:', JSON.stringify(curated[0], null, 2))
 
-        // Prices can arrive either in cents (price*Cents) or already in reais (price*)
-        const priceBase = toReais(item.priceBaseCents ?? item.priceBase ?? item.originalPriceCents ?? item.originalPrice ?? 0)
-        const priceFinal = toReais(item.priceFinalCents ?? item.priceFinal ?? item.priceCents ?? item.price ?? 0)
-
-        // Robust title/cover extraction: prefer nested game fields from backend shape
-        const title = (item.game?.title || item.title || 'Jogo sem título')
-        const cover = (item.game?.coverUrl || item.coverUrl || item.header_image || null)
-
-        // Ensure discountPct consistency if backend didn't provide
-        const discountPct = typeof item.discountPct === 'number' && isFinite(item.discountPct)
-          ? item.discountPct
-          : (priceBase > 0 ? Math.round(((priceBase - priceFinal) / priceBase) * 100) : 0)
-
-        // Build id preferring appId when present
-        const id = item._id || (item.appId ? `steam-${item.appId}` : `game-${index}-${Date.now()}`)
-
+      // Os dados já vêm na estrutura correta da API, só precisamos garantir compatibilidade
+      const sourceDeals: any[] = curated.map((item: any, index: number) => {
+        console.log(`🎮 Processando jogo ${index}: ${item.game?.title || item.title || 'SEM TÍTULO'}`)
+        
         return {
-          _id: id,
-          url: item.url,
-          priceBase,
-          priceFinal,
-          discountPct,
-          // keep numeric prices and let the UI format according to selected currency
-          formattedPrice: priceFinal === 0 ? 'GRÁTIS' : undefined,
-          originalFormattedPrice: priceBase > 0 && priceBase !== priceFinal ? undefined : null,
+          _id: item._id || `deal-${item.appId || index}`,
           appId: item.appId,
+          url: item.url,
+          priceBase: item.priceBase || 0,
+          priceFinal: item.priceFinal || 0,
+          discountPct: item.discountPct || 0,
           game: {
-            title,
-            coverUrl: cover,
+            title: item.game?.title || item.title || 'Título não encontrado',
+            coverUrl: item.game?.coverUrl || item.coverUrl,
             genres: item.game?.genres || item.genres || [],
             tags: item.game?.tags || item.tags || []
           },
-          store: {
-            name: item.store?.name || 'Steam'
-          }
+          store: item.store || { name: 'Steam' }
         }
       })
       
-      // Remove duplicatas por appId
-      const uniqueDeals = mappedDeals.filter((deal: any, index: number, self: any[]) => 
+      // Os dados já estão na estrutura correta, só remover duplicatas
+      const uniqueDeals = sourceDeals.filter((deal: any, index: number, self: any[]) => 
         index === self.findIndex((d: any) => d._id === deal._id)
       )
       
@@ -811,11 +724,24 @@ export default function Home() {
         }
       })()
       
-    } catch (err) {
-      console.error('Erro ao buscar ofertas:', err)
-      setError(`Erro ao conectar com a nova API de preços: ${err}`)
+    } catch (err: any) {
+      console.error('💥 Erro ao buscar ofertas:', err)
+      console.error('💥 Tipo do erro:', typeof err)
+      console.error('💥 Mensagem:', err?.message || 'Erro desconhecido')
+      
+      let errorMessage = 'Erro ao carregar ofertas'
+      if (err?.name === 'AbortError') {
+        errorMessage = 'Timeout: Verifique sua conexão'
+      } else if (err?.message?.includes('Network')) {
+        errorMessage = 'Erro de rede: Verifique sua internet'
+      } else if (err?.message) {
+        errorMessage = `Erro: ${err.message}`
+      }
+      
+      setError(errorMessage)
       setDeals([])
     } finally {
+      console.log('🏁 Finalizando busca de ofertas')
       setLoading(false)
     }
   }
@@ -1759,15 +1685,14 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                 try {
                   await AuthService.clearAll()
                   setUserId('')
-                  setShowLogin(true)
-                  showToast('Você saiu com sucesso')
+                  showToast('Dados limpos com sucesso')
                 } catch (e) {
-                  console.warn('Logout failed', e)
-                  showToast('Erro ao sair')
+                  console.warn('Clear data failed', e)
+                  showToast('Erro ao limpar dados')
                 }
               }} style={{ backgroundColor: '#111827', padding: 16, borderRadius: 12, alignItems: 'center', marginHorizontal: 20, marginBottom: 40 }}>
-                <Text style={{ color: '#E5E7EB', fontSize: 16, fontWeight: '700' }}>Sair</Text>
-                <Text style={{ color: '#9CA3AF', fontSize: 12 }}>Encerrar sessão</Text>
+                <Text style={{ color: '#E5E7EB', fontSize: 16, fontWeight: '700' }}>Limpar Dados</Text>
+                <Text style={{ color: '#9CA3AF', fontSize: 12 }}>Resetar preferências</Text>
               </TouchableOpacity>
             </View>
           </ScrollView>
@@ -1799,37 +1724,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
         onClose={() => setShowCurrencyModal(false)}
       />
 
-      {/* Old step modal preserved for editing prefs; primary flow now uses single-screen onboarding */}
-      <OnboardingModal
-        visible={showOnboarding}
-        onClose={() => setShowOnboarding(false)}
-      />
 
-      {/* Full-screen login screen for first-run */}
-      <Modal visible={showLogin} animationType='slide' onRequestClose={() => {}}>
-        <SafeAreaView style={{ flex: 1, backgroundColor: '#0b1020' }}>
-          {showLogin && (
-            <LoginScreen onLogged={(id: string) => { setUserId(id); setShowLogin(false); setShowSingleOnboarding(true); }} />
-          )}
-        </SafeAreaView>
-      </Modal>
-
-      {/* Single-screen onboarding used right after first login */}
-      {showSingleOnboarding && (
-        <Modal visible={showSingleOnboarding} animationType='slide' onRequestClose={() => {}}>
-          <SafeAreaView style={{ flex: 1, backgroundColor: '#0b1020' }}>
-            <SingleOnboarding userId={userId} onFinish={async (prefs?: any) => {
-              setShowSingleOnboarding(false)
-              setLoadingOnboarding(true)
-              // simulate filtering step and refresh deals
-              try { await fetchDeals() } catch (e) {}
-              setLoadingOnboarding(false)
-            }} />
-          </SafeAreaView>
-        </Modal>
-      )}
-
-      <LoadingModal visible={loadingOnboarding} message='Filtrando melhores ofertas de acordo com suas preferências...' />
 
       {/* Modal de adicionar à lista */}
       {selectedGameForList && (
