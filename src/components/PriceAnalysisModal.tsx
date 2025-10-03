@@ -19,6 +19,12 @@ import {
 
 const { width, height } = Dimensions.get('window');
 
+// 🔒 FUNÇÕES UTILITÁRIAS PARA BLINDAGEM TOTAL CONTRA .length EM UNDEFINED
+const isArr = (v: any): v is any[] => Array.isArray(v);
+const len = (v: any) => (Array.isArray(v) ? v.length : 0);
+const arr = <T,>(v: T[] | undefined | null): T[] => (Array.isArray(v) ? v : []);
+const obj = <T extends object>(v: T | undefined | null): T => (v ?? ({} as T));
+
 // Função helper para formatação segura de moeda
 function formatSafePrice(cents?: number, currency = 'BRL'): string {
   if (cents == null || !Number.isFinite(cents)) return '—';
@@ -45,25 +51,28 @@ export function PriceAnalysisModal({
   const [error, setError] = useState<string | null>(null);
   const [selectedPeriod, setSelectedPeriod] = useState(90);
 
-  // Garantir arrays seguros sempre
-  const history: PriceHistoryEntry[] = data?.history ?? [];
-  const currentPrices = data?.currentPrices ?? {};
-  const stats = data?.stats ?? null;
-  const analysis = data?.analysis ?? null;
+  // 🔒 SEMPRE arrays/objetos válidos - BLINDAGEM TOTAL
+  const priceHistory = arr(data?.history);
+  const currentPrices = obj(data?.currentPrices);
+  const stats = obj(data?.stats);
+  const analysis = obj(data?.analysis);
+  const series = arr((data as any)?.series); // às vezes vem como "series"
+  const points = arr((analysis as any)?.series); // ou series dentro de analysis
   
-  // Debug payload
+  // Debug payload com funções seguras
   useEffect(() => {
-    if (visible && data) {
-      console.log('PriceAnalysis payload:', {
-        hasData: !!data,
-        keys: Object.keys(data),
-        historyLength: history.length,
-        hasCurrentPrices: Object.keys(currentPrices).length > 0,
-        hasStats: !!stats,
-        hasAnalysis: !!analysis
+    if (visible && data && __DEV__) {
+      console.log('🔒 PriceAnalysis payload safe:', {
+        keys: data ? Object.keys(data) : [],
+        priceHistory: len(priceHistory),
+        currentPrices: len(Object.keys(currentPrices)),
+        seriesTop: len(series),
+        seriesInAnalysis: len(points),
+        hasStats: len(Object.keys(stats)) > 0,
+        hasAnalysis: len(Object.keys(analysis)) > 0
       });
     }
-  }, [visible, data, history.length]);
+  }, [visible, data]);  // removido history.length - usar len()
 
   useEffect(() => {
     if (visible && gameId) {
@@ -86,10 +95,10 @@ export function PriceAnalysisModal({
   };
 
   const renderSimpleChart = () => {
-    const safeHistory = (history ?? []).filter(h => h && typeof h.price === 'number' && Number.isFinite(h.price));
-    if (safeHistory.length === 0) return null;
+    const safeHistory = arr(priceHistory).filter(h => h && typeof h.price === 'number' && Number.isFinite(h.price));
+    if (len(safeHistory) === 0) return null;
 
-    const prices = safeHistory.map(h => h.price);
+    const prices = arr(safeHistory).map(h => h.price);
     const minPrice = Math.min(...prices);
     const maxPrice = Math.max(...prices);
     const range = maxPrice - minPrice || 1;
@@ -99,7 +108,7 @@ export function PriceAnalysisModal({
         <Text style={styles.chartTitle}>Evolução de Preços (Últimos {selectedPeriod} dias)</Text>
         
         <View style={styles.chartArea}>
-          {safeHistory.slice(-30).map((entry, index) => {
+          {arr(safeHistory).slice(-30).map((entry, index) => {
             const height = ((entry.price - minPrice) / range) * 100;
             const isLowest = entry.price === minPrice;
             
@@ -132,7 +141,7 @@ export function PriceAnalysisModal({
   };
 
   const renderAnalysis = () => {
-    if (!stats || !analysis) return null;
+    if (len(Object.keys(stats)) === 0 || len(Object.keys(analysis)) === 0) return null;
     const recommendation = analysis.recommendation;
     const color = PriceHistoryService.getRecommendationColor(recommendation);
 
@@ -187,14 +196,14 @@ export function PriceAnalysisModal({
   };
 
   const renderCurrentPrices = () => {
-    const stores = Object.entries(currentPrices ?? {});
-    if (stores.length === 0) return null;
+    const stores = Object.entries(obj(currentPrices));
+    if (len(stores) === 0) return null;
 
     return (
       <View style={styles.currentPricesContainer}>
         <Text style={styles.sectionTitle}>Preços Atuais por Loja</Text>
         
-        {stores.filter(([store, info]) => store && info && typeof info.price === 'number' && Number.isFinite(info.price)).map(([store, info]) => (
+        {arr(stores).filter(([store, info]) => store && info && typeof info.price === 'number' && Number.isFinite(info.price)).map(([store, info]) => (
           <View key={store} style={styles.priceRow}>
             <Text style={styles.storeName}>{store}</Text>
             <Text style={styles.storePrice}>
@@ -211,11 +220,15 @@ export function PriceAnalysisModal({
     return null;
   }
 
-  // Estado vazio quando não há histórico
-  const hasHistory = history.length > 0;
-  const hasData = hasHistory || Object.keys(currentPrices).length > 0;
+  // Estado vazio quando não há histórico - usando len() para segurança
+  const hasHistory = len(priceHistory) > 0;
+  const hasCurrentPrices = len(Object.keys(currentPrices)) > 0;
+  const hasAnyData = hasHistory || hasCurrentPrices || len(series) > 0 || len(points) > 0;
+  
+  // Sem histórico → estado vazio, não renderize gráfico/lista
+  if (!loading && !error && data && !hasAnyData) {
 
-  if (!loading && !error && data && !hasData) {
+
     return (
       <Modal
         visible={visible}
