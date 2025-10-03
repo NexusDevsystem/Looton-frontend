@@ -17,7 +17,6 @@ import FavoritesAndLists from './favorites'
 import { WishlistService } from '../src/services/WishlistService'
 import { WishlistSyncService } from '../src/services/WishlistSyncService'
 import { GameCover } from '../src/components/GameCover'
-import { useImagePrefetch } from '../src/hooks/useImagePrefetch'
 import { FavoriteButton } from '../src/components/FavoriteButton'
 import { AddToListModal } from '../src/components/AddToListModal'
 import { FilterChips } from '../src/components/FilterChips'
@@ -161,11 +160,6 @@ export default function Home() {
   // Estado para ofertas filtradas
   const [displayDeals, setDisplayDeals] = useState<Deal[]>([])
 
-  // Função removida - GameCover gerencia os erros internamente
-
-  // Prefetch das imagens para melhor performance
-  useImagePrefetch(deals.map(deal => ({ coverUrl: deal.game?.coverUrl })))
-
   useEffect(() => {
     // Inicializar app com verificação do fluxo de onboarding
     initializeApp()
@@ -289,245 +283,13 @@ export default function Home() {
     }
   }
 
-  // Effect para aplicar filtros na aba home
+  // Effect simplificado para aplicar filtros básicos na aba home
   useEffect(() => {
     if (activeTab === 'home') {
-      applyFilters()
+      // Filtros simplificados - apenas usar os deals originais sem processamento complexo
+      setDisplayDeals(deals);
     }
-  }, [deals, selectedGenres, selectedTags, activeTab, userPreferredSteamGenres])
-
-  // Função para organizar jogos com filtro de gênero e destaque da melhor oferta
-  const applyFilters = () => {
-    console.log('=== Aplicando Filtros ===');
-    console.log('Total de jogos:', deals.length);
-    console.log('Gêneros preferidos selecionados:', userPreferredSteamGenres);
-    
-    let filteredDeals = deals;
-    
-    // SISTEMA SIMPLIFICADO: Backend já faz boost, aqui só filtros de UI se necessário
-    if (userPreferredSteamGenres && userPreferredSteamGenres.length > 0) {
-      console.log('Gêneros Steam preferidos para filtro de UI:', userPreferredSteamGenres.join(', '));
-      
-      filteredDeals = deals.filter(deal => {
-        const gameGenres = deal.game?.genres || [];
-        const gameTitle = (deal.game?.title || '').toLowerCase();
-        
-        // Debug apenas alguns jogos para não poluir o console
-        if (Math.random() < 0.1) {
-          console.log(`Jogo: ${deal.game?.title}, Gêneros: [${gameGenres.join(', ')}]`);
-        }
-        
-        // Mapeamento expandido de gêneros em português para keywords
-        const genreMapping: Record<string, string[]> = {
-          'Ação': [
-            'action', 'shooter', 'combat', 'fighting', 'fps', 'tps', 'third person shooter', 'first person shooter',
-            'call of duty', 'battlefield', 'counter-strike', 'doom', 'halo', 'gears of war', 'mortal kombat',
-            'tekken', 'street fighter', 'overwatch', 'apex', 'valorant', 'csgo', 'cod', 'pubg', 'fortnite',
-            'gun', 'weapon', 'war', 'battle', 'military', 'zombie', 'survival horror', 'beat em up',
-            'hack and slash', 'stealth', 'ninja', 'assassin', 'metal gear', 'hitman'
-          ],
-          'Aventura': [
-            'adventure', 'exploration', 'story rich', 'narrative', 'puzzle', 'mystery', 'detective',
-            'tomb raider', 'uncharted', 'zelda', 'assassins creed', 'life is strange', 'telltale',
-            'point and click', 'visual novel', 'interactive fiction', 'walking simulator',
-            'open world', 'exploration', 'quest', 'journey', 'discovery', 'treasure', 'indiana jones'
-          ],
-          'Corrida': [
-            'racing', 'driving', 'automobile', 'motorcycle', 'car', 'race', 'speed', 'drift', 'rally',
-            'forza', 'need for speed', 'gran turismo', 'f1', 'formula', 'nfs', 'burnout', 'dirt',
-            'wreckfest', 'assetto corsa', 'project cars', 'crew', 'driver', 'midnight club',
-            'track', 'circuit', 'nascar', 'motogp', 'bikes', 'supercars', 'street racing',
-            'arcade racing', 'simulation racing', 'kart', 'go kart', 'mario kart'
-          ],
-          'RPG': [
-            'rpg', 'role-playing', 'jrpg', 'character action', 'leveling', 'stats', 'experience',
-            'witcher', 'elder scrolls', 'fallout', 'final fantasy', 'dragon age', 'mass effect',
-            'divinity', 'baldurs gate', 'pillars of eternity', 'pathfinder', 'cyberpunk',
-            'fantasy', 'medieval', 'magic', 'wizard', 'warrior', 'rogue', 'mage', 'knight',
-            'dungeon', 'dragon', 'sword', 'sorcery', 'turn-based rpg', 'action rpg', 'crpg'
-          ],
-          'Estratégia': [
-            'strategy', 'rts', 'real time strategy', 'turn-based', 'turn based strategy', 'tower defense',
-            '4x', 'grand strategy', 'tactical', 'management', 'base building', 'resource management',
-            'civilization', 'age of empires', 'starcraft', 'command and conquer', 'total war',
-            'cities skylines', 'anno', 'tropico', 'crusader kings', 'europa universalis',
-            'xcom', 'chess', 'board game', 'war game', 'empire', 'conquest'
-          ],
-          'Esportes': [
-            'sports', 'football', 'soccer', 'basketball', 'baseball', 'tennis', 'golf', 'hockey',
-            'fifa', 'nba', '2k', 'madden', 'nhl', 'mlb', 'pes', 'pro evolution soccer',
-            'olympics', 'swimming', 'athletics', 'boxing', 'wrestling', 'ufc', 'mma',
-            'skateboarding', 'snowboarding', 'skiing', 'surfing', 'volleyball', 'american football'
-          ],
-          'Simulação': [
-            'simulation', 'sim', 'simulator', 'life sim', 'farming', 'farm', 'city builder',
-            'cities skylines', 'simcity', 'euro truck', 'american truck', 'flight simulator',
-            'farming simulator', 'construction', 'tycoon', 'business', 'management',
-            'train simulator', 'bus simulator', 'cooking', 'medical', 'surgery simulator',
-            'goat simulator', 'job simulator', 'realistic', 'educational'
-          ],
-          'Indie': [
-            'indie', 'independent', 'pixel art', 'retro', 'artistic', 'experimental', 'creative',
-            'minimalist', 'abstract', 'unique', 'innovative', 'small developer', 'art game',
-            'atmospheric', 'emotional', 'personal', 'stylized', 'hand drawn', '2d', 'pixel'
-          ],
-          'Casual': [
-            'casual', 'family friendly', 'relaxing', 'chill', 'simple', 'easy', 'accessible',
-            'puzzle', 'match 3', 'hidden object', 'time management', 'card game', 'board game',
-            'trivia', 'word game', 'educational', 'kids', 'children', 'all ages', 'cute'
-          ],
-          'Acesso Antecipado': [
-            'early access', 'alpha', 'beta', 'preview', 'development', 'work in progress',
-            'upcoming', 'unreleased', 'in development', 'pre-release'
-          ]
-        };
-
-        const matchesFilter = userPreferredSteamGenres.some((selectedGenre: string) => {
-          const keywords = genreMapping[selectedGenre] || [selectedGenre.toLowerCase()];
-          
-          // Debug específico para Corrida
-          if (selectedGenre === 'Corrida') {
-            console.log(`🏎️ Verificando ${deal.game?.title} para Corrida:`);
-            console.log(`   - Gêneros do jogo: [${gameGenres.join(', ')}]`);
-            console.log(`   - Keywords de busca: [${keywords.join(', ')}]`);
-            console.log(`   - Título: ${gameTitle}`);
-          }
-          
-          // Verifica gêneros primeiro com match mais flexível
-          let hasMatch = false;
-          let matchReason = '';
-          
-          if (gameGenres.length > 0) {
-            hasMatch = gameGenres.some(gameGenre => {
-              const gameGenreLower = gameGenre.toLowerCase();
-              const matchFound = keywords.some(keyword => {
-                const keywordLower = keyword.toLowerCase();
-                // Match mais flexível: permite palavras parciais
-                return gameGenreLower.includes(keywordLower) || 
-                       keywordLower.includes(gameGenreLower) ||
-                       gameGenreLower.startsWith(keywordLower.substring(0, 4)) ||
-                       keywordLower.startsWith(gameGenreLower.substring(0, 4));
-              });
-              
-              if (matchFound && selectedGenre === 'Corrida') {
-                const matchedKeyword = keywords.find(k => {
-                  const kLower = k.toLowerCase();
-                  return gameGenreLower.includes(kLower) || kLower.includes(gameGenreLower) ||
-                         gameGenreLower.startsWith(kLower.substring(0, 4)) || kLower.startsWith(gameGenreLower.substring(0, 4));
-                });
-                console.log(`   ✅ Match no gênero: "${gameGenre}" ↔ "${matchedKeyword}"`);
-                matchReason = `gênero: ${gameGenre}`;
-              }
-              
-              return matchFound;
-            });
-          }
-          
-          // Verifica no título com match flexível
-          if (!hasMatch) {
-            hasMatch = keywords.some(keyword => {
-              const keywordLower = keyword.toLowerCase();
-              // Match no título com diferentes estratégias
-              const titleMatch = gameTitle.includes(keywordLower) ||
-                               keywordLower.includes(gameTitle.split(' ')[0]) ||
-                               gameTitle.split(' ').some(word => word.length > 3 && keywordLower.includes(word));
-              
-              if (titleMatch && selectedGenre === 'Corrida') {
-                console.log(`   ✅ Match no título: "${gameTitle}" ↔ "${keyword}"`);
-                matchReason = `título: ${keyword}`;
-              }
-              return titleMatch;
-            });
-          }
-          
-          if (hasMatch) {
-            console.log(`✅ ${deal.game?.title} PASSA no filtro (${selectedGenre})`);
-          }
-          
-          return hasMatch;
-        });
-        
-        return matchesFilter;
-      });
-      
-      console.log(`Filtrados por gênero: ${deals.length} -> ${filteredDeals.length} jogos`);
-      
-      // Sistema de fallback: se encontrou poucos jogos, expandir criterios
-      if (filteredDeals.length < 10) {
-        console.log(`⚠️ Poucos jogos encontrados (${filteredDeals.length}), aplicando fallback...`);
-        
-        const fallbackDeals = deals.filter(deal => {
-          const gameTitle = (deal.game?.title || '').toLowerCase();
-          const gameGenres = deal.game?.genres || [];
-          
-          // Já incluído no filtro principal
-          if (filteredDeals.some(fd => fd._id === deal._id)) return false;
-          
-          // Fallback com keywords mais gerais para cada gênero
-          const fallbackKeywords: Record<string, string[]> = {
-            'Ação': ['action', 'combat', 'fight', 'war', 'gun', 'battle'],
-            'Aventura': ['adventure', 'story', 'quest', 'explore'],
-            'Corrida': ['car', 'drive', 'speed', 'race', 'motor', 'vehicle'],
-            'RPG': ['rpg', 'role', 'fantasy', 'magic', 'level'],
-            'Estratégia': ['strategy', 'tactical', 'management', 'build'],
-            'Esportes': ['sport', 'football', 'soccer', 'basket'],
-            'Simulação': ['sim', 'simulator', 'real', 'life'],
-            'Indie': ['indie', 'pixel', 'art', 'small'],
-            'Casual': ['casual', 'puzzle', 'simple', 'easy'],
-            'Acesso Antecipado': ['early', 'alpha', 'beta', 'preview']
-          };
-          
-          return userPreferredSteamGenres.some((selectedGenre: string) => {
-            const fallbackKeys = fallbackKeywords[selectedGenre] || [];
-            return fallbackKeys.some(keyword => 
-              gameTitle.includes(keyword) || 
-              gameGenres.some(genre => genre.toLowerCase().includes(keyword))
-            );
-          });
-        });
-        
-        // Adiciona os jogos do fallback
-        filteredDeals = [...filteredDeals, ...fallbackDeals.slice(0, 15)];
-        console.log(`Fallback adicionou ${fallbackDeals.length} jogos. Total: ${filteredDeals.length}`);
-      }
-      
-      // Debug especial se ainda há poucos jogos
-      if (userPreferredSteamGenres.includes('Corrida') && filteredDeals.length < 5) {
-        console.log('🚨 AINDA POUCOS JOGOS DE CORRIDA! Verificando primeiros 10 jogos:');
-        deals.slice(0, 10).forEach(deal => {
-          console.log(`   - ${deal.game?.title}: gêneros [${deal.game?.genres?.join(', ') || 'nenhum'}]`);
-        });
-      }
-    } else {
-      console.log('Nenhum gênero selecionado, mostrando todos os jogos');
-    }
-    
-    // Processar ofertas com destaque
-    const processedDeals = filteredDeals.map(deal => {
-      return {
-        ...deal,
-        isBestDeal: deal.discountPct >= 50, // Marcar como melhor oferta se desconto >= 50%
-        highlightColor: deal.discountPct >= 70 ? '#FFD700' : deal.discountPct >= 50 ? '#ff8800' : null
-      };
-    });
-    
-    // Ordenar para colocar as melhores ofertas primeiro (maior desconto)
-    const sortedDeals = processedDeals.sort((a, b) => {
-      // Primeiro, ordenar por maior desconto
-      if (a.discountPct !== b.discountPct) {
-        return b.discountPct - a.discountPct; // Maior desconto primeiro
-      }
-      
-      // Se empate no desconto, ordenar por menor preço
-      return a.priceFinal - b.priceFinal;
-    });
-    
-    console.log('Jogos finais após processamento:', sortedDeals.length);
-    console.log('Melhores ofertas encontradas (>=50%):', sortedDeals.filter(d => d.isBestDeal).length);
-    console.log('Super ofertas encontradas (>=70%):', sortedDeals.filter(d => d.discountPct >= 70).length);
-    
-    setDisplayDeals(sortedDeals);
-  }
+  }, [deals, activeTab])
 
   useEffect(() => {
     if (searchQuery.trim() === '') {
@@ -564,61 +326,19 @@ export default function Home() {
         sourceArray = data.games
       }
 
-      // Mapeia para o formato esperado
+      // Mapeamento simplificado para evitar problemas de performance
       const mappedResults = sourceArray.map((item: any, index: number) => {
-        // Parse dos preços vindos como strings da busca
-        const parsePriceString = (priceStr: string): number => {
-          if (!priceStr || priceStr === 'Grátis' || priceStr === 'N/A') return 0
-          const cleaned = priceStr.replace(/[R$\s]/g, '')
-          if (cleaned.indexOf(',') > cleaned.indexOf('.') || (cleaned.indexOf(',') !== -1 && cleaned.indexOf('.') === -1)) {
-            return parseFloat(cleaned.replace(',', '.')) || 0
-          }
-          return parseFloat(cleaned) || 0
-        }
-
-        // If item already has numeric priceFinal (from /search), prefer it
-        const priceFinal = typeof item.priceFinal === 'number' ? item.priceFinal : parsePriceString(item.price || item.formattedPrice || '')
-        const priceBase = typeof item.priceBase === 'number' ? item.priceBase : (item.originalPrice === item.price ? 0 : parsePriceString(item.originalPrice || ''))
-
-        // Normalize appId field (some adapters use storeAppId)
-        const appIdVal = item.appId || item.storeAppId || item.appid || item.app_id || null
-        const urlVal = item.url || (appIdVal ? `https://store.steampowered.com/app/${appIdVal}` : '')
-
-        // Tenta extrair appId do url se ainda não tivermos um appId
-        let finalAppId: any = appIdVal
-        if (!finalAppId && urlVal) {
-          const mUrl = String(urlVal).match(/\/app\/(\d+)/)
-          if (mUrl) finalAppId = mUrl[1]
-        }
-
-        // fallback: extrai uma sequência de dígitos longa do próprio item se presente
-        if (!finalAppId && item._id) {
-          const mId = String(item._id).match(/(\d{4,})/)
-          if (mId) finalAppId = mId[1]
-        }
-
-        // Normalize cover URL and force https quando possível
-        let cover = item.coverUrl || item.imageUrl || item.header_image || null
-        if (cover && typeof cover === 'string') {
-          cover = cover.trim()
-          if (cover.startsWith('//')) cover = `https:${cover}`
-          if (cover.startsWith('http://')) cover = cover.replace('http://', 'https://')
-        }
-
+        const appId = item.appId || item.storeAppId || null
         return {
-          _id: `search-${finalAppId || index}`,
-          appId: finalAppId ? Number(finalAppId) : undefined,
-          priceBase,
-          priceFinal,
-          discountPct: typeof item.discountPct === 'number' ? item.discountPct : (typeof item.discount === 'number' ? item.discount : 0),
-          // keep numeric prices and let the UI format according to selected currency
-          formattedPrice: priceFinal === 0 ? 'GRÁTIS' : undefined,
-          originalFormattedPrice: (priceBase && priceBase > 0 && priceBase !== priceFinal) ? undefined : null,
-          isFree: item.isFree || item.price === 'Grátis',
-          url: urlVal || '',
+          _id: `search-${appId || index}`,
+          appId: appId ? Number(appId) : undefined,
+          priceBase: item.priceBase || 0,
+          priceFinal: item.priceFinal || 0,
+          discountPct: item.discountPct || 0,
+          url: item.url || '',
           game: {
-            title: item.title,
-            coverUrl: cover
+            title: item.title || 'Título não encontrado',
+            coverUrl: item.coverUrl || item.imageUrl || ''
           },
           store: {
             name: 'Steam'
@@ -772,65 +492,8 @@ export default function Home() {
         console.log('Nenhum gênero coletado da API, mantendo fallback...');
       }
 
-      // Attempt to apply personalization based on onboarding prefs (favoriteGenres / genreWeights)
-      ;(async () => {
-        try {
-          const prefs = await OnboardingService.loadLocalPrefs()
-          const weights: Record<string, number> = (prefs && prefs.genreWeights) || {}
-          if (!weights || Object.keys(weights).length === 0) {
-            setDeals(sortedDeals || [])
-            return
-          }
-
-          // mapping of genre -> keywords (same idea used in applyFilters)
-          const genreKeywords: Record<string, string[]> = {
-            'RPG': ['rpg', 'role', 'adventure'],
-            'Ação': ['action', 'combat', 'fight', 'war'],
-            'Aventura': ['adventure', 'quest', 'journey'],
-            'Estratégia': ['strategy', 'tactical', 'empire'],
-            'Simulação': ['simulator', 'farming', 'city', 'tycoon'],
-            'Esportes': ['sport', 'football', 'soccer', 'racing'],
-            'FPS': ['shooter', 'fps', 'gun'],
-            'Puzzle': ['puzzle', 'brain', 'logic'],
-            'Indie': ['indie', 'pixel']
-          }
-
-          const scoreFor = (deal: any) => {
-            let s = 0
-            // Prefer explicit genres returned by the backend
-            const dg: string[] = (deal.game && deal.game.genres) || []
-            if (dg && dg.length > 0) {
-              for (const g of dg) {
-                if (weights[g]) s += Number(weights[g]) || 0
-              }
-              return s
-            }
-
-            // Fallback: keyword match on title
-            const title = (deal.game?.title || '').toLowerCase()
-            for (const [genre, w] of Object.entries(weights)) {
-              const kws = genreKeywords[genre] || [genre.toLowerCase()]
-              if (kws.some(k => title.includes(k))) s += Number(w) || 0
-            }
-            return s
-          }
-
-          const personalized = sortedDeals.slice().sort((a: Deal, b: Deal) => {
-            // primary sort by discountPct
-            const d = (b.discountPct || 0) - (a.discountPct || 0)
-            if (Math.abs(d) > 1e-6) return d
-            // secondary sort by personalization score
-            const sb = scoreFor(b) - scoreFor(a)
-            if (Math.abs(sb) > 1e-6) return sb > 0 ? 1 : -1
-            return 0
-          })
-
-          setDeals(personalized || sortedDeals)
-        } catch (e) {
-          // fallback to base order on any error
-          setDeals(sortedDeals || [])
-        }
-      })()
+      // Usar os deals já ordenados por desconto sem personalização complexa
+      setDeals(sortedDeals || [])
       
     } catch (err: any) {
       console.error('💥 Erro ao buscar ofertas:', err)
