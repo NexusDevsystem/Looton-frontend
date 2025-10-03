@@ -60,9 +60,10 @@ export function PriceAnalysisModal({
   };
 
   const renderSimpleChart = (history: PriceHistoryEntry[]) => {
-    if (!history || history.length === 0) return null;
+    if (!history || !Array.isArray(history) || history.length === 0) return null;
 
-    const prices = history.map(h => h.price);
+    const prices = history.filter(h => h && typeof h.price === 'number').map(h => h.price);
+    if (prices.length === 0) return null;
     const minPrice = Math.min(...prices);
     const maxPrice = Math.max(...prices);
     const range = maxPrice - minPrice || 1;
@@ -72,7 +73,7 @@ export function PriceAnalysisModal({
         <Text style={styles.chartTitle}>Evolução de Preços (Últimos {selectedPeriod} dias)</Text>
         
         <View style={styles.chartArea}>
-          {history.slice(-30).map((entry, index) => {
+          {history.slice(-30).filter(entry => entry && typeof entry.price === 'number').map((entry, index) => {
             const height = ((entry.price - minPrice) / range) * 100;
             const isLowest = entry.price === minPrice;
             
@@ -108,6 +109,7 @@ export function PriceAnalysisModal({
     if (!data?.stats || !data?.analysis) return null;
 
     const { stats, analysis } = data;
+    if (!stats || !analysis) return null;
     const recommendation = analysis.recommendation;
     const color = PriceHistoryService.getRecommendationColor(recommendation);
 
@@ -165,13 +167,13 @@ export function PriceAnalysisModal({
     if (!data?.currentPrices) return null;
 
     const stores = Object.entries(data.currentPrices);
-    if (!stores || stores.length === 0) return null;
+    if (!stores || !Array.isArray(stores) || stores.length === 0) return null;
 
     return (
       <View style={styles.currentPricesContainer}>
         <Text style={styles.sectionTitle}>Preços Atuais por Loja</Text>
         
-        {stores.map(([store, info]) => (
+        {stores.filter(([store, info]) => store && info && typeof info.price === 'number').map(([store, info]) => (
           <View key={store} style={styles.priceRow}>
             <Text style={styles.storeName}>{store}</Text>
             <Text style={styles.storePrice}>
@@ -182,6 +184,11 @@ export function PriceAnalysisModal({
       </View>
     );
   };
+
+  // Verificação de segurança para evitar renderização com dados inválidos
+  if (!visible || !gameId || !gameTitle) {
+    return null;
+  }
 
   return (
     <Modal
@@ -248,7 +255,7 @@ export function PriceAnalysisModal({
 
           {data && !loading && !error && (
             <>
-              {renderSimpleChart(data.history)}
+              {data.history && renderSimpleChart(data.history)}
               {renderAnalysis()}
               {renderCurrentPrices()}
             </>
