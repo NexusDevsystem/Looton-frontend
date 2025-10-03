@@ -25,6 +25,7 @@ import { useFilters } from '../src/hooks/useFilters'
 import { SteamGenresPreferencesModal } from '../src/components/SteamGenresPreferencesModal'
 import { fetchCuratedFeed, SteamGenre, UserPreferences } from '../src/services/SteamGenresService'
 import { showToast } from '../src/utils/SimpleToast'
+import { TermsOfServiceModal } from '../src/components/TermsOfServiceModal'
 
 interface Deal {
   _id: string
@@ -64,6 +65,7 @@ const API_URL = (() => {
   return fromEnv || 'http://localhost:3000'
 })()
 const { width, height } = Dimensions.get('window')
+const isTablet = width >= 768
 
 // Small component to render a price using CurrencyContext so it updates reactively
 const PriceText: React.FC<{ value?: number | null; style?: any }> = ({ value, style }) => {
@@ -128,6 +130,7 @@ export default function Home() {
   const [loadingGenres, setLoadingGenres] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
   const [showCurrencyModal, setShowCurrencyModal] = useState(false)
+  const [showTermsModal, setShowTermsModal] = useState(false)
   
   // Mock user ID - em um app real viria do contexto de autenticação
   // Leave empty to treat as unauthenticated in dev by default
@@ -165,6 +168,7 @@ export default function Home() {
     fetchDeals()
     loadWishlistCount()
     loadWishlistGames()
+    checkFirstTime()
     
     // Animação de entrada
     Animated.parallel([
@@ -180,6 +184,19 @@ export default function Home() {
       })
     ]).start()
   }, [])
+
+  const checkFirstTime = async () => {
+    try {
+      const hasAcceptedTerms = await OnboardingService.hasAcceptedTerms()
+      if (!hasAcceptedTerms) {
+        setShowTermsModal(true)
+      }
+    } catch (error) {
+      console.log('Error checking first time:', error)
+      // Em caso de erro, mostre os termos por segurança
+      setShowTermsModal(true)
+    }
+  }
 
   // Effect para aplicar filtros na aba home
   useEffect(() => {
@@ -977,12 +994,12 @@ export default function Home() {
         onPress={() => openGameDetails(deal)}
       />
         
-        <View style={{ padding: 16 }}>
+        <View style={{ padding: isTablet ? 20 : 16 }}>
         <Text style={{ 
           color: '#FFFFFF', 
-          fontSize: 18, 
+          fontSize: isTablet ? 20 : 18, 
           fontWeight: '700',
-          marginBottom: 8
+          marginBottom: isTablet ? 10 : 8
         }}>
           {deal.game?.title || 'Sem título'}
         </Text>
@@ -992,15 +1009,15 @@ export default function Home() {
             {(deal.discountPct || 0) > 0 && (
               <PriceText
                 value={deal.priceBase}
-                style={{ color: '#9CA3AF', fontSize: 14, textDecorationLine: 'line-through', marginBottom: 4 }}
+                style={{ color: '#9CA3AF', fontSize: isTablet ? 16 : 14, textDecorationLine: 'line-through', marginBottom: 4 }}
               />
             )}
             {/* Final price: highlight in green when discounted */}
             <PriceText
               value={deal.priceFinal}
               style={((deal.discountPct || 0) > 0 || (deal.priceBase && deal.priceFinal < deal.priceBase))
-                ? { color: '#10B981', backgroundColor: 'rgba(16,185,129,0.08)', paddingHorizontal: 3, paddingVertical: 1, borderRadius: 4, fontSize: 22, fontWeight: '900', lineHeight: 22, textShadowColor: 'rgba(16,185,129,0.06)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 1, alignSelf: 'flex-start' }
-                : { color: (deal as any).isFree || deal.priceFinal === 0 ? '#3B82F6' : '#FFFFFF', fontSize: 22, fontWeight: '800' }
+                ? { color: '#10B981', backgroundColor: 'rgba(16,185,129,0.08)', paddingHorizontal: 3, paddingVertical: 1, borderRadius: 4, fontSize: isTablet ? 26 : 22, fontWeight: '900', lineHeight: isTablet ? 26 : 22, textShadowColor: 'rgba(16,185,129,0.06)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 1, alignSelf: 'flex-start' }
+                : { color: (deal as any).isFree || deal.priceFinal === 0 ? '#3B82F6' : '#FFFFFF', fontSize: isTablet ? 26 : 22, fontWeight: '800' }
               }
             />
           </View>
@@ -1014,7 +1031,7 @@ export default function Home() {
             }}>
               <Text style={{ 
                 color: '#FFFFFF', 
-                fontSize: 12, 
+                fontSize: isTablet ? 14 : 12, 
                 fontWeight: '700' 
               }}>
                 -{Math.round(deal.discountPct || 0)}%
@@ -1031,10 +1048,10 @@ export default function Home() {
           borderTopWidth: 1,
           borderTopColor: '#4B5563'
         }}>
-          <Ionicons name="storefront-outline" size={16} color="#9CA3AF" />
+          <Ionicons name="storefront-outline" size={isTablet ? 18 : 16} color="#9CA3AF" />
           <Text style={{ 
             color: '#9CA3AF', 
-            fontSize: 12,
+            fontSize: isTablet ? 14 : 12,
             marginLeft: 6,
             textTransform: 'uppercase',
             letterSpacing: 0.5
@@ -1298,7 +1315,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
 
               {!loading && !error && (deals.length > 0 || displayDeals.length > 0) && (
                 <>
-                  <View style={{ paddingHorizontal: 20 }}>
+                  <View style={{ paddingHorizontal: isTablet ? 40 : 20, maxWidth: isTablet ? 800 : '100%', alignSelf: 'center', width: '100%' }}>
                     <View style={{ 
                       flexDirection: 'row', 
                       justifyContent: 'space-between', 
@@ -1307,7 +1324,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                     }}>
                       <Text style={{ 
                         color: '#FFFFFF', 
-                        fontSize: 24, 
+                        fontSize: isTablet ? 28 : 24, 
                         fontWeight: '700'
                       }}>
                         {hasActiveFilters() ? 'Ofertas Filtradas' : 'Todas as Ofertas'}
@@ -1371,12 +1388,13 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
 
         {activeTab === 'search' && (
           <View style={{ flex: 1, paddingTop: 60 }}>
-            <View style={{ paddingHorizontal: 20, marginBottom: 20 }}>
+            <View style={{ paddingHorizontal: isTablet ? 40 : 20, marginBottom: 20, maxWidth: isTablet ? 800 : '100%', alignSelf: 'center', width: '100%' }}>
               <Text style={{ 
                 color: '#FFFFFF', 
-                fontSize: 28, 
+                fontSize: isTablet ? 32 : 28, 
                 fontWeight: '800',
-                marginBottom: 20
+                marginBottom: 20,
+                textAlign: isTablet ? 'center' : 'left'
               }}>
                 Buscar Jogos
               </Text>
@@ -1504,31 +1522,33 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
 
         {activeTab === 'profile' && (
           <ScrollView style={{ flex: 1, paddingTop: 60 }}>
-            <View style={{ paddingHorizontal: 20 }}>
+            <View style={{ paddingHorizontal: isTablet ? 40 : 20, maxWidth: isTablet ? 600 : '100%', alignSelf: 'center', width: '100%' }}>
               {/* Header do Perfil */}
               <View style={{ alignItems: 'center', marginBottom: 30 }}>
                 <View style={{
-                  width: 80,
-                  height: 80,
-                  borderRadius: 40,
+                  width: isTablet ? 100 : 80,
+                  height: isTablet ? 100 : 80,
+                  borderRadius: isTablet ? 50 : 40,
                   backgroundColor: '#374151',
                   justifyContent: 'center',
                   alignItems: 'center',
                   marginBottom: 16
                 }}>
-                  <Ionicons name="person" size={40} color="#9CA3AF" />
+                  <Ionicons name="person" size={isTablet ? 50 : 40} color="#9CA3AF" />
                 </View>
                 <Text style={{ 
                   color: '#FFFFFF', 
-                  fontSize: 24, 
+                  fontSize: isTablet ? 28 : 24, 
                   fontWeight: '700',
-                  marginBottom: 4
+                  marginBottom: 4,
+                  textAlign: 'center'
                 }}>
                   Usuário Looton
                 </Text>
                 <Text style={{ 
                   color: '#9CA3AF', 
-                  fontSize: 16
+                  fontSize: isTablet ? 18 : 16,
+                  textAlign: 'center'
                 }}>
                   Caçador de ofertas
                 </Text>
@@ -1538,40 +1558,41 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
               <View style={{
                 backgroundColor: '#374151',
                 borderRadius: 16,
-                padding: 20,
+                padding: isTablet ? 24 : 20,
                 marginBottom: 20
               }}>
                 <Text style={{ 
                   color: '#FFFFFF', 
-                  fontSize: 18, 
+                  fontSize: isTablet ? 20 : 18, 
                   fontWeight: '700',
-                  marginBottom: 16
+                  marginBottom: 16,
+                  textAlign: isTablet ? 'center' : 'left'
                 }}>
                   Suas Estatísticas
                 </Text>
                 
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                   <View style={{ alignItems: 'center', flex: 1 }}>
-                    <Text style={{ color: '#3B82F6', fontSize: 24, fontWeight: '800' }}>
+                    <Text style={{ color: '#3B82F6', fontSize: isTablet ? 28 : 24, fontWeight: '800' }}>
                       {deals.length}
                     </Text>
-                    <Text style={{ color: '#9CA3AF', fontSize: 12 }}>
+                    <Text style={{ color: '#9CA3AF', fontSize: isTablet ? 14 : 12, textAlign: 'center' }}>
                       Ofertas Vistas
                     </Text>
                   </View>
                   
                   <View style={{ alignItems: 'center', flex: 1 }}>
-                    <PriceText value={0} style={{ color: '#3B82F6', fontSize: 24, fontWeight: '800' }} />
-                    <Text style={{ color: '#9CA3AF', fontSize: 12 }}>
+                    <PriceText value={0} style={{ color: '#3B82F6', fontSize: isTablet ? 28 : 24, fontWeight: '800' }} />
+                    <Text style={{ color: '#9CA3AF', fontSize: isTablet ? 14 : 12, textAlign: 'center' }}>
                       Economizado
                     </Text>
                   </View>
                   
                   <View style={{ alignItems: 'center', flex: 1 }}>
-                    <Text style={{ color: '#F59E0B', fontSize: 24, fontWeight: '800' }}>
+                    <Text style={{ color: '#F59E0B', fontSize: isTablet ? 28 : 24, fontWeight: '800' }}>
                       0
                     </Text>
-                    <Text style={{ color: '#9CA3AF', fontSize: 12 }}>
+                    <Text style={{ color: '#9CA3AF', fontSize: isTablet ? 14 : 12, textAlign: 'center' }}>
                       Favoritos
                     </Text>
                   </View>
@@ -1586,17 +1607,16 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
               }}>
                 <Text style={{ 
                   color: '#FFFFFF', 
-                  fontSize: 18, 
+                  fontSize: isTablet ? 20 : 18, 
                   fontWeight: '700',
-                  padding: 20,
-                  paddingBottom: 0
+                  padding: isTablet ? 24 : 20,
+                  paddingBottom: 0,
+                  textAlign: isTablet ? 'center' : 'left'
                 }}>
                   Configurações
                 </Text>
 
                 {[
-                  { icon: 'moon-outline', title: 'Tema Escuro', subtitle: 'Sempre ativado' },
-                  { icon: 'language-outline', title: 'Idioma', subtitle: 'Português (BR)' },
                   { icon: 'card-outline', title: 'Moeda', subtitle: 'Real Brasileiro (BRL)' },
                   { icon: 'shield-checkmark-outline', title: 'Privacidade', subtitle: 'Gerenciar dados' },
                   { icon: 'help-circle-outline', title: 'Ajuda', subtitle: 'Suporte e FAQ' }
@@ -1609,19 +1629,19 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                         style={{
                           flexDirection: 'row',
                           alignItems: 'center',
-                          padding: 20,
-                          borderBottomWidth: index < 4 ? 1 : 0,
+                          padding: isTablet ? 24 : 20,
+                          borderBottomWidth: index < 2 ? 1 : 0,
                           borderBottomColor: '#4B5563'
                         }}
                       >
-                        <Ionicons name={item.icon as any} size={24} color="#9CA3AF" />
-                        <View style={{ flex: 1, marginLeft: 16 }}>
-                          <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '600' }}>
+                        <Ionicons name={item.icon as any} size={isTablet ? 28 : 24} color="#9CA3AF" />
+                        <View style={{ flex: 1, marginLeft: isTablet ? 20 : 16 }}>
+                          <Text style={{ color: '#FFFFFF', fontSize: isTablet ? 18 : 16, fontWeight: '600' }}>
                             {item.title}
                           </Text>
                           <CurrencySubtitle />
                         </View>
-                        <Ionicons name="chevron-forward" size={20} color="#6B7280" />
+                        <Ionicons name="chevron-forward" size={isTablet ? 24 : 20} color="#6B7280" />
                       </TouchableOpacity>
                     )
                   }
@@ -1632,21 +1652,21 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                       style={{
                         flexDirection: 'row',
                         alignItems: 'center',
-                        padding: 20,
-                        borderBottomWidth: index < 4 ? 1 : 0,
+                        padding: isTablet ? 24 : 20,
+                        borderBottomWidth: index < 2 ? 1 : 0,
                         borderBottomColor: '#4B5563'
                       }}
                     >
-                      <Ionicons name={item.icon as any} size={24} color="#9CA3AF" />
-                      <View style={{ flex: 1, marginLeft: 16 }}>
-                        <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '600' }}>
+                      <Ionicons name={item.icon as any} size={isTablet ? 28 : 24} color="#9CA3AF" />
+                      <View style={{ flex: 1, marginLeft: isTablet ? 20 : 16 }}>
+                        <Text style={{ color: '#FFFFFF', fontSize: isTablet ? 18 : 16, fontWeight: '600' }}>
                           {item.title}
                         </Text>
-                        <Text style={{ color: '#9CA3AF', fontSize: 14, marginTop: 2 }}>
+                        <Text style={{ color: '#9CA3AF', fontSize: isTablet ? 16 : 14, marginTop: 2 }}>
                           {item.subtitle}
                         </Text>
                       </View>
-                      <Ionicons name="chevron-forward" size={20} color="#6B7280" />
+                      <Ionicons name="chevron-forward" size={isTablet ? 24 : 20} color="#6B7280" />
                     </TouchableOpacity>
                   )
                 })}
@@ -1658,42 +1678,30 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
               <View style={{
                 backgroundColor: '#374151',
                 borderRadius: 16,
-                padding: 20,
+                padding: isTablet ? 24 : 20,
                 marginBottom: 40
               }}>
                 <Text style={{ 
                   color: '#FFFFFF', 
-                  fontSize: 18, 
+                  fontSize: isTablet ? 20 : 18, 
                   fontWeight: '700',
-                  marginBottom: 12
+                  marginBottom: 12,
+                  textAlign: isTablet ? 'center' : 'left'
                 }}>
                   Sobre o Looton
                 </Text>
                 <Text style={{ 
                   color: '#9CA3AF', 
-                  fontSize: 14,
-                  lineHeight: 20
+                  fontSize: isTablet ? 16 : 14,
+                  lineHeight: isTablet ? 24 : 20,
+                  textAlign: isTablet ? 'center' : 'left'
                 }}>
                   Versão 1.0.0{'\n'}
                   O melhor aplicativo para encontrar ofertas de jogos.{'\n'}
                   Desenvolvido com ❤️ para gamers.
                 </Text>
               </View>
-              
-              {/* Logout */}
-              <TouchableOpacity onPress={async () => {
-                try {
-                  await AuthService.clearAll()
-                  setUserId('')
-                  showToast('Dados limpos com sucesso')
-                } catch (e) {
-                  console.warn('Clear data failed', e)
-                  showToast('Erro ao limpar dados')
-                }
-              }} style={{ backgroundColor: '#111827', padding: 16, borderRadius: 12, alignItems: 'center', marginHorizontal: 20, marginBottom: 40 }}>
-                <Text style={{ color: '#E5E7EB', fontSize: 16, fontWeight: '700' }}>Limpar Dados</Text>
-                <Text style={{ color: '#9CA3AF', fontSize: 12 }}>Resetar preferências</Text>
-              </TouchableOpacity>
+
             </View>
           </ScrollView>
         )}
@@ -1852,6 +1860,15 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
             console.error('Erro ao salvar preferências:', error)
             showToast('Erro ao salvar preferências')
           }
+        }}
+      />
+
+      <TermsOfServiceModal
+        visible={showTermsModal}
+        onAccept={async () => {
+          await OnboardingService.setTermsAccepted()
+          setShowTermsModal(false)
+          showToast('Bem-vindo ao Looton!')
         }}
       />
       </View>

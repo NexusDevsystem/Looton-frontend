@@ -54,3 +54,22 @@ export async function getServerPrefs(userId: string) {
   if (!userId) return null
   return api(`/users/${userId}/genres`)
 }
+
+const TERMS_STORAGE_KEY = 'TERMS_ACCEPTED_v1'
+
+export async function hasAcceptedTerms(): Promise<boolean> {
+  try {
+    const value = await AsyncStorage.getItem(TERMS_STORAGE_KEY)
+    return value === 'true'
+  } catch (error) {
+    return false
+  }
+}
+
+export async function setTermsAccepted(): Promise<void> {
+  try {
+    await AsyncStorage.setItem(TERMS_STORAGE_KEY, 'true')
+  } catch (error) {
+    console.error('Error saving terms acceptance:', error)
+  }
+}
