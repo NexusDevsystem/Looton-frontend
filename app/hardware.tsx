@@ -93,8 +93,8 @@ export function HardwareInner() {
     })()
   }, [debounced, loadCurated])
 
-  // Debug: log items to see what's being returned
-  console.log('Hardware items:', items.length, 'first item:', items[0])
+  // Debug: log items and search to see what's being returned
+  console.log('Hardware search:', debounced, 'items:', items.length, 'first item:', items[0]?.title)
   
   // Minimal list: prefer Terabyte, but show all if none available
   let listItems = items.filter((it) => {
@@ -116,7 +116,7 @@ export function HardwareInner() {
           <TextInput
             value={query}
             onChangeText={setQuery}
-            placeholder="Buscar produto (ex: RTX 4060)"
+            placeholder="Buscar hardware (ex: RTX 4060, i5, SSD, memoria)"
             placeholderTextColor={tokens.colors.textDim}
             style={{ backgroundColor: tokens.colors.chip, color: tokens.colors.text, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 8 }}
             autoCorrect={false}
@@ -124,7 +124,12 @@ export function HardwareInner() {
             clearButtonMode="while-editing"
           />
         </View>
-        <Text style={{ color: tokens.colors.textDim, marginTop: 4 }}>Resultados atualizam conforme a busca</Text>
+        <Text style={{ color: tokens.colors.textDim, marginTop: 4, fontSize: 12 }}>
+          {debounced 
+            ? `Buscando por "${debounced}"... Encontrados ${listItems.length} produtos`
+            : 'Digite para buscar produtos específicos como "4060", "i5", "DDR5", etc.'
+          }
+        </Text>
       </View>
       {error && <Text style={{ color: 'tomato', paddingHorizontal: 16 }}>{error}</Text>}
       <FlatList
@@ -173,7 +178,7 @@ export function HardwareInner() {
             </Text>
             <Text style={{ color: tokens.colors.textDim, textAlign: 'center', lineHeight: 20, marginBottom: 12 }}>
               {debounced 
-                ? 'Tente buscar por outros termos como "RTX", "GPU", "SSD" ou "memória"'
+                ? `Nenhum produto encontrado para "${debounced}". Tente termos como:\n• GPUs: "4060", "RTX", "RX 6600"\n• CPUs: "i5", "Ryzen 5", "processador"\n• Outros: "SSD", "memória", "fonte"`
                 : 'As ofertas de hardware são atualizadas a cada 30 minutos. Puxe para baixo para tentar novamente ou use a busca acima.'
               }
             </Text>

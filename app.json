@@ -19,9 +19,7 @@
       "**/*"
     ],
     "jsEngine": "hermes",
-    "runtimeVersion": {
-      "policy": "sdkVersion"
-    },
+    "runtimeVersion": "1.0.0",
     "android": {
       "package": "com.nexusdevsystem.looton",
       "permissions": [

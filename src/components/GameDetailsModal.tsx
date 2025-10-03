@@ -16,7 +16,8 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { WishlistService, WishlistItem } from '../services/WishlistService';
-import { AddToListModal } from './AddToListModal'
+import { AddToListModal } from './AddToListModal';
+import { PriceAnalysisModal } from './PriceAnalysisModal';
 
 const { width, height } = Dimensions.get('window');
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
@@ -135,6 +136,7 @@ export const GameDetailsModal: React.FC<GameDetailsProps> = ({
   const [loading, setLoading] = useState(false);
   const [showWishlistModal, setShowWishlistModal] = useState(false);
   const [showAddToListModal, setShowAddToListModal] = useState(false);
+  const [showPriceAnalysis, setShowPriceAnalysis] = useState(false);
   const [desiredPrice, setDesiredPrice] = useState('');
   const [isInWishlist, setIsInWishlist] = useState(false);
   const [wishlistItem, setWishlistItem] = useState<WishlistItem | null>(null);
@@ -497,41 +499,65 @@ export const GameDetailsModal: React.FC<GameDetailsProps> = ({
                     </View>
                   </View>
 
-                  <TouchableOpacity
-                    onPress={() => {
-                      if (userId) {
-                        // authenticated flow: open server lists modal
-                        setShowAddToListModal(true)
-                      } else {
-                        // anonymous: local wishlist behavior
-                        if (isInWishlist) {
-                          handleRemoveFromWishlist()
-                        } else {
-                          setShowWishlistModal(true)
-                        }
-                      }
-                    }}
+                  <View style={{ flexDirection: 'row', gap: 12 }}>
+                    <TouchableOpacity
+                      onPress={() => setShowPriceAnalysis(true)}
+                      style={{
+                        backgroundColor: '#8B5CF6',
+                        paddingHorizontal: 14,
+                        paddingVertical: 8,
+                        borderRadius: 20,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <Ionicons 
+                        name="analytics-outline" 
+                        size={16} 
+                        color="white" 
+                        style={{ marginRight: 6 }}
+                      />
+                      <Text style={{ color: 'white', fontWeight: '600' }}>
+                        Análise
+                      </Text>
+                    </TouchableOpacity>
 
-                    style={{
-                      backgroundColor: isInWishlist ? '#EF4444' : '#3B82F6',
-                      paddingHorizontal: 16,
-                      paddingVertical: 8,
-                      borderRadius: 20,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                    }}
-                    // We'll replace the handler in the next patch to avoid large hunks
-                  >
-                    <Ionicons 
-                      name={isInWishlist ? "heart" : "heart-outline"} 
-                      size={16} 
-                      color="white" 
-                      style={{ marginRight: 6 }}
-                    />
-                    <Text style={{ color: 'white', fontWeight: '600' }}>
-                      {isInWishlist ? 'Na Lista' : 'Desejar'}
-                    </Text>
-                  </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => {
+                        if (userId) {
+                          // authenticated flow: open server lists modal
+                          setShowAddToListModal(true)
+                        } else {
+                          // anonymous: local wishlist behavior
+                          if (isInWishlist) {
+                            handleRemoveFromWishlist()
+                          } else {
+                            setShowWishlistModal(true)
+                          }
+                        }
+                      }}
+
+                      style={{
+                        backgroundColor: isInWishlist ? '#EF4444' : '#3B82F6',
+                        paddingHorizontal: 16,
+                        paddingVertical: 8,
+                        borderRadius: 20,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                      }}
+                      // We'll replace the handler in the next patch to avoid large hunks
+                    >
+                      <Ionicons 
+                        name={isInWishlist ? "heart" : "heart-outline"} 
+                        size={16} 
+                        color="white" 
+                        style={{ marginRight: 6 }}
+                      />
+                      <Text style={{ color: 'white', fontWeight: '600' }}>
+                        {isInWishlist ? 'Na Lista' : 'Desejar'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               </View>
 
@@ -760,6 +786,15 @@ export const GameDetailsModal: React.FC<GameDetailsProps> = ({
             userId={userId}
           />
         )}
+
+        {/* Price Analysis Modal */}
+        <PriceAnalysisModal
+          visible={showPriceAnalysis}
+          onClose={() => setShowPriceAnalysis(false)}
+          gameId={appId.toString()}
+          gameTitle={gameDetails?.name || gameTitle || ''}
+          currentPrice={currentPrice}
+        />
 
         {/* Local wishlist modal for anonymous users (already implemented above via showWishlistModal) */}
       </View>

@@ -186,11 +186,8 @@ export const WishlistTab: React.FC<WishlistTabProps> = ({ visible, onClose }) =>
                     <View style={{ flexDirection: 'row', padding: 16 }}>
                       {/* Game Image */}
                       <GameCover
-                        title={item.title}
-                        coverUrl={item.coverUrl}
-                        width={80}
-                        aspect={16/9}
-                        rounded={8}
+                        imageUrls={[item.coverUrl]}
+                        height={45}
                       />
 
                       {/* Game Info */}

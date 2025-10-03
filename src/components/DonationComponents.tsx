@@ -75,10 +75,11 @@ export function DonationModal({ visible, onClose }: DonationModalProps) {
 
                 {/* QR Code */}
                 <View style={styles.qrContainer}>
-                  <View style={[styles.qrCode, { backgroundColor: '#E5E7EB', justifyContent: 'center', alignItems: 'center' }]}>
-                    <Ionicons name="qr-code" size={80} color="#6B7280" />
-                    <Text style={{ color: '#6B7280', marginTop: 8, fontSize: 12 }}>QR Code PIX</Text>
-                  </View>
+                  <Image 
+                    source={require('../../assets/images/qrcode.jpeg')} 
+                    style={styles.qrCode}
+                    resizeMode="contain"
+                  />
                   <Text style={styles.qrLabel}>PIX para doação</Text>
                 </View>
 

@@ -12,6 +12,7 @@ export type Deal = {
   priceFinal: number
   discountPct: number
   game?: { title: string; coverUrl?: string }
+  imageUrls?: string[]
   store?: { name: string }
 }
 
@@ -19,11 +20,8 @@ export function DealCard({ deal, onPress }: { deal: Deal; onPress?: () => void }
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.9} style={{ backgroundColor: tokens.colors.card, borderRadius: tokens.radius, overflow: 'hidden', margin: 8, ...tokens.shadow.card }}>
       <GameCover
-        title={deal.game?.title || 'Jogo sem título'}
-        coverUrl={deal.game?.coverUrl}
-        aspect={140/300}
-        width="100%"
-        rounded={0}
+        imageUrls={(deal.imageUrls && deal.imageUrls.length > 0) ? deal.imageUrls : [deal.game?.coverUrl]}
+        height={140}
       />
       <View style={{ padding: 12 }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>

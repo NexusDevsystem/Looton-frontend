@@ -29,6 +29,7 @@ import { showToast } from '../src/utils/SimpleToast'
 import { TermsOfServiceModal } from '../src/components/TermsOfServiceModal'
 import { SplashScreen } from '../src/components/SplashScreen'
 import { OnboardingCarousel } from '../src/components/OnboardingCarousel'
+import { useGameFeed, GameItem } from '../src/hooks/useGameFeed'
 
 interface Deal {
   _id: string
@@ -38,6 +39,8 @@ interface Deal {
   priceFinal: number
   discountPct: number
   steamGenres?: Array<{ id: string; name: string }>
+  imageUrls?: string[]
+  image?: string
   game: {
     title: string
     coverUrl: string
@@ -138,6 +141,9 @@ export default function Home() {
   const [appState, setAppState] = useState<'splash' | 'onboarding' | 'terms' | 'app'>('splash')
   const [hasSeenOnboarding, setHasSeenOnboarding] = useState(false)
   
+  // Estado para ordenação
+  const [sortBy, setSortBy] = useState<'best_price' | 'biggest_discount'>('best_price')
+  
   // Mock user ID - em um app real viria do contexto de autenticação
   // Leave empty to treat as unauthenticated in dev by default
   const [userId, setUserId] = useState('')
@@ -160,9 +166,37 @@ export default function Home() {
     hasActiveFilters,
     fetchFilteredDeals
   } = useFilters()
+  
+  // Hook do novo feed
+  const { 
+    data: gameItems, 
+    loading: feedLoading, 
+    error: feedError, 
+    hasNextPage, 
+    refresh: refreshFeed, 
+    loadMore 
+  } = useGameFeed(selectedGenres, sortBy)
 
   // Estado para ofertas filtradas
   const [displayDeals, setDisplayDeals] = useState<Deal[]>([])
+  
+  // Função para converter GameItem para Deal (compatibilidade)
+  const convertGameItemToDeal = (item: GameItem): Deal => ({
+    _id: item.id,
+    url: item.url,
+    priceBase: item.priceFinalCents / 100, // assumindo que não há desconto, usar o preço final
+    priceFinal: item.priceFinalCents / 100,
+    discountPct: item.discountPct || 0,
+    game: {
+      title: item.title,
+      coverUrl: item.coverUrl || '',
+      genres: item.genres,
+      tags: item.tags
+    },
+    store: {
+      name: item.store
+    }
+  })
 
   useEffect(() => {
     // Inicializar app com verificação do fluxo de onboarding
@@ -287,13 +321,19 @@ export default function Home() {
     }
   }
 
-  // Effect simplificado para aplicar filtros básicos na aba home
+  // Effect para usar o novo feed quando houver filtros ativos
   useEffect(() => {
     if (activeTab === 'home') {
-      // Filtros simplificados - apenas usar os deals originais sem processamento complexo
-      setDisplayDeals(deals);
+      if (hasActiveFilters && gameItems.length > 0) {
+        // Usar o novo feed filtrado
+        const convertedDeals = gameItems.map(convertGameItemToDeal)
+        setDisplayDeals(convertedDeals)
+      } else {
+        // Usar os deals originais sem filtros
+        setDisplayDeals(deals)
+      }
     }
-  }, [deals, activeTab])
+  }, [deals, activeTab, hasActiveFilters, gameItems])
 
   useEffect(() => {
     if (searchQuery.trim() === '') {
@@ -526,6 +566,10 @@ export default function Home() {
     try {
       setRefreshing(true)
       await fetchDeals()
+      // Também atualizar o feed filtrado se houver filtros ativos
+      if (hasActiveFilters) {
+        refreshFeed()
+      }
     } finally {
       setRefreshing(false)
     }
@@ -746,12 +790,9 @@ export default function Home() {
       )}
       {/* Removido: botões de favorito e adicionar à lista foram movidos para o botão 'Desejar' no modal */}
 
-      <GameCover
-        title={deal.game?.title || 'Sem título'}
-        coverUrl={deal.game?.coverUrl}
-        aspect={16/9}
-        width="100%"
-        onPress={() => openGameDetails(deal)}
+      <GameCover 
+        imageUrls={(deal.imageUrls && deal.imageUrls.length > 0) ? deal.imageUrls : [deal.game?.coverUrl]} 
+        height={200} 
       />
         
         <View style={{ padding: isTablet ? 20 : 16 }}>
@@ -1155,6 +1196,22 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                       initialNumToRender={5}
                       windowSize={5}
                       maxToRenderPerBatch={3}
+                      onEndReached={() => {
+                        if (hasActiveFilters && hasNextPage && !feedLoading) {
+                          loadMore()
+                        }
+                      }}
+                      onEndReachedThreshold={0.1}
+                      ListFooterComponent={() => (
+                        hasActiveFilters && feedLoading ? (
+                          <View style={{ padding: 20, alignItems: 'center' }}>
+                            <ActivityIndicator color="#3B82F6" />
+                            <Text style={{ color: '#9CA3AF', marginTop: 8 }}>
+                              Carregando mais...
+                            </Text>
+                          </View>
+                        ) : null
+                      )}
                     />
                   </View>
                 </>
@@ -1233,15 +1290,52 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
 
               {/* Filtros */}
               {showFilters && (
-                <FilterChips
-                  selectedGenres={selectedGenres}
-                  selectedTags={selectedTags}
-                  availableGenres={availableGenres}
-                  availableTags={availableTags}
-                  onGenreToggle={toggleGenre}
-                  onTagToggle={toggleTag}
-                  onClear={clearFilters}
-                />
+                <View>
+                  {/* Controle de Ordenação */}
+                  <View style={{ flexDirection: 'row', paddingHorizontal: 20, paddingBottom: 10, gap: 10 }}>
+                    <TouchableOpacity
+                      onPress={() => setSortBy('best_price')}
+                      style={{
+                        paddingHorizontal: 12,
+                        paddingVertical: 6,
+                        borderRadius: 16,
+                        backgroundColor: sortBy === 'best_price' ? '#3B82F6' : '#374151',
+                        borderWidth: 1,
+                        borderColor: sortBy === 'best_price' ? '#3B82F6' : '#4B5563'
+                      }}
+                    >
+                      <Text style={{ color: 'white', fontSize: 12, fontWeight: '500' }}>
+                        Melhor Preço
+                      </Text>
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity
+                      onPress={() => setSortBy('biggest_discount')}
+                      style={{
+                        paddingHorizontal: 12,
+                        paddingVertical: 6,
+                        borderRadius: 16,
+                        backgroundColor: sortBy === 'biggest_discount' ? '#3B82F6' : '#374151',
+                        borderWidth: 1,
+                        borderColor: sortBy === 'biggest_discount' ? '#3B82F6' : '#4B5563'
+                      }}
+                    >
+                      <Text style={{ color: 'white', fontSize: 12, fontWeight: '500' }}>
+                        Maior Desconto
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <FilterChips
+                    selectedGenres={selectedGenres}
+                    selectedTags={selectedTags}
+                    availableGenres={availableGenres}
+                    availableTags={availableTags}
+                    onGenreToggle={toggleGenre}
+                    onTagToggle={toggleTag}
+                    onClear={clearFilters}
+                  />
+                </View>
               )}
             </View>
 

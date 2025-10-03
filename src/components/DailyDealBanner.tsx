@@ -17,6 +17,7 @@ interface Deal {
     title: string;
     coverUrl: string;
   };
+  imageUrls?: string[];
   store: {
     name: string;
   };
@@ -50,13 +51,12 @@ export const DailyDealBanner: React.FC<DailyDealBannerProps> = ({ deal, onPress 
     >
       {/* GameCover com overlay */}
       <View style={{ position: 'relative' }}>
-        <GameCover
-          title={deal.game.title}
-          coverUrl={deal.game.coverUrl}
-          aspect={140/width}
-          width="100%"
-          onPress={() => onPress(deal)}
-        />
+        <TouchableOpacity onPress={() => onPress(deal)}>
+          <GameCover
+            imageUrls={(deal.imageUrls && deal.imageUrls.length > 0) ? deal.imageUrls : [deal.game.coverUrl]}
+            height={140}
+          />
+        </TouchableOpacity>
         
         {/* Overlay gradiente */}
         <LinearGradient

@@ -250,11 +250,8 @@ export default function FavoritesAndLists() {
       alignItems: 'center'
     }}>
       <GameCover 
-        title={favorite.gameId?.title || 'Jogo'}
-        coverUrl={favorite.gameId?.coverUrl}
-        width={60}
-        aspect={4/3}
-        rounded={8}
+        imageUrls={[favorite.gameId?.coverUrl]}
+        height={80}
       />
       <View style={{ flex: 1, marginLeft: 12 }}>
         <Text style={{ color: tokens.colors.text, fontSize: 16, fontWeight: 'bold' }}>
