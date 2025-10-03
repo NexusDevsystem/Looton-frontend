@@ -12,7 +12,7 @@ import { tokens } from '../src/theme/tokens'
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000'
 
 export default function FavoritesAndLists() {
-  const [activeTab, setActiveTab] = useState<'watching' | 'lists'>('watching')
+  const [activeTab, setActiveTab] = useState<'watching'>('watching')
   const [filterStore, setFilterStore] = useState<'all' | 'steam' | 'epic'>('all')
   const [filterChanged, setFilterChanged] = useState<'all' | 'down' | 'up'>('all')
   const [newListName, setNewListName] = useState('')
@@ -189,13 +189,13 @@ export default function FavoritesAndLists() {
     return filtered
   }
 
-  const renderTabButton = (tab: 'watching' | 'lists', title: string, icon: string) => (
+  const renderTabButton = (tab: 'watching', title: string, icon: string) => (
     <TouchableOpacity
       style={{
         flex: 1,
         paddingVertical: 12,
         paddingHorizontal: 16,
-  backgroundColor: activeTab === tab ? tokens.colors.primary : 'transparent',
+        backgroundColor: activeTab === tab ? tokens.colors.primary : 'transparent',
         borderRadius: 8,
         marginHorizontal: 4,
         alignItems: 'center',
@@ -358,170 +358,70 @@ export default function FavoritesAndLists() {
         </Text>
       </View>
 
-      {/* Tabs */}
+      {/* Header Vigiando */}
       <View style={{
-        flexDirection: 'row',
         paddingHorizontal: 20,
         paddingVertical: 16,
-        backgroundColor: tokens.colors.bgElev
+        backgroundColor: tokens.colors.bgElev,
+        alignItems: 'center'
       }}>
-        {renderTabButton('watching', 'Vigiando', 'heart')}
-        {renderTabButton('lists', 'Listas', 'list')}
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <Ionicons name="heart" size={24} color="#E91E63" style={{ marginRight: 12 }} />
+          <Text style={{
+            color: tokens.colors.text,
+            fontSize: 18,
+            fontWeight: 'bold'
+          }}>
+            Jogos Vigiando
+          </Text>
+        </View>
       </View>
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20 }}>
-        {/* Tab Vigiando */}
-        {activeTab === 'watching' && (
-          <View>
-            {/* Filtros */}
-            <View style={{ marginBottom: 20 }}>
-              <Text style={{ color: '#FFF', fontSize: 16, fontWeight: 'bold', marginBottom: 12 }}>
-                Filtros
-              </Text>
-              <View style={{ flexDirection: 'row', marginBottom: 8 }}>
-                {renderFilterChip('all', 'Todas as Lojas', filterStore, setFilterStore)}
-                {renderFilterChip('steam', 'Steam', filterStore, setFilterStore)}
-                {renderFilterChip('epic', 'Epic', filterStore, setFilterStore)}
-              </View>
-              <View style={{ flexDirection: 'row' }}>
-                {renderFilterChip('all', 'Todas', filterChanged, setFilterChanged)}
-                {renderFilterChip('down', 'Preço Caiu', filterChanged, setFilterChanged)}
-                {renderFilterChip('up', 'Preço Subiu', filterChanged, setFilterChanged)}
-              </View>
+        {/* Seção Vigiando */}
+        <View>
+          {/* Filtros */}
+          <View style={{ marginBottom: 20 }}>
+            <Text style={{ color: '#FFF', fontSize: 16, fontWeight: 'bold', marginBottom: 12 }}>
+              Filtros
+            </Text>
+            <View style={{ flexDirection: 'row', marginBottom: 8 }}>
+              {renderFilterChip('all', 'Todas as Lojas', filterStore, setFilterStore)}
+              {renderFilterChip('steam', 'Steam', filterStore, setFilterStore)}
+              {renderFilterChip('epic', 'Epic', filterStore, setFilterStore)}
             </View>
-
-            {/* Lista de Favoritos */}
-            {isLoading ? (
-                <ActivityIndicator size="large" color={tokens.colors.primary} style={{ marginTop: 50 }} />
-            ) : (
-              <View>
-                <Text style={{ color: '#FFF', fontSize: 16, fontWeight: 'bold', marginBottom: 12 }}>
-                  Seus Favoritos ({getFilteredFavorites().length})
-                </Text>
-                {getFilteredFavorites().length === 0 ? (
-                  <View style={{
-                    padding: 40,
-                    alignItems: 'center'
-                  }}>
-                    <Ionicons name="heart-outline" size={60} color={tokens.colors.border} />
-                    <Text style={{ color: tokens.colors.textDim, fontSize: 16, marginTop: 16, textAlign: 'center' }}>
-                      Nenhum jogo favoritado ainda.{'\n'}
-                      Adicione jogos aos favoritos para acompanhar mudanças de preço!
-                    </Text>
-                  </View>
-                ) : (
-                  getFilteredFavorites().map(renderFavoriteItem)
-                )}
-              </View>
-            )}
+            <View style={{ flexDirection: 'row' }}>
+              {renderFilterChip('all', 'Todas', filterChanged, setFilterChanged)}
+              {renderFilterChip('down', 'Preço Caiu', filterChanged, setFilterChanged)}
+              {renderFilterChip('up', 'Preço Subiu', filterChanged, setFilterChanged)}
+            </View>
           </View>
-        )}
 
-        {/* Tab Listas */}
-        {activeTab === 'lists' && (
-          <View>
-            {/* Botão Criar Lista */}
-            <TouchableOpacity
-              style={{
-                backgroundColor: tokens.colors.primary,
-                paddingVertical: 12,
-                paddingHorizontal: 20,
-                borderRadius: 8,
-                marginBottom: 20,
-                alignItems: 'center',
-                flexDirection: 'row',
-                justifyContent: 'center'
-              }}
-              onPress={() => setShowCreateList(true)}
-            >
-              <Ionicons name="add" size={20} color={tokens.colors.bg} style={{ marginRight: 8 }} />
-              <Text style={{ color: tokens.colors.bg, fontWeight: 'bold' }}>
-                Criar Nova Lista
+          {/* Lista de Favoritos */}
+          {isLoading ? (
+            <ActivityIndicator size="large" color={tokens.colors.primary} style={{ marginTop: 50 }} />
+          ) : (
+            <View>
+              <Text style={{ color: '#FFF', fontSize: 16, fontWeight: 'bold', marginBottom: 12 }}>
+                Seus Favoritos ({getFilteredFavorites().length})
               </Text>
-            </TouchableOpacity>
-
-            {/* Input para criar lista */}
-            {showCreateList && (
-              <View style={{
-                backgroundColor: tokens.colors.card,
-                borderRadius: 12,
-                padding: 16,
-                marginBottom: 20
-              }}>
-                <TextInput
-                  style={{
-                    backgroundColor: tokens.colors.bgElev,
-                    color: tokens.colors.text,
-                    paddingHorizontal: 12,
-                    paddingVertical: 8,
-                    borderRadius: 8,
-                    marginBottom: 12
-                  }}
-                  placeholder="Nome da lista"
-                  placeholderTextColor={tokens.colors.textDim}
-                  value={newListName}
-                  onChangeText={setNewListName}
-                />
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <TouchableOpacity
-                    style={{
-                      flex: 1,
-                      backgroundColor: tokens.colors.bgElev,
-                      paddingVertical: 8,
-                      alignItems: 'center',
-                      borderRadius: 8,
-                      marginRight: 8
-                    }}
-                    onPress={() => {
-                      setShowCreateList(false)
-                      setNewListName('')
-                    }}
-                  >
-                    <Text style={{ color: tokens.colors.text }}>Cancelar</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                      style={{
-                        flex: 1,
-                        backgroundColor: tokens.colors.primary,
-                      paddingVertical: 8,
-                      alignItems: 'center',
-                      borderRadius: 8,
-                      marginLeft: 8
-                    }}
-                    onPress={handleCreateList}
-                  >
-                      <Text style={{ color: tokens.colors.bg, fontWeight: 'bold' }}>Criar</Text>
-                  </TouchableOpacity>
+              {getFilteredFavorites().length === 0 ? (
+                <View style={{
+                  padding: 40,
+                  alignItems: 'center'
+                }}>
+                  <Ionicons name="heart-outline" size={60} color={tokens.colors.border} />
+                  <Text style={{ color: tokens.colors.textDim, fontSize: 16, marginTop: 16, textAlign: 'center' }}>
+                    Nenhum jogo favoritado ainda.{'\n'}
+                    Adicione jogos aos favoritos para acompanhar mudanças de preço!
+                  </Text>
                 </View>
-              </View>
-            )}
-
-            {/* Lista de Listas */}
-            {listsLoading ? (
-              <ActivityIndicator size="large" color={tokens.colors.primary} style={{ marginTop: 50 }} />
-            ) : (
-              <View>
-                <Text style={{ color: '#FFF', fontSize: 16, fontWeight: 'bold', marginBottom: 12 }}>
-                  Suas Listas ({lists.length})
-                </Text>
-                {lists.length === 0 ? (
-                  <View style={{
-                    padding: 40,
-                    alignItems: 'center'
-                  }}>
-                    <Ionicons name="list-outline" size={60} color={tokens.colors.border} />
-                    <Text style={{ color: tokens.colors.textDim, fontSize: 16, marginTop: 16, textAlign: 'center' }}>
-                      Nenhuma lista criada ainda.{'\n'}
-                      Crie listas para organizar seus jogos favoritos!
-                    </Text>
-                  </View>
-                ) : (
-                  lists.map(renderListItem)
-                )}
-              </View>
-            )}
-          </View>
-        )}
+              ) : (
+                getFilteredFavorites().map(renderFavoriteItem)
+              )}
+            </View>
+          )}
+        </View>
       </ScrollView>
     </SafeAreaView>
   )

@@ -27,7 +27,7 @@ export function HardwareInner() {
   const loadCurated = useCallback(async () => {
     setError(null)
     try {
-      const res = await fetchPcDeals({ limit: 12, store: ['terabyte'] })
+      const res = await fetchPcDeals({ limit: 12 })
       setItems(res.items || [])
     } catch (e: any) {
       setError(e.message || 'Erro ao carregar ofertas')
@@ -41,7 +41,7 @@ export function HardwareInner() {
   const loadMore = useCallback(async () => {
     try {
       if (!debounced) return // do not load more unless searching
-      const baseParams = { full: true as const, store: ['terabyte'] as string[], limit: pageSize, offset: page * pageSize }
+      const baseParams = { full: true as const, limit: pageSize, offset: page * pageSize }
       const res = await fetchPcDeals({ ...baseParams, q: debounced })
       const next = res.items || []
       if (next.length) {
@@ -81,7 +81,7 @@ export function HardwareInner() {
     ;(async () => {
       setLoading(true)
       try {
-        const res = await fetchPcDeals({ full: true, store: ['terabyte'], q: debounced, limit: pageSize, offset: 0 })
+        const res = await fetchPcDeals({ full: true, q: debounced, limit: pageSize, offset: 0 })
         setItems(res.items || [])
         setPage(1)
       } catch (e: any) {
@@ -93,8 +93,20 @@ export function HardwareInner() {
     })()
   }, [debounced, loadCurated])
 
-  // Minimal list: only Terabyte, no category chips
-  const listItems = items.filter((it) => (it.store || '').toLowerCase() === 'terabyte')
+  // Debug: log items to see what's being returned
+  console.log('Hardware items:', items.length, 'first item:', items[0])
+  
+  // Minimal list: prefer Terabyte, but show all if none available
+  let listItems = items.filter((it) => {
+    const storeMatch = (it.store || '').toLowerCase().includes('terabyte')
+    return storeMatch
+  })
+  
+  // Fallback: if no Terabyte items, show all items
+  if (listItems.length === 0 && items.length > 0) {
+    listItems = items
+    console.log('No Terabyte items found, showing all stores')
+  }
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: tokens.colors.bg }}>
@@ -139,7 +151,7 @@ export function HardwareInner() {
                 // refresh first page of search
                 ;(async () => {
                   try {
-                    const res = await fetchPcDeals({ full: true, store: ['terabyte'], q: debounced, limit: pageSize, offset: 0 })
+                    const res = await fetchPcDeals({ full: true, q: debounced, limit: pageSize, offset: 0 })
                     setItems(res.items || [])
                     setPage(1)
                   } catch {}

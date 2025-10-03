@@ -8,13 +8,17 @@
     "platforms": ["ios", "android"],
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "icon": "./assets/images/favicon.png",
     "assetBundlePatterns": [
       "**/*"
     ],
     "android": {
       "package": "com.nexusdevsystem.looton",
       "runtimeVersion": "1.0.0",
-      "permissions": []
+      "permissions": [
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.WAKE_LOCK"
+      ]
     },
     "ios": {
       "bundleIdentifier": "com.nexusdevsystem.looton",
@@ -28,6 +32,7 @@
     },
     "plugins": [
       "expo-router",
+      "expo-notifications",
       [
         "expo-build-properties",
         {

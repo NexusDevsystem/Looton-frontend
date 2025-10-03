@@ -20,8 +20,9 @@ import { GameCover } from '../src/components/GameCover'
 import { useImagePrefetch } from '../src/hooks/useImagePrefetch'
 import { FavoriteButton } from '../src/components/FavoriteButton'
 import { AddToListModal } from '../src/components/AddToListModal'
-import { FilterChips } from '../src/components/FilterChips'
-import { useFilters } from '../src/hooks/useFilters'
+import { LowestPriceBadge, PriceHistoryIndicator } from '../src/components/LowestPriceBadge'
+import { PriceHistoryModal } from '../src/components/PriceHistoryModal'
+import { usePriceHistory } from '../src/hooks/usePriceHistory'
 import { SteamGenresPreferencesModal } from '../src/components/SteamGenresPreferencesModal'
 import { fetchCuratedFeed, SteamGenre, UserPreferences } from '../src/services/SteamGenresService'
 import { showToast } from '../src/utils/SimpleToast'
@@ -117,7 +118,6 @@ export default function Home() {
   const [gameDetailsModalVisible, setGameDetailsModalVisible] = useState(false)
   const [wishlistGames, setWishlistGames] = useState<any[]>([])
   const [showDetails, setShowDetails] = useState(false)
-  const [filteredDeals, setFilteredDeals] = useState<Deal[]>([])
   const [searchResults, setSearchResults] = useState<Deal[]>([])
   const [isSearching, setIsSearching] = useState(false)
   const fadeAnim = useRef(new Animated.Value(0)).current
@@ -128,9 +128,10 @@ export default function Home() {
   const [showPreferencesModal, setShowPreferencesModal] = useState(false)
   const [availableSteamGenres, setAvailableSteamGenres] = useState<SteamGenre[]>([])
   const [loadingGenres, setLoadingGenres] = useState(false)
-  const [showFilters, setShowFilters] = useState(false)
   const [showCurrencyModal, setShowCurrencyModal] = useState(false)
   const [showTermsModal, setShowTermsModal] = useState(false)
+  const [showPriceHistoryModal, setShowPriceHistoryModal] = useState(false)
+  const [selectedGameForHistory, setSelectedGameForHistory] = useState<{appId: number, title: string} | null>(null)
   
   // Mock user ID - em um app real viria do contexto de autenticação
   // Leave empty to treat as unauthenticated in dev by default
@@ -139,26 +140,17 @@ export default function Home() {
   const searchTimeout = useRef<NodeJS.Timeout | null>(null)
   const searchInputRef = useRef<any | null>(null)
 
-  // Hook de filtros
-  const {
-    selectedGenres,
-    selectedTags,
-    availableGenres,
-    availableTags,
-    toggleGenre,
-    toggleTag,
-    clearFilters,
-    hasActiveFilters,
-    fetchFilteredDeals
-  } = useFilters()
 
-  // Estado para ofertas filtradas
-  const [displayDeals, setDisplayDeals] = useState<Deal[]>([])
+
+
 
   // Função removida - GameCover gerencia os erros internamente
 
   // Prefetch das imagens para melhor performance
   useImagePrefetch(deals.map(deal => ({ coverUrl: deal.game?.coverUrl })))
+
+  // Hook para histórico de preços
+  const { processDeals } = usePriceHistory()
 
   useEffect(() => {
     // Iniciar o app diretamente sem onboarding ou login
@@ -198,255 +190,21 @@ export default function Home() {
     }
   }
 
-  // Effect para aplicar filtros na aba home
-  useEffect(() => {
-    if (activeTab === 'home') {
-      applyFilters()
-    }
-  }, [deals, selectedGenres, selectedTags, activeTab, userPreferredSteamGenres])
 
-  // Função para organizar jogos com filtro de gênero e destaque da melhor oferta
+
+  // Filtros removidos - o backend já entrega os dados organizados
   const applyFilters = () => {
-    console.log('=== Aplicando Filtros ===');
-    console.log('Total de jogos:', deals.length);
-    console.log('Gêneros preferidos selecionados:', userPreferredSteamGenres);
-    
-    let filteredDeals = deals;
-    
-    // SISTEMA SIMPLIFICADO: Backend já faz boost, aqui só filtros de UI se necessário
-    if (userPreferredSteamGenres && userPreferredSteamGenres.length > 0) {
-      console.log('Gêneros Steam preferidos para filtro de UI:', userPreferredSteamGenres.join(', '));
-      
-      filteredDeals = deals.filter(deal => {
-        const gameGenres = deal.game?.genres || [];
-        const gameTitle = (deal.game?.title || '').toLowerCase();
-        
-        // Debug apenas alguns jogos para não poluir o console
-        if (Math.random() < 0.1) {
-          console.log(`Jogo: ${deal.game?.title}, Gêneros: [${gameGenres.join(', ')}]`);
-        }
-        
-        // Mapeamento expandido de gêneros em português para keywords
-        const genreMapping: Record<string, string[]> = {
-          'Ação': [
-            'action', 'shooter', 'combat', 'fighting', 'fps', 'tps', 'third person shooter', 'first person shooter',
-            'call of duty', 'battlefield', 'counter-strike', 'doom', 'halo', 'gears of war', 'mortal kombat',
-            'tekken', 'street fighter', 'overwatch', 'apex', 'valorant', 'csgo', 'cod', 'pubg', 'fortnite',
-            'gun', 'weapon', 'war', 'battle', 'military', 'zombie', 'survival horror', 'beat em up',
-            'hack and slash', 'stealth', 'ninja', 'assassin', 'metal gear', 'hitman'
-          ],
-          'Aventura': [
-            'adventure', 'exploration', 'story rich', 'narrative', 'puzzle', 'mystery', 'detective',
-            'tomb raider', 'uncharted', 'zelda', 'assassins creed', 'life is strange', 'telltale',
-            'point and click', 'visual novel', 'interactive fiction', 'walking simulator',
-            'open world', 'exploration', 'quest', 'journey', 'discovery', 'treasure', 'indiana jones'
-          ],
-          'Corrida': [
-            'racing', 'driving', 'automobile', 'motorcycle', 'car', 'race', 'speed', 'drift', 'rally',
-            'forza', 'need for speed', 'gran turismo', 'f1', 'formula', 'nfs', 'burnout', 'dirt',
-            'wreckfest', 'assetto corsa', 'project cars', 'crew', 'driver', 'midnight club',
-            'track', 'circuit', 'nascar', 'motogp', 'bikes', 'supercars', 'street racing',
-            'arcade racing', 'simulation racing', 'kart', 'go kart', 'mario kart'
-          ],
-          'RPG': [
-            'rpg', 'role-playing', 'jrpg', 'character action', 'leveling', 'stats', 'experience',
-            'witcher', 'elder scrolls', 'fallout', 'final fantasy', 'dragon age', 'mass effect',
-            'divinity', 'baldurs gate', 'pillars of eternity', 'pathfinder', 'cyberpunk',
-            'fantasy', 'medieval', 'magic', 'wizard', 'warrior', 'rogue', 'mage', 'knight',
-            'dungeon', 'dragon', 'sword', 'sorcery', 'turn-based rpg', 'action rpg', 'crpg'
-          ],
-          'Estratégia': [
-            'strategy', 'rts', 'real time strategy', 'turn-based', 'turn based strategy', 'tower defense',
-            '4x', 'grand strategy', 'tactical', 'management', 'base building', 'resource management',
-            'civilization', 'age of empires', 'starcraft', 'command and conquer', 'total war',
-            'cities skylines', 'anno', 'tropico', 'crusader kings', 'europa universalis',
-            'xcom', 'chess', 'board game', 'war game', 'empire', 'conquest'
-          ],
-          'Esportes': [
-            'sports', 'football', 'soccer', 'basketball', 'baseball', 'tennis', 'golf', 'hockey',
-            'fifa', 'nba', '2k', 'madden', 'nhl', 'mlb', 'pes', 'pro evolution soccer',
-            'olympics', 'swimming', 'athletics', 'boxing', 'wrestling', 'ufc', 'mma',
-            'skateboarding', 'snowboarding', 'skiing', 'surfing', 'volleyball', 'american football'
-          ],
-          'Simulação': [
-            'simulation', 'sim', 'simulator', 'life sim', 'farming', 'farm', 'city builder',
-            'cities skylines', 'simcity', 'euro truck', 'american truck', 'flight simulator',
-            'farming simulator', 'construction', 'tycoon', 'business', 'management',
-            'train simulator', 'bus simulator', 'cooking', 'medical', 'surgery simulator',
-            'goat simulator', 'job simulator', 'realistic', 'educational'
-          ],
-          'Indie': [
-            'indie', 'independent', 'pixel art', 'retro', 'artistic', 'experimental', 'creative',
-            'minimalist', 'abstract', 'unique', 'innovative', 'small developer', 'art game',
-            'atmospheric', 'emotional', 'personal', 'stylized', 'hand drawn', '2d', 'pixel'
-          ],
-          'Casual': [
-            'casual', 'family friendly', 'relaxing', 'chill', 'simple', 'easy', 'accessible',
-            'puzzle', 'match 3', 'hidden object', 'time management', 'card game', 'board game',
-            'trivia', 'word game', 'educational', 'kids', 'children', 'all ages', 'cute'
-          ],
-          'Acesso Antecipado': [
-            'early access', 'alpha', 'beta', 'preview', 'development', 'work in progress',
-            'upcoming', 'unreleased', 'in development', 'pre-release'
-          ]
-        };
-
-        const matchesFilter = userPreferredSteamGenres.some((selectedGenre: string) => {
-          const keywords = genreMapping[selectedGenre] || [selectedGenre.toLowerCase()];
-          
-          // Debug específico para Corrida
-          if (selectedGenre === 'Corrida') {
-            console.log(`🏎️ Verificando ${deal.game?.title} para Corrida:`);
-            console.log(`   - Gêneros do jogo: [${gameGenres.join(', ')}]`);
-            console.log(`   - Keywords de busca: [${keywords.join(', ')}]`);
-            console.log(`   - Título: ${gameTitle}`);
-          }
-          
-          // Verifica gêneros primeiro com match mais flexível
-          let hasMatch = false;
-          let matchReason = '';
-          
-          if (gameGenres.length > 0) {
-            hasMatch = gameGenres.some(gameGenre => {
-              const gameGenreLower = gameGenre.toLowerCase();
-              const matchFound = keywords.some(keyword => {
-                const keywordLower = keyword.toLowerCase();
-                // Match mais flexível: permite palavras parciais
-                return gameGenreLower.includes(keywordLower) || 
-                       keywordLower.includes(gameGenreLower) ||
-                       gameGenreLower.startsWith(keywordLower.substring(0, 4)) ||
-                       keywordLower.startsWith(gameGenreLower.substring(0, 4));
-              });
-              
-              if (matchFound && selectedGenre === 'Corrida') {
-                const matchedKeyword = keywords.find(k => {
-                  const kLower = k.toLowerCase();
-                  return gameGenreLower.includes(kLower) || kLower.includes(gameGenreLower) ||
-                         gameGenreLower.startsWith(kLower.substring(0, 4)) || kLower.startsWith(gameGenreLower.substring(0, 4));
-                });
-                console.log(`   ✅ Match no gênero: "${gameGenre}" ↔ "${matchedKeyword}"`);
-                matchReason = `gênero: ${gameGenre}`;
-              }
-              
-              return matchFound;
-            });
-          }
-          
-          // Verifica no título com match flexível
-          if (!hasMatch) {
-            hasMatch = keywords.some(keyword => {
-              const keywordLower = keyword.toLowerCase();
-              // Match no título com diferentes estratégias
-              const titleMatch = gameTitle.includes(keywordLower) ||
-                               keywordLower.includes(gameTitle.split(' ')[0]) ||
-                               gameTitle.split(' ').some(word => word.length > 3 && keywordLower.includes(word));
-              
-              if (titleMatch && selectedGenre === 'Corrida') {
-                console.log(`   ✅ Match no título: "${gameTitle}" ↔ "${keyword}"`);
-                matchReason = `título: ${keyword}`;
-              }
-              return titleMatch;
-            });
-          }
-          
-          if (hasMatch) {
-            console.log(`✅ ${deal.game?.title} PASSA no filtro (${selectedGenre})`);
-          }
-          
-          return hasMatch;
-        });
-        
-        return matchesFilter;
-      });
-      
-      console.log(`Filtrados por gênero: ${deals.length} -> ${filteredDeals.length} jogos`);
-      
-      // Sistema de fallback: se encontrou poucos jogos, expandir criterios
-      if (filteredDeals.length < 10) {
-        console.log(`⚠️ Poucos jogos encontrados (${filteredDeals.length}), aplicando fallback...`);
-        
-        const fallbackDeals = deals.filter(deal => {
-          const gameTitle = (deal.game?.title || '').toLowerCase();
-          const gameGenres = deal.game?.genres || [];
-          
-          // Já incluído no filtro principal
-          if (filteredDeals.some(fd => fd._id === deal._id)) return false;
-          
-          // Fallback com keywords mais gerais para cada gênero
-          const fallbackKeywords: Record<string, string[]> = {
-            'Ação': ['action', 'combat', 'fight', 'war', 'gun', 'battle'],
-            'Aventura': ['adventure', 'story', 'quest', 'explore'],
-            'Corrida': ['car', 'drive', 'speed', 'race', 'motor', 'vehicle'],
-            'RPG': ['rpg', 'role', 'fantasy', 'magic', 'level'],
-            'Estratégia': ['strategy', 'tactical', 'management', 'build'],
-            'Esportes': ['sport', 'football', 'soccer', 'basket'],
-            'Simulação': ['sim', 'simulator', 'real', 'life'],
-            'Indie': ['indie', 'pixel', 'art', 'small'],
-            'Casual': ['casual', 'puzzle', 'simple', 'easy'],
-            'Acesso Antecipado': ['early', 'alpha', 'beta', 'preview']
-          };
-          
-          return userPreferredSteamGenres.some((selectedGenre: string) => {
-            const fallbackKeys = fallbackKeywords[selectedGenre] || [];
-            return fallbackKeys.some(keyword => 
-              gameTitle.includes(keyword) || 
-              gameGenres.some(genre => genre.toLowerCase().includes(keyword))
-            );
-          });
-        });
-        
-        // Adiciona os jogos do fallback
-        filteredDeals = [...filteredDeals, ...fallbackDeals.slice(0, 15)];
-        console.log(`Fallback adicionou ${fallbackDeals.length} jogos. Total: ${filteredDeals.length}`);
-      }
-      
-      // Debug especial se ainda há poucos jogos
-      if (userPreferredSteamGenres.includes('Corrida') && filteredDeals.length < 5) {
-        console.log('🚨 AINDA POUCOS JOGOS DE CORRIDA! Verificando primeiros 10 jogos:');
-        deals.slice(0, 10).forEach(deal => {
-          console.log(`   - ${deal.game?.title}: gêneros [${deal.game?.genres?.join(', ') || 'nenhum'}]`);
-        });
-      }
-    } else {
-      console.log('Nenhum gênero selecionado, mostrando todos os jogos');
-    }
-    
-    // Processar ofertas com destaque
-    const processedDeals = filteredDeals.map(deal => {
-      return {
-        ...deal,
-        isBestDeal: deal.discountPct >= 50, // Marcar como melhor oferta se desconto >= 50%
-        highlightColor: deal.discountPct >= 70 ? '#FFD700' : deal.discountPct >= 50 ? '#ff8800' : null
-      };
-    });
-    
-    // Ordenar para colocar as melhores ofertas primeiro (maior desconto)
-    const sortedDeals = processedDeals.sort((a, b) => {
-      // Primeiro, ordenar por maior desconto
-      if (a.discountPct !== b.discountPct) {
-        return b.discountPct - a.discountPct; // Maior desconto primeiro
-      }
-      
-      // Se empate no desconto, ordenar por menor preço
-      return a.priceFinal - b.priceFinal;
-    });
-    
-    console.log('Jogos finais após processamento:', sortedDeals.length);
-    console.log('Melhores ofertas encontradas (>=50%):', sortedDeals.filter(d => d.isBestDeal).length);
-    console.log('Super ofertas encontradas (>=70%):', sortedDeals.filter(d => d.discountPct >= 70).length);
-    
-    setDisplayDeals(sortedDeals);
+    // Função removida
   }
 
   useEffect(() => {
     if (searchQuery.trim() === '') {
-      setFilteredDeals(deals)
       setSearchResults([])
     } else {
       const filtered = deals.filter(deal => 
         deal.game?.title?.toLowerCase().includes(searchQuery.toLowerCase())
       )
-      setFilteredDeals(filtered)
+      setSearchResults(filtered)
     }
   }, [searchQuery, deals])
 
@@ -735,9 +493,21 @@ export default function Home() {
           })
 
           setDeals(personalized || sortedDeals)
+          
+          // Processar histórico de preços em background
+          console.log('📊 Processando histórico de preços...')
+          processDeals(personalized || sortedDeals).catch(err => 
+            console.error('Erro ao processar histórico de preços:', err)
+          )
         } catch (e) {
           // fallback to base order on any error
           setDeals(sortedDeals || [])
+          
+          // Processar histórico mesmo no fallback
+          console.log('📊 Processando histórico de preços (fallback)...')
+          processDeals(sortedDeals || []).catch(err => 
+            console.error('Erro ao processar histórico de preços:', err)
+          )
         }
       })()
       
@@ -879,6 +649,16 @@ export default function Home() {
     }
   }
 
+  const openPriceHistoryModal = (appId: number, title: string) => {
+    setSelectedGameForHistory({ appId, title })
+    setShowPriceHistoryModal(true)
+  }
+
+  const closePriceHistoryModal = () => {
+    setShowPriceHistoryModal(false)
+    setSelectedGameForHistory(null)
+  }
+
   // Currency subtitle helper component uses hook from context
   const CurrencySubtitle: React.FC = () => {
     try {
@@ -938,6 +718,16 @@ export default function Home() {
     const isHighlighted = deal.discountPct >= 50;
     const isSuperDeal = deal.discountPct >= 70;
     const highlightColor = deal.highlightColor || (isSuperDeal ? '#FFD700' : isHighlighted ? '#ff8800' : '#FFD700');
+    
+    // Hook para verificar histórico de preços
+    const { checkIfLowestPrice } = usePriceHistory();
+    const [isLowestPrice, setIsLowestPrice] = useState(false);
+    
+    useEffect(() => {
+      if (deal.appId && deal.priceFinal) {
+        checkIfLowestPrice(deal.appId, deal.priceFinal).then(setIsLowestPrice);
+      }
+    }, [deal.appId, deal.priceFinal]);
     
     return (
       <TouchableOpacity
@@ -1003,6 +793,15 @@ export default function Home() {
         }}>
           {deal.game?.title || 'Sem título'}
         </Text>
+        
+        {/* Badge de menor preço histórico */}
+        {isLowestPrice && (
+          <LowestPriceBadge 
+            isLowestPrice={isLowestPrice}
+            onPress={() => deal.appId && openPriceHistoryModal(deal.appId, deal.game?.title || 'Jogo')}
+            compact={true}
+          />
+        )}
         
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <View style={{ flex: 1 }}>
@@ -1211,7 +1010,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
       elevation: 12
     }}>
       {[
-        { key: 'home', icon: 'home', label: 'Início' },
+        { key: 'home', icon: 'game-controller', label: 'Games' },
         { key: 'hardware', icon: 'cube', label: 'Hardware' },
         { key: 'search', icon: 'search', label: 'Buscar' },
         { key: 'favorites', icon: 'heart', label: 'Desejos' },
@@ -1313,13 +1112,10 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                 </View>
               )}
 
-              {!loading && !error && (deals.length > 0 || displayDeals.length > 0) && (
+              {!loading && !error && deals.length > 0 && (
                 <>
                   <View style={{ paddingHorizontal: isTablet ? 40 : 20, maxWidth: isTablet ? 800 : '100%', alignSelf: 'center', width: '100%' }}>
                     <View style={{ 
-                      flexDirection: 'row', 
-                      justifyContent: 'space-between', 
-                      alignItems: 'center',
                       marginBottom: 20
                     }}>
                       <Text style={{ 
@@ -1327,47 +1123,12 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                         fontSize: isTablet ? 28 : 24, 
                         fontWeight: '700'
                       }}>
-                        {hasActiveFilters() ? 'Ofertas Filtradas' : 'Todas as Ofertas'}
+                        Todas as Ofertas
                       </Text>
-                      
-                      <TouchableOpacity
-                        onPress={() => setShowFilters(true)}
-                        style={{
-                          backgroundColor: hasActiveFilters() ? '#3B82F6' : '#374151',
-                          paddingHorizontal: 16,
-                          paddingVertical: 8,
-                          borderRadius: 12,
-                          flexDirection: 'row',
-                          alignItems: 'center'
-                        }}
-                      >
-                        <Ionicons 
-                          name="filter" 
-                          size={16} 
-                          color={hasActiveFilters() ? '#FFFFFF' : '#9CA3AF'} 
-                        />
-                        <Text style={{ 
-                          color: hasActiveFilters() ? '#FFFFFF' : '#9CA3AF',
-                          fontSize: 14,
-                          fontWeight: '600',
-                          marginLeft: 6
-                        }}>
-                          Filtros
-                        </Text>
-                        {hasActiveFilters() && (
-                          <View style={{
-                            backgroundColor: '#FFFFFF',
-                            width: 6,
-                            height: 6,
-                            borderRadius: 3,
-                            marginLeft: 6
-                          }} />
-                        )}
-                      </TouchableOpacity>
                     </View>
                     
                     <FlatList
-                      data={displayDeals.length > 0 ? displayDeals : deals}
+                      data={deals}
                       renderItem={renderGameCard}
                       keyExtractor={(item, index) => `${item._id || 'game'}-${index}`}
                       scrollEnabled={false}
@@ -1425,21 +1186,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                 {isSearching && (
                   <ActivityIndicator size="small" color="#3B82F6" style={{ marginLeft: 8 }} />
                 )}
-                <TouchableOpacity
-                  style={{
-                    marginLeft: 8,
-                    padding: 8,
-                    backgroundColor: hasActiveFilters() ? '#3B82F6' : '#333',
-                    borderRadius: 8
-                  }}
-                  onPress={() => setShowFilters(!showFilters)}
-                >
-                  <Ionicons 
-                    name="options" 
-                    size={16} 
-                    color={hasActiveFilters() ? '#000' : '#FFF'} 
-                  />
-                </TouchableOpacity>
+
               </View>
 
               {searchQuery.length > 0 && (
@@ -1452,18 +1199,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                 </Text>
               )}
 
-              {/* Filtros */}
-              {showFilters && (
-                <FilterChips
-                  selectedGenres={selectedGenres}
-                  selectedTags={selectedTags}
-                  availableGenres={availableGenres}
-                  availableTags={availableTags}
-                  onGenreToggle={toggleGenre}
-                  onTagToggle={toggleTag}
-                  onClear={clearFilters}
-                />
-              )}
+
             </View>
 
             <FlatList
@@ -1748,83 +1484,13 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
         />
       )}
 
-      {/* Modal de filtros */}
-      <Modal
-        visible={showFilters}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setShowFilters(false)}
-      >
-        <SafeAreaView style={{ flex: 1, backgroundColor: '#1F2937' }}>
-          <View style={{ 
-            flexDirection: 'row', 
-            justifyContent: 'space-between', 
-            alignItems: 'center',
-            paddingHorizontal: 20,
-            paddingVertical: 16,
-            borderBottomWidth: 1,
-            borderBottomColor: '#374151'
-          }}>
-            <Text style={{ 
-              color: '#FFFFFF', 
-              fontSize: 20, 
-              fontWeight: '700' 
-            }}>
-              Filtros
-            </Text>
-            <TouchableOpacity
-              onPress={() => setShowFilters(false)}
-              style={{
-                backgroundColor: '#374151',
-                borderRadius: 20,
-                width: 40,
-                height: 40,
-                justifyContent: 'center',
-                alignItems: 'center'
-              }}
-            >
-              <Ionicons name="close" size={20} color="#9CA3AF" />
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
-            <FilterChips
-              selectedGenres={selectedGenres}
-              selectedTags={selectedTags}
-              availableGenres={availableGenres}
-              availableTags={availableTags}
-              onGenreToggle={toggleGenre}
-              onTagToggle={toggleTag}
-              onClear={clearFilters}
-            />
-          </ScrollView>
-
-          <View style={{
-            paddingHorizontal: 20,
-            paddingVertical: 16,
-            borderTopWidth: 1,
-            borderTopColor: '#374151'
-          }}>
-            <TouchableOpacity
-              onPress={() => setShowFilters(false)}
-              style={{
-                backgroundColor: '#3B82F6',
-                borderRadius: 12,
-                paddingVertical: 16,
-                alignItems: 'center'
-              }}
-            >
-              <Text style={{ 
-                color: '#FFFFFF', 
-                fontSize: 16, 
-                fontWeight: '600' 
-              }}>
-                Aplicar Filtros
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </SafeAreaView>
-      </Modal>
+      {/* Modal de Histórico de Preços */}
+      <PriceHistoryModal
+        visible={showPriceHistoryModal}
+        onClose={closePriceHistoryModal}
+        appId={selectedGameForHistory?.appId || 0}
+        gameTitle={selectedGameForHistory?.title || ''}
+      />
 
       {/* Modal de Preferências - Steam Genres */}
       <SteamGenresPreferencesModal
