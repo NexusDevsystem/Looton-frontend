@@ -4,6 +4,7 @@ import { tokens } from '../src/theme/tokens'
 import { fetchPcDeals, PcOffer } from '../src/services/HardwareService'
 import { PcDealCard } from '../src/components/PcDealCard'
 import { CurrencyProvider } from '../src/contexts/CurrencyContext'
+import { API_URL } from '../src/api/client'
 
 // Old inline card removed in favor of PcDealCard
 
@@ -81,10 +82,13 @@ export function HardwareInner() {
     ;(async () => {
       setLoading(true)
       try {
+        console.log('Fazendo busca com:', debounced, 'URL:', `${API_URL}/pc-deals`)
         const res = await fetchPcDeals({ full: true, q: debounced, limit: pageSize, offset: 0 })
+        console.log('Resposta da busca:', res)
         setItems(res.items || [])
         setPage(1)
       } catch (e: any) {
+        console.error('Erro na busca de hardware:', e)
         setError(e.message || 'Erro na busca')
         setItems([])
       } finally {
@@ -95,6 +99,7 @@ export function HardwareInner() {
 
   // Debug: log items and search to see what's being returned
   console.log('Hardware search:', debounced, 'items:', items.length, 'first item:', items[0]?.title)
+  console.log('API_URL being used:', API_URL)
   
   // Minimal list: prefer Terabyte, but show all if none available
   let listItems = items.filter((it) => {

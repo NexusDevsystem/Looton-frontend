@@ -250,7 +250,7 @@ export default function FavoritesAndLists() {
       alignItems: 'center'
     }}>
       <GameCover 
-        imageUrls={[favorite.gameId?.coverUrl]}
+        imageUrls={favorite.gameId?.coverUrl ? [favorite.gameId.coverUrl] : []}
         height={80}
       />
       <View style={{ flex: 1, marginLeft: 12 }}>

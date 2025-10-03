@@ -4,7 +4,7 @@ import { Image } from 'expo-image';
 
 export function GameCover({ imageUrls, height = 180 }: { imageUrls?: string[]; height?: number }) {
   const [idx, setIdx] = React.useState(0);
-  const urls = Array.isArray(imageUrls) ? imageUrls : [];
+  const urls = Array.isArray(imageUrls) ? imageUrls.filter(url => url && typeof url === 'string' && url.trim() !== '') : [];
   const src = urls[idx];
 
   React.useEffect(() => { setIdx(0); }, [JSON.stringify(urls)]);

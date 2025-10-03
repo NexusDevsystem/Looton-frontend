@@ -60,7 +60,7 @@ export function PriceAnalysisModal({
   };
 
   const renderSimpleChart = (history: PriceHistoryEntry[]) => {
-    if (history.length === 0) return null;
+    if (!history || history.length === 0) return null;
 
     const prices = history.map(h => h.price);
     const minPrice = Math.min(...prices);
@@ -165,7 +165,7 @@ export function PriceAnalysisModal({
     if (!data?.currentPrices) return null;
 
     const stores = Object.entries(data.currentPrices);
-    if (stores.length === 0) return null;
+    if (!stores || stores.length === 0) return null;
 
     return (
       <View style={styles.currentPricesContainer}>
