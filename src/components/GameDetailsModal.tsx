@@ -20,6 +20,10 @@ import { AddToListModal } from './AddToListModal';
 import { PriceAnalysisModal } from './PriceAnalysisModal';
 
 const { width, height } = Dimensions.get('window');
+
+// 🔒 BLINDAGEM CONTRA .length CRASH
+const len = (v: any) => (Array.isArray(v) ? v.length : 0);
+const arr = <T,>(v: T[] | undefined | null): T[] => (Array.isArray(v) ? v : []);
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
 
 interface GameDetailsProps {
@@ -619,13 +623,13 @@ export const GameDetailsModal: React.FC<GameDetailsProps> = ({
               </View>
 
               {/* Screenshots */}
-              {gameDetails.screenshots.length > 0 && (
+              {len(gameDetails?.screenshots) > 0 && (
                 <View style={{ marginBottom: 20 }}>
                   <Text style={{ color: '#E5E7EB', fontSize: 18, fontWeight: 'bold', marginBottom: 12 }}>
                     Capturas de Tela
                   </Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                    {gameDetails.screenshots.slice(0, 5).map((screenshot, index) => (
+                    {arr(gameDetails?.screenshots).slice(0, 5).map((screenshot, index) => (
                       <Image
                         key={screenshot.id}
                         source={{ uri: screenshot.path_thumbnail }}
@@ -648,13 +652,13 @@ export const GameDetailsModal: React.FC<GameDetailsProps> = ({
               {renderSystemRequirements(gameDetails.pc_requirements)}
 
               {/* Genres */}
-              {gameDetails.genres.length > 0 && (
+              {len(gameDetails?.genres) > 0 && (
                 <View style={{ marginVertical: 16 }}>
                   <Text style={{ color: '#E5E7EB', fontSize: 18, fontWeight: 'bold', marginBottom: 12 }}>
                     Gêneros
                   </Text>
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-                    {gameDetails.genres.map((genre) => (
+                    {arr(gameDetails?.genres).map((genre) => (
                       <View
                         key={genre.id}
                         style={{
