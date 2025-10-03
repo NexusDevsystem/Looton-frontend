@@ -5,7 +5,10 @@
     "version": "0.1.0",
     "orientation": "portrait",
     "scheme": "looton",
-    "platforms": ["ios", "android"],
+    "platforms": [
+      "ios",
+      "android"
+    ],
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "icon": "./assets/images/favicon.png",
@@ -55,10 +58,11 @@
     },
     "extra": {
       "eas": {
-        "projectId": "9f504692-ecb1-4a42-9949-15bd6789b1ec"
-      }
+        "projectId": "41306841-8939-4568-a1a1-af93af0428d1"
+      },
+      "router": {}
     },
-    "owner": "nexusdevsystem",
+    "owner": "nyill",
     "updates": {
       "url": "https://u.expo.dev/9f504692-ecb1-4a42-9949-15bd6789b1ec"
     }

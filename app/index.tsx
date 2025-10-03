@@ -26,8 +26,6 @@ import { SteamGenresPreferencesModal } from '../src/components/SteamGenresPrefer
 import { fetchCuratedFeed, SteamGenre, UserPreferences } from '../src/services/SteamGenresService'
 import { showToast } from '../src/utils/SimpleToast'
 import { TermsOfServiceModal } from '../src/components/TermsOfServiceModal'
-import { LazyLowestPriceBadge } from '../src/components/LazyLowestPriceBadge'
-import { PriceHistoryModal } from '../src/components/PriceHistoryModal'
 import { SplashScreen } from '../src/components/SplashScreen'
 import { OnboardingCarousel } from '../src/components/OnboardingCarousel'
 
@@ -135,8 +133,6 @@ export default function Home() {
   const [showFilters, setShowFilters] = useState(false)
   const [showCurrencyModal, setShowCurrencyModal] = useState(false)
   const [showTermsModal, setShowTermsModal] = useState(false)
-  const [showPriceHistoryModal, setShowPriceHistoryModal] = useState(false)
-  const [selectedGameForHistory, setSelectedGameForHistory] = useState<{ id?: number; name?: string } | null>(null)
   
   // Estados do fluxo de inicialização
   const [appState, setAppState] = useState<'splash' | 'onboarding' | 'terms' | 'app'>('splash')
@@ -994,15 +990,7 @@ export default function Home() {
     handleGamePress(deal)
   }
 
-  const openPriceHistoryModal = (gameId?: number, gameName?: string) => {
-    setSelectedGameForHistory({ id: gameId, name: gameName })
-    setShowPriceHistoryModal(true)
-  }
 
-  const closePriceHistoryModal = () => {
-    setShowPriceHistoryModal(false)
-    setSelectedGameForHistory(null)
-  }
 
   const renderHeader = () => (
     <View style={{ paddingHorizontal: 20, paddingTop: 60, paddingBottom: 20 }}>
@@ -1144,14 +1132,6 @@ export default function Home() {
             </View>
           )}
         </View>
-        
-        {/* Badge de menor preço histórico - safe lazy loading */}
-        <LazyLowestPriceBadge
-          gameId={deal.appId}
-          currentPrice={deal.priceFinal}
-          gameName={deal.game?.title}
-          onPress={() => openPriceHistoryModal(deal.appId, deal.game?.title)}
-        />
         
         <View style={{ 
           flexDirection: 'row', 
@@ -1993,14 +1973,6 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
             showToast('Erro ao salvar preferências')
           }
         }}
-      />
-
-      {/* Modal de histórico de preços */}
-      <PriceHistoryModal
-        visible={showPriceHistoryModal}
-        onClose={closePriceHistoryModal}
-        gameId={selectedGameForHistory?.id}
-        gameName={selectedGameForHistory?.name}
       />
       
       </View>
