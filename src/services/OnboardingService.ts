@@ -56,6 +56,7 @@ export async function getServerPrefs(userId: string) {
 }
 
 const TERMS_STORAGE_KEY = 'TERMS_ACCEPTED_v1'
+const ONBOARDING_SEEN_KEY = 'ONBOARDING_SEEN_v1'
 
 export async function hasAcceptedTerms(): Promise<boolean> {
   try {
@@ -71,5 +72,22 @@ export async function setTermsAccepted(): Promise<void> {
     await AsyncStorage.setItem(TERMS_STORAGE_KEY, 'true')
   } catch (error) {
     console.error('Error saving terms acceptance:', error)
+  }
+}
+
+export async function hasSeenOnboarding(): Promise<boolean> {
+  try {
+    const value = await AsyncStorage.getItem(ONBOARDING_SEEN_KEY)
+    return value === 'true'
+  } catch (error) {
+    return false
+  }
+}
+
+export async function setOnboardingSeen(): Promise<void> {
+  try {
+    await AsyncStorage.setItem(ONBOARDING_SEEN_KEY, 'true')
+  } catch (error) {
+    console.error('Error saving onboarding seen:', error)
   }
 }

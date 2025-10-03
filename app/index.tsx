@@ -26,6 +26,10 @@ import { SteamGenresPreferencesModal } from '../src/components/SteamGenresPrefer
 import { fetchCuratedFeed, SteamGenre, UserPreferences } from '../src/services/SteamGenresService'
 import { showToast } from '../src/utils/SimpleToast'
 import { TermsOfServiceModal } from '../src/components/TermsOfServiceModal'
+import { LazyLowestPriceBadge } from '../src/components/LazyLowestPriceBadge'
+import { PriceHistoryModal } from '../src/components/PriceHistoryModal'
+import { SplashScreen } from '../src/components/SplashScreen'
+import { OnboardingCarousel } from '../src/components/OnboardingCarousel'
 
 interface Deal {
   _id: string
@@ -131,6 +135,12 @@ export default function Home() {
   const [showFilters, setShowFilters] = useState(false)
   const [showCurrencyModal, setShowCurrencyModal] = useState(false)
   const [showTermsModal, setShowTermsModal] = useState(false)
+  const [showPriceHistoryModal, setShowPriceHistoryModal] = useState(false)
+  const [selectedGameForHistory, setSelectedGameForHistory] = useState<{ id?: number; name?: string } | null>(null)
+  
+  // Estados do fluxo de inicialização
+  const [appState, setAppState] = useState<'splash' | 'onboarding' | 'terms' | 'app'>('splash')
+  const [hasSeenOnboarding, setHasSeenOnboarding] = useState(false)
   
   // Mock user ID - em um app real viria do contexto de autenticação
   // Leave empty to treat as unauthenticated in dev by default
@@ -161,16 +171,101 @@ export default function Home() {
   useImagePrefetch(deals.map(deal => ({ coverUrl: deal.game?.coverUrl })))
 
   useEffect(() => {
-    // Iniciar o app diretamente sem onboarding ou login
-    console.log('🚀 Iniciando app diretamente...')
+    // Inicializar app com verificação do fluxo de onboarding
+    initializeApp()
+  }, [])
+
+  const initializeApp = async () => {
+    try {
+      console.log('🚀 Inicializando app...')
+      
+      // Verificar se já viu onboarding e aceitou termos
+      const hasSeenOnboardingBefore = await OnboardingService.hasSeenOnboarding()
+      const hasAcceptedTerms = await OnboardingService.hasAcceptedTerms()
+      
+      setHasSeenOnboarding(hasSeenOnboardingBefore)
+      
+      // Determinar estado inicial baseado no histórico do usuário
+      if (!hasSeenOnboardingBefore) {
+        // Primeira vez: Splash → Onboarding → Termos → App
+        setAppState('splash')
+      } else if (!hasAcceptedTerms) {
+        // Já viu onboarding mas não aceitou termos: Splash → Termos → App
+        setAppState('splash')
+      } else {
+        // Usuário completo: Splash → App
+        setAppState('splash')
+      }
+      
+      // Carregar dados básicos em background
+      fetchDeals()
+      loadWishlistCount()
+      loadWishlistGames()
+      
+    } catch (error) {
+      console.error('Erro ao inicializar app:', error)
+      // Em caso de erro, iniciar do começo
+      setAppState('splash')
+    }
+  }
+
+  // Funções de transição entre estados
+  const handleSplashFinish = async () => {
+    const hasSeenOnboardingBefore = await OnboardingService.hasSeenOnboarding()
+    const hasAcceptedTerms = await OnboardingService.hasAcceptedTerms()
     
-    // Carregar dados básicos
-    fetchDeals()
-    loadWishlistCount()
-    loadWishlistGames()
-    checkFirstTime()
+    if (!hasSeenOnboardingBefore) {
+      setAppState('onboarding')
+    } else if (!hasAcceptedTerms) {
+      setAppState('terms')
+    } else {
+      setAppState('app')
+      // Animação de entrada do app
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 600,
+          useNativeDriver: true,
+        })
+      ]).start()
+    }
+  }
+
+  const handleOnboardingFinish = async () => {
+    await OnboardingService.setOnboardingSeen()
+    const hasAcceptedTerms = await OnboardingService.hasAcceptedTerms()
     
-    // Animação de entrada
+    if (!hasAcceptedTerms) {
+      setAppState('terms')
+    } else {
+      setAppState('app')
+      // Animação de entrada do app
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 600,
+          useNativeDriver: true,
+        })
+      ]).start()
+    }
+  }
+
+  const handleTermsAccept = async () => {
+    await OnboardingService.setTermsAccepted()
+    setAppState('app')
+    showToast('Bem-vindo ao Looton! 🎮')
+    
+    // Animação de entrada do app
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
@@ -183,7 +278,7 @@ export default function Home() {
         useNativeDriver: true,
       })
     ]).start()
-  }, [])
+  }
 
   const checkFirstTime = async () => {
     try {
@@ -899,6 +994,16 @@ export default function Home() {
     handleGamePress(deal)
   }
 
+  const openPriceHistoryModal = (gameId?: number, gameName?: string) => {
+    setSelectedGameForHistory({ id: gameId, name: gameName })
+    setShowPriceHistoryModal(true)
+  }
+
+  const closePriceHistoryModal = () => {
+    setShowPriceHistoryModal(false)
+    setSelectedGameForHistory(null)
+  }
+
   const renderHeader = () => (
     <View style={{ paddingHorizontal: 20, paddingTop: 60, paddingBottom: 20 }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1039,6 +1144,14 @@ export default function Home() {
             </View>
           )}
         </View>
+        
+        {/* Badge de menor preço histórico - safe lazy loading */}
+        <LazyLowestPriceBadge
+          gameId={deal.appId}
+          currentPrice={deal.priceFinal}
+          gameName={deal.game?.title}
+          onPress={() => openPriceHistoryModal(deal.appId, deal.game?.title)}
+        />
         
         <View style={{ 
           flexDirection: 'row', 
@@ -1244,6 +1357,25 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
     </View>
   )
 
+  // Renderização condicional baseada no estado da app
+  if (appState === 'splash') {
+    return <SplashScreen onFinish={handleSplashFinish} />
+  }
+
+  if (appState === 'onboarding') {
+    return <OnboardingCarousel onFinish={handleOnboardingFinish} />
+  }
+
+  if (appState === 'terms') {
+    return (
+      <TermsOfServiceModal
+        visible={true}
+        onAccept={handleTermsAccept}
+      />
+    )
+  }
+
+  // App principal
   return (
     <CurrencyProvider>
       <View style={{ flex: 1, backgroundColor: '#1F2937' }}>
@@ -1863,14 +1995,14 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
         }}
       />
 
-      <TermsOfServiceModal
-        visible={showTermsModal}
-        onAccept={async () => {
-          await OnboardingService.setTermsAccepted()
-          setShowTermsModal(false)
-          showToast('Bem-vindo ao Looton!')
-        }}
+      {/* Modal de histórico de preços */}
+      <PriceHistoryModal
+        visible={showPriceHistoryModal}
+        onClose={closePriceHistoryModal}
+        gameId={selectedGameForHistory?.id}
+        gameName={selectedGameForHistory?.name}
       />
+      
       </View>
     </CurrencyProvider>
   )
