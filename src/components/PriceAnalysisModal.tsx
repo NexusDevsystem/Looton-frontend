@@ -46,6 +46,11 @@ export function PriceAnalysisModal({
   gameTitle, 
   currentPrice 
 }: PriceAnalysisModalProps) {
+  // 🛡️ EARLY RETURN - Evita renderização com props inválidas
+  if (!visible || !gameId || !gameTitle) {
+    return null;
+  }
+
   const [data, setData] = useState<PriceHistoryResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -215,10 +220,7 @@ export function PriceAnalysisModal({
     );
   };
 
-  // Verificação de segurança para evitar renderização com dados inválidos
-  if (!visible || !gameId || !gameTitle) {
-    return null;
-  }
+
 
   // Estado vazio quando não há histórico - usando len() para segurança
   const hasHistory = len(priceHistory) > 0;

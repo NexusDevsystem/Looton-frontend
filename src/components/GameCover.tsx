@@ -2,14 +2,18 @@
 import { View } from 'react-native';
 import { Image } from 'expo-image';
 
+// 🔒 BLINDAGEM CONTRA .length CRASH
+const len = (v: any) => (Array.isArray(v) ? v.length : 0);
+const arr = <T,>(v: T[] | undefined | null): T[] => (Array.isArray(v) ? v : []);
+
 export function GameCover({ imageUrls, height = 180 }: { imageUrls?: string[]; height?: number }) {
   const [idx, setIdx] = React.useState(0);
-  const urls = Array.isArray(imageUrls) ? imageUrls.filter(url => url && typeof url === 'string' && url.trim() !== '') : [];
+  const urls = arr(imageUrls).filter(url => url && typeof url === 'string' && url.trim() !== '');
   const src = urls[idx];
 
   React.useEffect(() => { setIdx(0); }, [JSON.stringify(urls)]);
 
-  if (!urls.length) return <Placeholder h={height} />;
+  if (len(urls) === 0) return <Placeholder h={height} />;
 
   return (
     <Image
@@ -20,7 +24,7 @@ export function GameCover({ imageUrls, height = 180 }: { imageUrls?: string[]; h
       transition={200}
       placeholder={{ blurhash: 'LEHV6nWB2yk8pyo0adR*.7kCMdnj' }}
       onError={() => {
-        if (idx < urls.length - 1) setIdx(i => i + 1);
+        if (idx < len(urls) - 1) setIdx(i => i + 1);
       }}
     />
   );
