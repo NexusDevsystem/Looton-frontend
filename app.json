@@ -11,9 +11,7 @@
     ],
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-    "icon": "./assets/images/favicon.png",
     "splash": {
-      "image": "./assets/images/favicon.png",
       "resizeMode": "contain",
       "backgroundColor": "#111827"
     },
@@ -64,7 +62,7 @@
     },
     "owner": "nyill",
     "updates": {
-      "url": "https://u.expo.dev/9f504692-ecb1-4a42-9949-15bd6789b1ec"
+      "enabled": false
     }
   }
 }
