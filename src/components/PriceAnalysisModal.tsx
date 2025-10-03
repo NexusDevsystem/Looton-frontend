@@ -19,6 +19,12 @@ import {
 
 const { width, height } = Dimensions.get('window');
 
+// Função helper para formatação segura de moeda
+function formatSafePrice(cents?: number, currency = 'BRL'): string {
+  if (cents == null || !Number.isFinite(cents)) return '—';
+  return (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency });
+}
+
 interface PriceAnalysisModalProps {
   visible: boolean;
   onClose: () => void;
@@ -38,6 +44,26 @@ export function PriceAnalysisModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedPeriod, setSelectedPeriod] = useState(90);
+
+  // Garantir arrays seguros sempre
+  const history: PriceHistoryEntry[] = data?.history ?? [];
+  const currentPrices = data?.currentPrices ?? {};
+  const stats = data?.stats ?? null;
+  const analysis = data?.analysis ?? null;
+  
+  // Debug payload
+  useEffect(() => {
+    if (visible && data) {
+      console.log('PriceAnalysis payload:', {
+        hasData: !!data,
+        keys: Object.keys(data),
+        historyLength: history.length,
+        hasCurrentPrices: Object.keys(currentPrices).length > 0,
+        hasStats: !!stats,
+        hasAnalysis: !!analysis
+      });
+    }
+  }, [visible, data, history.length]);
 
   useEffect(() => {
     if (visible && gameId) {
@@ -59,11 +85,11 @@ export function PriceAnalysisModal({
     }
   };
 
-  const renderSimpleChart = (history: PriceHistoryEntry[]) => {
-    if (!history || !Array.isArray(history) || history.length === 0) return null;
+  const renderSimpleChart = () => {
+    const safeHistory = (history ?? []).filter(h => h && typeof h.price === 'number' && Number.isFinite(h.price));
+    if (safeHistory.length === 0) return null;
 
-    const prices = history.filter(h => h && typeof h.price === 'number').map(h => h.price);
-    if (prices.length === 0) return null;
+    const prices = safeHistory.map(h => h.price);
     const minPrice = Math.min(...prices);
     const maxPrice = Math.max(...prices);
     const range = maxPrice - minPrice || 1;
@@ -73,7 +99,7 @@ export function PriceAnalysisModal({
         <Text style={styles.chartTitle}>Evolução de Preços (Últimos {selectedPeriod} dias)</Text>
         
         <View style={styles.chartArea}>
-          {history.slice(-30).filter(entry => entry && typeof entry.price === 'number').map((entry, index) => {
+          {safeHistory.slice(-30).map((entry, index) => {
             const height = ((entry.price - minPrice) / range) * 100;
             const isLowest = entry.price === minPrice;
             
@@ -95,10 +121,10 @@ export function PriceAnalysisModal({
         
         <View style={styles.chartLabels}>
           <Text style={styles.chartLabel}>
-            Min: {PriceHistoryService.formatPrice(minPrice)}
+            Min: {formatSafePrice(minPrice * 100)}
           </Text>
           <Text style={styles.chartLabel}>
-            Max: {PriceHistoryService.formatPrice(maxPrice)}
+            Max: {formatSafePrice(maxPrice * 100)}
           </Text>
         </View>
       </View>
@@ -106,9 +132,6 @@ export function PriceAnalysisModal({
   };
 
   const renderAnalysis = () => {
-    if (!data?.stats || !data?.analysis) return null;
-
-    const { stats, analysis } = data;
     if (!stats || !analysis) return null;
     const recommendation = analysis.recommendation;
     const color = PriceHistoryService.getRecommendationColor(recommendation);
@@ -132,7 +155,7 @@ export function PriceAnalysisModal({
           <View style={styles.statItem}>
             <Text style={styles.statLabel}>Menor Preço</Text>
             <Text style={styles.statValue}>
-              {PriceHistoryService.formatPrice(stats.lowest)}
+              {formatSafePrice(stats.lowest)}
             </Text>
             <Text style={styles.statDate}>
               {PriceHistoryService.formatDate(stats.lowestDate)}
@@ -142,7 +165,7 @@ export function PriceAnalysisModal({
           <View style={styles.statItem}>
             <Text style={styles.statLabel}>Preço Atual</Text>
             <Text style={styles.statValue}>
-              {PriceHistoryService.formatPrice(stats.current)}
+              {formatSafePrice(stats.current)}
             </Text>
             <Text style={styles.statExtra}>
               {analysis.percentageFromLowest > 0 
@@ -155,7 +178,7 @@ export function PriceAnalysisModal({
           <View style={styles.statItem}>
             <Text style={styles.statLabel}>Preço Médio</Text>
             <Text style={styles.statValue}>
-              {PriceHistoryService.formatPrice(stats.average)}
+              {formatSafePrice(stats.average)}
             </Text>
           </View>
         </View>
@@ -164,20 +187,18 @@ export function PriceAnalysisModal({
   };
 
   const renderCurrentPrices = () => {
-    if (!data?.currentPrices) return null;
-
-    const stores = Object.entries(data.currentPrices);
-    if (!stores || !Array.isArray(stores) || stores.length === 0) return null;
+    const stores = Object.entries(currentPrices ?? {});
+    if (stores.length === 0) return null;
 
     return (
       <View style={styles.currentPricesContainer}>
         <Text style={styles.sectionTitle}>Preços Atuais por Loja</Text>
         
-        {stores.filter(([store, info]) => store && info && typeof info.price === 'number').map(([store, info]) => (
+        {stores.filter(([store, info]) => store && info && typeof info.price === 'number' && Number.isFinite(info.price)).map(([store, info]) => (
           <View key={store} style={styles.priceRow}>
             <Text style={styles.storeName}>{store}</Text>
             <Text style={styles.storePrice}>
-              {PriceHistoryService.formatPrice(info.price)}
+              {formatSafePrice(info.price)}
             </Text>
           </View>
         ))}
@@ -188,6 +209,44 @@ export function PriceAnalysisModal({
   // Verificação de segurança para evitar renderização com dados inválidos
   if (!visible || !gameId || !gameTitle) {
     return null;
+  }
+
+  // Estado vazio quando não há histórico
+  const hasHistory = history.length > 0;
+  const hasData = hasHistory || Object.keys(currentPrices).length > 0;
+
+  if (!loading && !error && data && !hasData) {
+    return (
+      <Modal
+        visible={visible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={onClose}
+      >
+        <View style={styles.container}>
+          <LinearGradient colors={['#1F2937', '#111827']} style={styles.header}>
+            <View style={styles.headerContent}>
+              <View style={styles.headerLeft}>
+                <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+                  <Ionicons name="close" size={24} color="white" />
+                </TouchableOpacity>
+                <Text style={styles.headerTitle} numberOfLines={2}>{gameTitle}</Text>
+              </View>
+            </View>
+          </LinearGradient>
+          <View style={styles.emptyContainer}>
+            <Ionicons name="analytics-outline" size={64} color="#9CA3AF" />
+            <Text style={styles.emptyTitle}>Sem histórico ainda</Text>
+            <Text style={styles.emptySubtitle}>
+              Quando tivermos dados de preço para este jogo, a análise aparece aqui.
+            </Text>
+            <TouchableOpacity onPress={onClose} style={styles.emptyButton}>
+              <Text style={styles.emptyButtonText}>Entendi</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    );
   }
 
   return (
@@ -255,7 +314,7 @@ export function PriceAnalysisModal({
 
           {data && !loading && !error && (
             <>
-              {data.history && renderSimpleChart(data.history)}
+              {renderSimpleChart()}
               {renderAnalysis()}
               {renderCurrentPrices()}
             </>
@@ -492,5 +551,36 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#1F2937',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  emptyTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginTop: 20,
+    marginBottom: 12,
+  },
+  emptySubtitle: {
+    fontSize: 16,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 32,
+  },
+  emptyButton: {
+    backgroundColor: '#3B82F6',
+    paddingHorizontal: 32,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  emptyButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
