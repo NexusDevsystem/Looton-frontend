@@ -1,6 +1,6 @@
 import { View, Text, ScrollView, ActivityIndicator, Image, TouchableOpacity, Dimensions, TextInput, Modal, SafeAreaView, FlatList, Animated, RefreshControl } from 'react-native'
 import { StatusBar } from 'expo-status-bar'
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Ionicons } from '@expo/vector-icons'
 import { GameDetailsModal } from '../src/components/GameDetailsModal'
@@ -149,7 +149,7 @@ export default function Home() {
   const [userId, setUserId] = useState('')
   const slideAnim = useRef(new Animated.Value(50)).current
   const searchTimeout = useRef<NodeJS.Timeout | null>(null)
-  const searchInputRef = useRef<any | null>(null)
+  const searchInputRef = useRef<TextInput>(null)
 
   // Hook de doação
   const donation = useDonationBanner()
@@ -181,7 +181,7 @@ export default function Home() {
   const [displayDeals, setDisplayDeals] = useState<Deal[]>([])
   
   // Função para converter GameItem para Deal (compatibilidade)
-  const convertGameItemToDeal = (item: GameItem): Deal => ({
+  const convertGameItemToDeal = useCallback((item: GameItem): Deal => ({
     _id: item.id,
     url: item.url,
     priceBase: item.priceFinalCents / 100, // assumindo que não há desconto, usar o preço final
@@ -196,7 +196,7 @@ export default function Home() {
     store: {
       name: item.store
     }
-  })
+  }), [])
 
   useEffect(() => {
     // Inicializar app com verificação do fluxo de onboarding
@@ -333,7 +333,7 @@ export default function Home() {
         setDisplayDeals(deals)
       }
     }
-  }, [deals, activeTab, hasActiveFilters, gameItems])
+  }, [deals, activeTab, hasActiveFilters, gameItems, convertGameItemToDeal])
 
   useEffect(() => {
     if (searchQuery.trim() === '') {
@@ -348,7 +348,7 @@ export default function Home() {
   }, [searchQuery, deals])
 
   // Função para buscar jogos na Steam API
-  const searchSteamGames = async (query: string) => {
+  const searchSteamGames = useCallback(async (query: string) => {
     if (query.trim().length < 2) {
       setSearchResults([])
       return
@@ -398,7 +398,7 @@ export default function Home() {
     } finally {
       setIsSearching(false)
     }
-  }
+  }, [])
 
   // Debounce da busca
   const handleSearchChange = (text: string) => {
@@ -427,7 +427,7 @@ export default function Home() {
         searchSteamGames(searchQuery)
       }
     }
-  }, [activeTab])
+  }, [activeTab, searchQuery, searchSteamGames])
 
   const fetchDeals = async () => {
     try {
@@ -1246,7 +1246,6 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
               }}>
                 <Ionicons name="search-outline" size={20} color="#9CA3AF" style={{ marginRight: 12 }} />
                 <TextInput
-                  ref={searchInputRef}
                   placeholder="Procure por jogos"
                   placeholderTextColor="#9CA3AF"
                   value={searchQuery}

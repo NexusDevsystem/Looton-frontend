@@ -1,5 +1,4 @@
 import * as Notifications from 'expo-notifications';
-import * as Device from 'expo-device';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
@@ -32,8 +31,6 @@ export async function askPushPermissionFirstLaunch(projectId: string): Promise<s
 
   // 1ª vez: marca como perguntado (para não spammar caso o app reinicie)
   await AsyncStorage.setItem(ASK_FLAG, '1');
-
-  if (!Device.isDevice) return null;
 
   let { status } = await Notifications.getPermissionsAsync();
   if (status !== 'granted') {
@@ -80,7 +77,6 @@ export async function getCurrentPushToken(projectId: string): Promise<string | n
 /** Forçar pedido de permissão (para botão "Ativar notificações" nas configurações) */
 export async function forcePushPermissionRequest(projectId: string): Promise<string | null> {
   try {
-    if (!Device.isDevice) return null;
 
     const req = await Notifications.requestPermissionsAsync({
       ios: { allowAlert: true, allowSound: true, allowBadge: true },

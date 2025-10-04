@@ -38,7 +38,11 @@ const localeMap: Record<string, string> = {
   ARS: 'es-AR'
 }
 
-export const CurrencyProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+type CurrencyProviderProps = {
+  children?: React.ReactNode;
+};
+
+export const CurrencyProvider: React.FC<CurrencyProviderProps> = ({ children }) => {
   const [currency, setCurrencyState] = useState<string>(DEFAULT_CURRENCY)
   const [rates, setRates] = useState<Record<string, number>>({ BRL: 1 })
   const [loading, setLoading] = useState(true)

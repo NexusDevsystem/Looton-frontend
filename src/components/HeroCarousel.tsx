@@ -28,14 +28,14 @@ export function HeroCarousel({ images }: { images?: string[] }) {
 
   return (
     <View>
-      <ScrollView ref={ref} horizontal pagingEnabled showsHorizontalScrollIndicator={false}>
+      <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false}>
         {arr(safeImages).map((uri, i) => (
-          <Image key={i} source={{ uri }} style={{ width, height: 180, resizeMode: 'cover' }} />
+          <Image source={{ uri }} style={{ width, height: 180, resizeMode: 'cover' }} />
         ))}
       </ScrollView>
       <View style={{ position: 'absolute', bottom: 8, width: '100%', flexDirection: 'row', justifyContent: 'center' }}>
         {arr(safeImages).map((_, i) => (
-          <View key={i} style={{ width: 8, height: 8, borderRadius: 4, marginHorizontal: 4, backgroundColor: i === index ? tokens.colors.primary : tokens.colors.border }} />
+          <View style={{ width: 8, height: 8, borderRadius: 4, marginHorizontal: 4, backgroundColor: i === index ? tokens.colors.primary : tokens.colors.border }} />
         ))}
       </View>
     </View>

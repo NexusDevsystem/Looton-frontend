@@ -95,12 +95,17 @@ const PriceAnalysisModal: React.FC<PriceAnalysisModalProps> = ({
   if (!visible) return null;
 
   return (
-    <Modal visible={visible} animationType="fade" transparent={true}>
+    <Modal 
+      visible={visible} 
+      animationType="fade" 
+      transparent={true}
+      statusBarTranslucent={true}
+    >
       <View style={styles.overlay}>
         <View style={styles.container}>
           {/* Header */}
           <View style={styles.header}>
-            <Text style={styles.title}>Histórico de Preços</Text>
+            <Text style={styles.title}>📊 Análise de Preços</Text>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
               <Ionicons name="close" size={20} color="#9CA3AF" />
             </TouchableOpacity>
@@ -137,7 +142,7 @@ const PriceAnalysisModal: React.FC<PriceAnalysisModalProps> = ({
             <View style={styles.historyContainer}>
               <Text style={styles.sectionTitle}>Últimos 15 dias</Text>
               {priceHistory.map((item, index) => (
-                <View key={index} style={styles.historyItem}>
+                <View style={styles.historyItem}>
                   <View style={styles.historyLeft}>
                     <Text style={styles.historyDate}>{formatDate(item.date)}</Text>
                     <Text style={styles.historyStore}>{item.storeName}</Text>
@@ -163,7 +168,7 @@ const PriceAnalysisModal: React.FC<PriceAnalysisModalProps> = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,

@@ -173,7 +173,6 @@ export const WishlistTab: React.FC<WishlistTabProps> = ({ visible, onClose }) =>
 
                 return (
                   <View
-                    key={item.appId}
                     style={{
                       backgroundColor: '#1F2937',
                       borderRadius: 16,

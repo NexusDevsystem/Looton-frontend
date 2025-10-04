@@ -368,7 +368,7 @@ export const GameDetailsModal: React.FC<GameDetailsProps> = ({
     const BulletList = ({ items }: { items: string[] }) => (
       <View>
         {items.map((line, idx) => (
-          <View key={idx} style={{ flexDirection: 'row', marginBottom: 6 }}>
+          <View style={{ flexDirection: 'row', marginBottom: 6 }}>
             <Text style={{ color: '#9CA3AF', marginRight: 8 }}>•</Text>
             <Text style={{ color: '#D1D5DB', fontSize: 14, lineHeight: 20, flex: 1 }}>{line}</Text>
           </View>
@@ -631,7 +631,6 @@ export const GameDetailsModal: React.FC<GameDetailsProps> = ({
                   <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                     {arr(gameDetails?.screenshots).slice(0, 5).map((screenshot, index) => (
                       <Image
-                        key={screenshot.id}
                         source={{ uri: screenshot.path_thumbnail }}
                         style={{
                           width: 150,
@@ -660,7 +659,6 @@ export const GameDetailsModal: React.FC<GameDetailsProps> = ({
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
                     {arr(gameDetails?.genres).map((genre) => (
                       <View
-                        key={genre.id}
                         style={{
                           backgroundColor: '#374151',
                           paddingHorizontal: 12,

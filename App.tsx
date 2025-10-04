@@ -3,7 +3,6 @@ import * as Notifications from 'expo-notifications'
 import Home from './app/index'
 import { checkUpdatesOnce } from './src/utils/updates-manager'
 import { askPushPermissionFirstLaunch } from './src/notifications'
-import { api } from './src/api/client'
 
 // Configurar handler de notificações
 Notifications.setNotificationHandler({
@@ -19,8 +18,12 @@ Notifications.setNotificationHandler({
 export default function App() {
   useEffect(() => {
     const initializeApp = async () => {
-      // Verificar updates
-      checkUpdatesOnce(true);
+      // Verificar updates (desabilitado para estabilidade)
+      try {
+        checkUpdatesOnce(true);
+      } catch (error) {
+        console.log('Updates check skipped:', error);
+      }
       
       // Pedir permissão de notificações na primeira execução
       try {
@@ -30,13 +33,6 @@ export default function App() {
         if (token) {
           console.log('📱 Push token obtido:', token);
           // TODO: Enviar token para o backend quando tiver endpoint
-          // await api('/push/register', { 
-          //   method: 'POST',
-          //   body: JSON.stringify({ 
-          //     userId: 'USER_ID', // substituir pelo ID do usuário real
-          //     expoPushToken: token 
-          //   })
-          // }).catch(console.error);
         } else {
           console.log('📱 Permissão de notificação não concedida ou já perguntada antes');
         }

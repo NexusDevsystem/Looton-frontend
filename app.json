@@ -10,7 +10,7 @@
       "android"
     ],
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "splash": {
       "resizeMode": "contain",
       "backgroundColor": "#111827"
@@ -18,7 +18,6 @@
     "assetBundlePatterns": [
       "**/*"
     ],
-    "jsEngine": "hermes",
     "runtimeVersion": "1.0.0",
     "android": {
       "package": "com.nexusdevsystem.looton",
@@ -32,7 +31,7 @@
     },
     "web": {
       "bundler": "metro",
-      "output": "static"
+      "output": "single"
     },
     "plugins": [
       "expo-notifications",
@@ -40,22 +39,18 @@
         "expo-build-properties",
         {
           "android": {
-            "newArchEnabled": true
+            "newArchEnabled": false
           },
           "ios": {
-            "newArchEnabled": true
+            "newArchEnabled": false
           }
         }
       ]
     ],
-    "experiments": {
-      "typedRoutes": true
-    },
     "extra": {
       "eas": {
         "projectId": "41306841-8939-4568-a1a1-af93af0428d1"
-      },
-      "router": {}
+      }
     },
     "owner": "nyill",
     "updates": {

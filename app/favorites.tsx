@@ -241,7 +241,7 @@ export default function FavoritesAndLists() {
   )
 
   const renderFavoriteItem = (favorite: any) => (
-    <View key={favorite._id} style={{
+    <View style={{
       backgroundColor: tokens.colors.card,
       borderRadius: 12,
       padding: 16,
@@ -282,7 +282,7 @@ export default function FavoritesAndLists() {
   )
 
   const renderListItem = (list: any) => (
-    <View key={list._id} style={{
+    <View style={{
       backgroundColor: tokens.colors.card,
       borderRadius: 12,
       padding: 16,

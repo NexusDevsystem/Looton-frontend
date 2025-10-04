@@ -1,15 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { Platform } from 'react-native'
 import * as Notifications from 'expo-notifications'
-let Device: any = { isDevice: true }
-try {
-  // require at runtime to avoid build-time type issues in environments without expo-device types
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  Device = require('expo-device')
-} catch (e) {
-  // ignore; treat as a non-device or unknown environment
-  Device = { isDevice: true }
-}
+// Simplified device detection - assume always device
+const Device = { isDevice: true }
 
 // Configurar comportamento das notificações
 Notifications.setNotificationHandler({
