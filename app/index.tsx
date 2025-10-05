@@ -34,6 +34,7 @@ import { fetchCuratedFeed, SteamGenre, UserPreferences } from '../src/services/S
 
 import { showToast } from '../src/utils/SimpleToast'
 import { TermsOfServiceModal } from '../src/components/TermsOfServiceModal'
+import { SplashScreen } from '../src/components/SplashScreen'
 import { OnboardingCarousel } from '../src/components/OnboardingCarousel'
 import { useGameFeed, GameItem } from '../src/hooks/useGameFeed'
 
@@ -200,7 +201,7 @@ export default function Home() {
   const [showTermsModal, setShowTermsModal] = useState(false)
   
   // Estados do fluxo de inicialização
-  const [appState, setAppState] = useState<'onboarding' | 'terms' | 'app'>('app')
+  const [appState, setAppState] = useState<'splash' | 'onboarding' | 'terms' | 'app'>('splash')
   const [hasSeenOnboarding, setHasSeenOnboarding] = useState(false)
   
   // Estado para ordenação
@@ -274,7 +275,7 @@ export default function Home() {
       
       // Determinar estado inicial baseado no histórico do usuário
       if (!hasSeenOnboardingBefore) {
-        setAppState('app')
+        setAppState('onboarding')
       } else if (!hasAcceptedTerms) {
         setAppState('terms')  
       } else {
@@ -288,9 +289,8 @@ export default function Home() {
   }, []) // Remover dependências desnecessárias
 
   useEffect(() => {
-    // Inicializar app com verificação do fluxo de onboarding
-    initializeApp()
-  }, [initializeApp])
+    // O splash screen irá chamar initializeApp() quando terminar
+  }, [])
 
   // Carregar deals iniciais quando o app inicia
   useEffect(() => {
@@ -300,12 +300,7 @@ export default function Home() {
     }
   }, [appState])
 
-  // Efeito para inicializar dados assim que o componente monta
-  useEffect(() => {
-    console.log('🔄 Carregando dados iniciais...')
-    fetchDeals()
-    initializeSmartServices()
-  }, [])
+
 
   // Inicializar serviços inteligentes (otimizado)
   const initializeSmartServices = async () => {
@@ -1491,6 +1486,10 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
   )
 
   // Renderização condicional baseada no estado da app
+  if (appState === 'splash') {
+    return <SplashScreen onFinish={() => initializeApp()} />
+  }
+
   if (appState === 'onboarding') {
     return <OnboardingCarousel onFinish={handleOnboardingFinish} />
   }
