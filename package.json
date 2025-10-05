@@ -1,0 +1,12 @@
+{
+  "dependencies": {
+    "@expo/cli": "^54.0.10",
+    "expo-dev-client": "~6.0.13",
+    "react-dom": "19.1.0",
+    "react-native-web": "^0.21.0"
+  },
+  "devDependencies": {
+    "@types/react": "~19.1.10",
+    "typescript": "~5.9.2"
+  }
+}
