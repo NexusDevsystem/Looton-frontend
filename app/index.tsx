@@ -300,6 +300,13 @@ export default function Home() {
     }
   }, [appState])
 
+  // Efeito para inicializar dados assim que o componente monta
+  useEffect(() => {
+    console.log('🔄 Carregando dados iniciais...')
+    fetchDeals()
+    initializeSmartServices()
+  }, [])
+
   // Inicializar serviços inteligentes (otimizado)
   const initializeSmartServices = async () => {
     try {
@@ -425,8 +432,19 @@ export default function Home() {
       // Aplicar filtro de loja
       const filteredDeals = getFilteredDeals(dealsToUse)
       setDisplayDeals(filteredDeals)
+    } else if (activeTab !== 'home') {
+      // Quando sair da home, limpar displayDeals para evitar dados obsoletos
+      setDisplayDeals([])
     }
   }, [activeTab, memoizedGameItems, loading, hasActiveFilters, deals, storeFilter])
+
+  // Efeito colateral para garantir que displayDeals seja atualizado quando deals mudar e não houver filtros ativos
+  useEffect(() => {
+    if (activeTab === 'home' && !loading && !hasActiveFilters && deals.length > 0) {
+      const filteredDeals = getFilteredDeals(deals)
+      setDisplayDeals(filteredDeals)
+    }
+  }, [deals, activeTab, loading, hasActiveFilters, storeFilter])
 
   // Função para filtrar resultados de busca por tipo usando classificação real da Steam
   const applySearchFilter = useCallback((results: Deal[]) => {
@@ -1544,9 +1562,9 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
               </View>
             )}
 
-            {!loading && !error && (deals.length > 0 || displayDeals.length > 0) && (
+            {!loading && !error && (deals.length > 0 || (hasActiveFilters && displayDeals.length > 0)) && (
               <FlatList
-                data={displayDeals.length > 0 ? displayDeals : deals}
+                data={hasActiveFilters && displayDeals.length > 0 ? displayDeals : deals}
                 renderItem={renderGameCard}
                 keyExtractor={(item, index) => `${item._id || 'game'}-${index}`}
                 showsVerticalScrollIndicator={false}
@@ -1565,6 +1583,13 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                     <View style={{ 
                       marginBottom: 20
                     }}>
+                      <Text style={{ 
+                        color: '#FFFFFF', 
+                        fontSize: isTablet ? 28 : 24, 
+                        fontWeight: '700'
+                      }}>
+                        Ofertas do Dia
+                      </Text>
                     </View>
                   </View>
                 }
@@ -1593,7 +1618,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
             )}
             
             {/* Renderizar FlatList vazia quando não há dados */}
-            {!loading && !error && deals.length === 0 && displayDeals.length === 0 && (
+            {!loading && !error && deals.length === 0 && (!hasActiveFilters || displayDeals.length === 0) && (
               <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 100 }}>
                 <Text style={{ color: '#9CA3AF', fontSize: 16 }}>Nenhuma oferta disponível no momento</Text>
               </View>
