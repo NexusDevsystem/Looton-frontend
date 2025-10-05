@@ -8,7 +8,7 @@
       "distribution": "internal",
       "channel": "development",
       "android": {
-        "buildType": "debug"
+        "buildType": "apk"
       }
     },
     "preview": {
