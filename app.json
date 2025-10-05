@@ -24,7 +24,9 @@
       "package": "com.nexusdevsystem.looton",
       "permissions": [
         "android.permission.RECEIVE_BOOT_COMPLETED",
-        "android.permission.WAKE_LOCK"
+        "android.permission.WAKE_LOCK",
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE"
       ]
     },
     "ios": {
@@ -45,6 +47,13 @@
           "ios": {
             "newArchEnabled": false
           }
+        }
+      ],
+      [
+        "react-native-google-mobile-ads",
+        {
+          "android_app_id": "ca-app-pub-2976862302591431~7964761364",
+          "ios_app_id": "ca-app-pub-2976862302591431~7964761364"
         }
       ]
     ],

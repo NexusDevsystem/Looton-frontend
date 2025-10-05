@@ -1,8 +1,10 @@
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
+import { api } from './api/client';
 
 const ASK_FLAG = 'pushAsked.v1'; // mude versão se quiser reprompt no futuro
+const PUSH_TOKEN_SAVED_FLAG = 'pushTokenSaved.v1';
 
 async function ensureAndroidChannel() {
   if (Platform.OS === 'android') {
@@ -45,7 +47,14 @@ export async function askPushPermissionFirstLaunch(projectId: string): Promise<s
 
   await ensureAndroidChannel();
   const token = await Notifications.getExpoPushTokenAsync({ projectId });
-  return token.data ?? null;
+  const pushToken = token.data ?? null;
+  
+  // Enviar token para o backend se não foi enviado antes
+  if (pushToken) {
+    await sendPushTokenToBackend(pushToken);
+  }
+  
+  return pushToken;
 }
 
 /** Opcional: resetar o flag (útil num botão "tentar de novo") */
@@ -87,9 +96,52 @@ export async function forcePushPermissionRequest(projectId: string): Promise<str
 
     await ensureAndroidChannel();
     const token = await Notifications.getExpoPushTokenAsync({ projectId });
-    return token.data ?? null;
+    const pushToken = token.data ?? null;
+    
+    // Enviar token para o backend se não foi enviado antes
+    if (pushToken) {
+      await sendPushTokenToBackend(pushToken);
+    }
+    
+    return pushToken;
   } catch (error) {
     console.error('Erro ao forçar permissão:', error);
     return null;
+  }
+}
+
+/** Enviar push token para o backend */
+export async function sendPushTokenToBackend(pushToken: string, email?: string) {
+  try {
+    // Verificar se o token já foi enviado antes para evitar envios duplicados
+    const tokenSaved = await AsyncStorage.getItem(PUSH_TOKEN_SAVED_FLAG);
+    if (tokenSaved === pushToken) {
+      console.log('Push token já foi enviado para o backend');
+      return;
+    }
+
+    // Se não tiver email, tentar obter do AsyncStorage ou usar um valor padrão
+    let userEmail = email;
+    if (!userEmail) {
+      // Aqui você pode implementar a lógica para obter o email do usuário logado
+      // Por enquanto, vamos usar um placeholder - em produção isso viria da sessão do usuário
+      userEmail = 'user@looton.app'; // Placeholder - substituir com valor real do usuário
+    }
+
+    // Enviar para o backend
+    await api('/users', { 
+      method: 'POST', 
+      headers: { 'Content-Type': 'application/json' }, 
+      body: JSON.stringify({ 
+        email: userEmail, 
+        pushToken: pushToken 
+      }) 
+    });
+    
+    // Salvar flag indicando que o token foi enviado
+    await AsyncStorage.setItem(PUSH_TOKEN_SAVED_FLAG, pushToken);
+    console.log('Push token enviado para o backend com sucesso');
+  } catch (error) {
+    console.error('Erro ao enviar push token para o backend:', error);
   }
 }

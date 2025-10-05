@@ -1,8 +1,9 @@
-import React, { useEffect } from 'react'
-import * as Notifications from 'expo-notifications'
-import Home from './app/index'
-import { checkUpdatesOnce } from './src/utils/updates-manager'
-import { askPushPermissionFirstLaunch } from './src/notifications'
+import React, { useEffect } from 'react';
+import * as Notifications from 'expo-notifications';
+import { AdsConsent, AdsConsentStatus, requestPermissionsAsync, MobileAds } from 'react-native-google-mobile-ads';
+import Home from './app/index';
+import { checkUpdatesOnce } from './src/utils/updates-manager';
+import { askPushPermissionFirstLaunch, sendPushTokenToBackend } from './src/notifications';
 
 // Configurar handler de notificações
 Notifications.setNotificationHandler({
@@ -14,6 +15,9 @@ Notifications.setNotificationHandler({
     shouldSetBadge: false,
   }),
 });
+
+// Inicializar o AdMob com o Application ID
+MobileAds().initialize();
 
 export default function App() {
   useEffect(() => {
@@ -32,12 +36,29 @@ export default function App() {
         
         if (token) {
           console.log('📱 Push token obtido:', token);
-          // TODO: Enviar token para o backend quando tiver endpoint
+          // Enviar token para o backend
+          await sendPushTokenToBackend(token);
         } else {
           console.log('📱 Permissão de notificação não concedida ou já perguntada antes');
         }
       } catch (error) {
         console.error('Erro ao configurar notificações:', error);
+      }
+      
+      // Configurar consentimento de anúncios (para GDPR e outras regulamentações)
+      try {
+        await requestPermissionsAsync();
+        const consentInfo = await AdsConsent.getConsentInfo();
+        if (consentInfo.status === AdsConsentStatus.REQUIRED) {
+          const formResult = await AdsConsent.showForm({
+            privacyPolicy: 'https://looton.app/privacy',
+            withPersonalizedAds: true,
+            withNonPersonalizedAds: true,
+          });
+          console.log('Formulário de consentimento exibido:', formResult);
+        }
+      } catch (error) {
+        console.error('Erro ao configurar consentimento de anúncios:', error);
       }
     };
 

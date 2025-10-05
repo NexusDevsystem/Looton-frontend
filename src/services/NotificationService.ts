@@ -14,6 +14,36 @@ Notifications.setNotificationHandler({
     shouldShowList: true,
   }),
 })
+
+// Handle incoming push notifications when app is in foreground
+Notifications.addNotificationReceivedListener((notification) => {
+  console.log('Notificação recebida:', notification.request.content.title, notification.request.content.body);
+  
+  // You can handle the notification data here
+  const data = notification.request.content.data;
+  if (data) {
+    console.log('Dados da notificação:', data);
+    // You can process specific types of notifications here
+    if (data.type === 'price_alert') {
+      // Handle price alert notification
+      console.log('Alerta de preço recebido');
+    } else if (data.type === 'new_deal') {
+      // Handle new deal notification
+      console.log('Nova oferta recebida');
+    }
+  }
+});
+
+// Handle notification responses (when user taps on notification)
+Notifications.addNotificationResponseReceivedListener((response) => {
+  console.log('Resposta à notificação:', response);
+  const data = response.notification.request.content.data;
+  if (data) {
+    console.log('Dados da notificação respondida:', data);
+    // You can navigate to specific screens based on notification type
+    // This would typically involve navigation logic
+  }
+});
 // Lightweight types and helpers for notification rules and evaluation
 
 export type Currency = string

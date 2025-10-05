@@ -19,15 +19,17 @@ import { WishlistSyncService } from '../src/services/WishlistSyncService'
 import { GameCover } from '../src/components/GameCover'
 import { FavoriteButton } from '../src/components/FavoriteButton'
 import SmartNotificationService from '../src/services/SmartNotificationService'
-import DonationPopupService from '../src/services/DonationPopupService'
+
 import SteamPriceHistoryService from '../src/services/SteamPriceHistoryService'
-import { DonationBanner, DonationModal } from '../src/components/DonationComponents'
-import { useDonationBanner } from '../src/hooks/useDonationBanner'
+import { DonationModal } from '../src/components/DonationComponents'
+import DonationService from '../src/services/DonationService'
+
 import { AddToListModal } from '../src/components/AddToListModal'
 import { FilterChips } from '../src/components/FilterChips'
 import { useFilters } from '../src/hooks/useFilters'
 import { SteamGenresPreferencesModal } from '../src/components/SteamGenresPreferencesModal'
 import { fetchCuratedFeed, SteamGenre, UserPreferences } from '../src/services/SteamGenresService'
+import AdBanner from '../src/components/AdBanner'
 import { showToast } from '../src/utils/SimpleToast'
 import { TermsOfServiceModal } from '../src/components/TermsOfServiceModal'
 import { SplashScreen } from '../src/components/SplashScreen'
@@ -135,21 +137,21 @@ export default function Home() {
   const [isSearching, setIsSearching] = useState(false)
   const fadeAnim = useRef(new Animated.Value(0)).current
   const [refreshing, setRefreshing] = useState(false)
+  const [showFilters, setShowFilters] = useState(false)
   const [showAddToListModal, setShowAddToListModal] = useState(false)
   const [selectedGameForList, setSelectedGameForList] = useState<{id: string, title: string} | null>(null)
   const [userPreferredSteamGenres, setUserPreferredSteamGenres] = useState<string[]>([])
   const [showPreferencesModal, setShowPreferencesModal] = useState(false)
   const [availableSteamGenres, setAvailableSteamGenres] = useState<SteamGenre[]>([])
   const [loadingGenres, setLoadingGenres] = useState(false)
-  const [showFilters, setShowFilters] = useState(false)
   const [showCurrencyModal, setShowCurrencyModal] = useState(false)
 
   
   // Estados dos novos serviços
-  const [showDonationPopup, setShowDonationPopup] = useState(false)
   const [showSmartNotification, setShowSmartNotification] = useState(false)
   const [currentNotification, setCurrentNotification] = useState<any>(null)
   const [priceAnalysis, setPriceAnalysis] = useState<Map<number, any>>(new Map())
+  const [showDonationModal, setShowDonationModal] = useState(false) // Modal de doação controlado pelo usuário
   
   // Filtro de busca: 'all' | 'games' | 'dlcs'
   const [searchFilter, setSearchFilter] = useState<'all' | 'games' | 'dlcs'>('games')
@@ -169,8 +171,7 @@ export default function Home() {
   const searchTimeout = useRef<NodeJS.Timeout | null>(null)
   const searchInputRef = useRef<TextInput>(null)
 
-  // Hook de doação
-  const donation = useDonationBanner()
+
   
   // Hook de filtros
   const {
@@ -260,34 +261,12 @@ export default function Home() {
   // Inicializar serviços inteligentes (otimizado)
   const initializeSmartServices = async () => {
     try {
-      // Apenas verificar popup de doação (mais leve)
-      const donationService = DonationPopupService.getInstance()
-      const shouldShow = await donationService.shouldShowPopup()
-      if (shouldShow) {
-        setShowDonationPopup(true)
-        await donationService.markAsShown()
-      }
-      
+      // Outros serviços inteligentes podem ser inicializados aqui
+      // Removido popup automático de doação
     } catch (error) {
       console.error('Erro ao inicializar serviços:', error)
     }
   }
-
-  // Timer para popup de doação (verificar a cada 1 hora)
-  useEffect(() => {
-    if (appState === 'app') {
-      const donationTimer = setInterval(async () => {
-        const donationService = DonationPopupService.getInstance()
-        const shouldShow = await donationService.shouldShowPopup()
-        if (shouldShow) {
-          setShowDonationPopup(true)
-          await donationService.markAsShown()
-        }
-      }, 60 * 60 * 1000) // 1 hora
-
-      return () => clearInterval(donationTimer)
-    }
-  }, [appState])
 
   // Funções de transição entre estados
   const handleSplashFinish = async () => {
@@ -447,6 +426,16 @@ export default function Home() {
     }
   }, [searchFilter, originalSearchResults, applySearchFilter])
 
+  // Efeito para resetar a busca quando sair da aba de busca
+  useEffect(() => {
+    if (activeTab === 'home' || activeTab === 'favorites' || activeTab === 'profile' || activeTab === 'wishlist' || activeTab === 'hardware') {
+      // Limpar resultados da busca ao sair da aba
+      setSearchResults([]);
+      setOriginalSearchResults([]);
+      // Não limpar a query para manter o texto caso o usuário volte rapidamente
+    }
+  }, [activeTab])
+
   // Função para buscar jogos na Steam API
   const searchSteamGames = useCallback(async (query: string) => {
     if (query.trim().length < 2) {
@@ -512,6 +501,13 @@ export default function Home() {
     }
   }, [])
 
+  // Função para limpar a busca (resultados e query)
+  const clearSearch = useCallback(() => {
+    setSearchQuery('');
+    setSearchResults([]);
+    setOriginalSearchResults([]);
+  }, [setSearchQuery, setSearchResults, setOriginalSearchResults]);
+
   // Debounce da busca
   const handleSearchChange = (text: string) => {
     setSearchQuery(text)
@@ -538,8 +534,11 @@ export default function Home() {
         // call immediately without waiting for debounce
         searchSteamGames(searchQuery)
       }
+    } else if (activeTab === 'home') {
+      // Limpar tudo ao sair da aba de busca
+      clearSearch();
     }
-  }, [activeTab, searchQuery, searchSteamGames])
+  }, [activeTab, searchQuery, searchSteamGames, clearSearch])
 
   const fetchDeals = async () => {
     try {
@@ -1278,7 +1277,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
         elevation: 12
       }}>
       {[
-        { key: 'home', icon: 'home', label: 'Início' },
+        { key: 'home', icon: 'game-controller', label: 'Games' },
         { key: 'hardware', icon: 'cube', label: 'Hardware' },
         { key: 'search', icon: 'search', label: 'Buscar' },
         { key: 'favorites', icon: 'eye', label: 'Vigiando' },
@@ -1489,21 +1488,21 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                 {isSearching && (
                   <ActivityIndicator size="small" color="#3B82F6" style={{ marginLeft: 8 }} />
                 )}
-                <TouchableOpacity
-                  style={{
-                    marginLeft: 8,
-                    padding: 8,
-                    backgroundColor: hasActiveFilters ? '#3B82F6' : '#333',
-                    borderRadius: 8
-                  }}
-                  onPress={() => setShowFilters(!showFilters)}
-                >
-                  <Ionicons 
-                    name="options" 
-                    size={16} 
-                    color={hasActiveFilters ? '#000' : '#FFF'} 
-                  />
-                </TouchableOpacity>
+                {searchQuery.length > 0 && (
+                  <TouchableOpacity
+                    style={{
+                      marginLeft: 8,
+                      padding: 8,
+                    }}
+                    onPress={clearSearch}
+                  >
+                    <Ionicons 
+                      name="close-circle" 
+                      size={24} 
+                      color="#9CA3AF" 
+                    />
+                  </TouchableOpacity>
+                )}
               </View>
 
               {/* Botões de Filtro Jogos/DLCs */}
@@ -1563,56 +1562,6 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                 }}>
                   Buscando em toda a Steam Store...
                 </Text>
-              )}
-
-              {/* Filtros */}
-              {showFilters && (
-                <View>
-                  {/* Controle de Ordenação */}
-                  <View style={{ flexDirection: 'row', paddingHorizontal: 20, paddingBottom: 10, gap: 10 }}>
-                    <TouchableOpacity
-                      onPress={() => setSortBy('best_price')}
-                      style={{
-                        paddingHorizontal: 12,
-                        paddingVertical: 6,
-                        borderRadius: 16,
-                        backgroundColor: sortBy === 'best_price' ? '#3B82F6' : '#374151',
-                        borderWidth: 1,
-                        borderColor: sortBy === 'best_price' ? '#3B82F6' : '#4B5563'
-                      }}
-                    >
-                      <Text style={{ color: 'white', fontSize: 12, fontWeight: '500' }}>
-                        Melhor Preço
-                      </Text>
-                    </TouchableOpacity>
-                    
-                    <TouchableOpacity
-                      onPress={() => setSortBy('biggest_discount')}
-                      style={{
-                        paddingHorizontal: 12,
-                        paddingVertical: 6,
-                        borderRadius: 16,
-                        backgroundColor: sortBy === 'biggest_discount' ? '#3B82F6' : '#374151',
-                        borderWidth: 1,
-                        borderColor: sortBy === 'biggest_discount' ? '#3B82F6' : '#4B5563'
-                      }}
-                    >
-                      <Text style={{ color: 'white', fontSize: 12, fontWeight: '500' }}>
-                        Maior Desconto
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  <FilterChips
-                    selectedGenres={selectedGenres}
-                    selectedTags={selectedTags}
-                    availableGenres={availableGenres}
-                    availableTags={availableTags}
-                    onGenreToggle={toggleGenre}
-                    onTagToggle={toggleTag}
-                    onClear={clearFilters}
-                  />
-                </View>
               )}
             </View>
 
@@ -1726,7 +1675,8 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                 {[
                   { icon: 'card-outline', title: 'Moeda', subtitle: 'Real Brasileiro (BRL)' },
                   { icon: 'shield-checkmark-outline', title: 'Privacidade', subtitle: 'Gerenciar dados' },
-                  { icon: 'help-circle-outline', title: 'Ajuda', subtitle: 'Suporte e FAQ' }
+                  { icon: 'help-circle-outline', title: 'Ajuda', subtitle: 'Suporte e FAQ' },
+                  { icon: 'heart-outline', title: 'Apoie o Looton', subtitle: 'Faça uma doação' }
                 ].map((item, index) => {
                   if (item.title === 'Moeda') {
                     return (
@@ -1753,29 +1703,56 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                     )
                   }
 
-                  return (
-                    <TouchableOpacity
-                      key={index}
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        padding: isTablet ? 24 : 20,
-                        borderBottomWidth: index < 2 ? 1 : 0,
-                        borderBottomColor: '#4B5563'
-                      }}
-                    >
-                      <Ionicons name={item.icon as any} size={isTablet ? 28 : 24} color="#9CA3AF" />
-                      <View style={{ flex: 1, marginLeft: isTablet ? 20 : 16 }}>
-                        <Text style={{ color: '#FFFFFF', fontSize: isTablet ? 18 : 16, fontWeight: '600' }}>
-                          {item.title}
-                        </Text>
-                        <Text style={{ color: '#9CA3AF', fontSize: isTablet ? 16 : 14, marginTop: 2 }}>
-                          {item.subtitle}
-                        </Text>
-                      </View>
-                      <Ionicons name="chevron-forward" size={isTablet ? 24 : 20} color="#9CA3AF" />
-                    </TouchableOpacity>
-                  )
+                  if (item.title === 'Apoie o Looton') {
+                    return (
+                      <TouchableOpacity
+                        key={index}
+                        onPress={() => setShowDonationModal(true)}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          padding: isTablet ? 24 : 20,
+                          borderBottomWidth: index < 3 ? 1 : 0, // Atualizado para 3 pois agora temos 4 itens
+                          borderBottomColor: '#4B5563'
+                        }}
+                      >
+                        <Ionicons name={item.icon as any} size={isTablet ? 28 : 24} color="#9CA3AF" />
+                        <View style={{ flex: 1, marginLeft: isTablet ? 20 : 16 }}>
+                          <Text style={{ color: '#FFFFFF', fontSize: isTablet ? 18 : 16, fontWeight: '600' }}>
+                            {item.title}
+                          </Text>
+                          <Text style={{ color: '#9CA3AF', fontSize: isTablet ? 16 : 14, marginTop: 2 }}>
+                            {item.subtitle}
+                          </Text>
+                        </View>
+                        <Ionicons name="chevron-forward" size={isTablet ? 24 : 20} color="#9CA3AF" />
+                      </TouchableOpacity>
+                    )
+                  } else {
+                    return (
+                      <TouchableOpacity
+                        key={index}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          padding: isTablet ? 24 : 20,
+                          borderBottomWidth: index < 3 ? 1 : 0, // Atualizado para 3 pois agora temos 4 itens
+                          borderBottomColor: '#4B5563'
+                        }}
+                      >
+                        <Ionicons name={item.icon as any} size={isTablet ? 28 : 24} color="#9CA3AF" />
+                        <View style={{ flex: 1, marginLeft: isTablet ? 20 : 16 }}>
+                          <Text style={{ color: '#FFFFFF', fontSize: isTablet ? 18 : 16, fontWeight: '600' }}>
+                            {item.title}
+                          </Text>
+                          <Text style={{ color: '#9CA3AF', fontSize: isTablet ? 16 : 14, marginTop: 2 }}>
+                            {item.subtitle}
+                          </Text>
+                        </View>
+                        <Ionicons name="chevron-forward" size={isTablet ? 24 : 20} color="#9CA3AF" />
+                      </TouchableOpacity>
+                    )
+                  }
                 })}
               </View>
 
@@ -1815,6 +1792,11 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
       </Animated.View>
 
       {renderBottomNav()}
+
+      {/* Banner de anúncio sutil - visível apenas na aba principal e quando não há modais abertos */}
+      {!(selectedGameId || showGameDetails || showWishlist || showCurrencyModal || showAddToListModal || showPreferencesModal || showDonationModal || showTermsModal) && (
+        <AdBanner visible={activeTab === 'home'} />
+      )}
 
       {selectedGameId && (
         <GameDetailsModal
@@ -1856,83 +1838,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
         />
       )}
 
-      {/* Modal de filtros */}
-      <Modal
-        visible={showFilters}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setShowFilters(false)}
-      >
-        <SafeAreaView style={{ flex: 1, backgroundColor: '#1F2937' }}>
-          <View style={{ 
-            flexDirection: 'row', 
-            justifyContent: 'space-between', 
-            alignItems: 'center',
-            paddingHorizontal: 20,
-            paddingVertical: 16,
-            borderBottomWidth: 1,
-            borderBottomColor: '#374151'
-          }}>
-            <Text style={{ 
-              color: '#FFFFFF', 
-              fontSize: 20, 
-              fontWeight: '700' 
-            }}>
-              Filtros
-            </Text>
-            <TouchableOpacity
-              onPress={() => setShowFilters(false)}
-              style={{
-                backgroundColor: '#374151',
-                borderRadius: 20,
-                width: 40,
-                height: 40,
-                justifyContent: 'center',
-                alignItems: 'center'
-              }}
-            >
-              <Ionicons name="close" size={20} color="#9CA3AF" />
-            </TouchableOpacity>
-          </View>
 
-          <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
-            <FilterChips
-              selectedGenres={selectedGenres}
-              selectedTags={selectedTags}
-              availableGenres={availableGenres}
-              availableTags={availableTags}
-              onGenreToggle={toggleGenre}
-              onTagToggle={toggleTag}
-              onClear={clearFilters}
-            />
-          </ScrollView>
-
-          <View style={{
-            paddingHorizontal: 20,
-            paddingVertical: 16,
-            borderTopWidth: 1,
-            borderTopColor: '#374151'
-          }}>
-            <TouchableOpacity
-              onPress={() => setShowFilters(false)}
-              style={{
-                backgroundColor: '#3B82F6',
-                borderRadius: 12,
-                paddingVertical: 16,
-                alignItems: 'center'
-              }}
-            >
-              <Text style={{ 
-                color: '#FFFFFF', 
-                fontSize: 16, 
-                fontWeight: '600' 
-              }}>
-                Aplicar Filtros
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </SafeAreaView>
-      </Modal>
 
       {/* Modal de Preferências - Steam Genres */}
       <SteamGenresPreferencesModal
@@ -1971,13 +1877,13 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
         }}
       />
       
-      {/* Popup de Doação Temporizado */}
+      {/* Modal de Doação - Apenas quando o usuário ativa manualmente */}
       <DonationModal
-        visible={showDonationPopup}
+        visible={showDonationModal}
         onClose={async () => {
-          const donationService = DonationPopupService.getInstance()
+          const donationService = DonationService.getInstance()
           await donationService.markAsDismissed()
-          setShowDonationPopup(false)
+          setShowDonationModal(false)
         }}
       />
       

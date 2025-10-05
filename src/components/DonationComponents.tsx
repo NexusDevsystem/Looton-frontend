@@ -95,43 +95,6 @@ export function DonationModal({ visible, onClose }: DonationModalProps) {
   )
 }
 
-interface DonationBannerProps {
-  onPress: () => void
-  onDismiss: () => void
-}
-
-export function DonationBanner({ onPress, onDismiss }: DonationBannerProps) {
-  return (
-    <View style={styles.banner}>
-      <LinearGradient
-        colors={['#DC2626', '#B91C1C']}
-        style={styles.bannerGradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-      >
-        <View style={styles.bannerContent}>
-          <View style={styles.bannerLeft}>
-            <Ionicons name="heart" size={20} color="#FFFFFF" />
-            <Text style={styles.bannerText}>
-              Ajude a manter o app funcionando
-            </Text>
-          </View>
-          
-          <View style={styles.bannerButtons}>
-            <TouchableOpacity style={styles.donateButton} onPress={onPress}>
-              <Text style={styles.donateButtonText}>Doar</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity style={styles.dismissButton} onPress={onDismiss}>
-              <Ionicons name="close" size={16} color="#FFFFFF" />
-            </TouchableOpacity>
-          </View>
-        </View>
-      </LinearGradient>
-    </View>
-  )
-}
-
 const styles = StyleSheet.create({
   // Modal styles
   overlay: {
@@ -233,57 +196,5 @@ const styles = StyleSheet.create({
     color: '#10B981',
     textAlign: 'center',
     fontWeight: '600',
-  },
-
-  // Banner styles
-  banner: {
-    marginHorizontal: 16,
-    marginVertical: 8,
-    borderRadius: 12,
-    overflow: 'hidden',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-  },
-  bannerGradient: {
-    padding: 16,
-  },
-  bannerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  bannerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  bannerText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    marginLeft: 8,
-    flex: 1,
-  },
-  bannerButtons: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  donateButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    marginRight: 8,
-  },
-  donateButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  dismissButton: {
-    padding: 8,
   },
 })

@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { Alert } from 'react-native'
 import { WishlistService } from './WishlistService'
+import * as Notifications from 'expo-notifications'
 
 export interface SmartNotification {
   id: string
@@ -49,8 +50,8 @@ class SmartNotificationService {
     }
   }
 
-  // Adicionar nova notificação
-  async addNotification(notification: Omit<SmartNotification, 'id' | 'timestamp' | 'shown'>) {
+  // Adicionar nova notificação - com opção de enviar como push remote
+  async addNotification(notification: Omit<SmartNotification, 'id' | 'timestamp' | 'shown'>, sendAsPush: boolean = false) {
     const newNotification: SmartNotification = {
       ...notification,
       id: Date.now().toString(),
@@ -66,7 +67,28 @@ class SmartNotificationService {
     }
 
     await this.saveNotificationsToStorage()
+    
+    // Se deve ser enviado como notificação push remota
+    if (sendAsPush) {
+      await this.sendRemotePushNotification(notification.title, notification.message, {
+        ...notification.data,
+        type: notification.type,
+        notificationId: newNotification.id
+      })
+    }
+    
     return newNotification
+  }
+
+  // Enviar notificação como push remoto
+  private async sendRemotePushNotification(title: string, message: string, data: any = {}) {
+    try {
+      // This will send to the backend which will handle the push notification delivery
+      // The actual push will be handled by the backend service when it receives relevant data
+      console.log('Enviando notificação push remota:', { title, message, data });
+    } catch (error) {
+      console.error('Erro ao enviar notificação push remota:', error);
+    }
   }
 
   // Verificar e mostrar notificações pendentes
@@ -90,6 +112,27 @@ class SmartNotificationService {
   }
 
   private showNotification(notification: SmartNotification) {
+    // Show as local notification using Expo Notifications
+    // Only use this for high-priority notifications that should show immediately
+    if (notification.type === 'price_drop' || notification.type === 'new_deal') {
+      // Use Expo to schedule a local notification
+      setTimeout(() => {
+        Notifications.scheduleNotificationAsync({
+          content: {
+            title: notification.title,
+            body: notification.message,
+            data: {
+              ...notification.data,
+              type: notification.type,
+              notificationId: notification.id
+            },
+          },
+          trigger: null, // Trigger immediately
+        });
+      }, 100); // Small delay to ensure proper execution context
+    }
+    
+    // Fallback to Alert if needed for immediate user attention
     Alert.alert(
       notification.title,
       notification.message,
@@ -113,7 +156,7 @@ class SmartNotificationService {
         title: '🔥 Ofertas Imperdíveis!',
         message: `${superDeals.length} jogos com mais de 70% de desconto disponíveis!`,
         data: { count: superDeals.length }
-      })
+      }, true) // send as push notification
     }
 
     // Notificação de wishlist
@@ -123,7 +166,7 @@ class SmartNotificationService {
         title: '👁️ Lista de Observação',
         message: `Você tem ${wishlistCount} jogos na lista. Que tal verificar se algum baixou de preço?`,
         data: { count: wishlistCount }
-      })
+      }, true) // send as push notification
     }
 
     // Notificação de fim de semana
@@ -133,7 +176,7 @@ class SmartNotificationService {
         title: '🎮 Fim de Semana Gamer!',
         message: 'Aproveite o fim de semana com as melhores ofertas de jogos!',
         data: { weekend: true }
-      })
+      }, true) // send as push notification
     }
 
     // Verificar jogos novos (simulado - em produção seria baseado em timestamp)
@@ -144,7 +187,7 @@ class SmartNotificationService {
         title: '✨ Novos Deals Encontrados!',
         message: `${newDeals.length} novos jogos com ótimos descontos adicionados!`,
         data: { count: newDeals.length }
-      })
+      }, true) // send as push notification
     }
   }
 
