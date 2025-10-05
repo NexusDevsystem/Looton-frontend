@@ -1,6 +1,6 @@
-import { View, Text, ScrollView, ActivityIndicator, Image, TouchableOpacity, Dimensions, TextInput, Modal, SafeAreaView, FlatList, Animated, RefreshControl } from 'react-native'
+import { View, Text, ScrollView, ActivityIndicator, Image, TouchableOpacity, Dimensions, TextInput, Modal, SafeAreaView, FlatList, Animated, RefreshControl, Platform } from 'react-native'
 import { StatusBar } from 'expo-status-bar'
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Ionicons } from '@expo/vector-icons'
 import { GameDetailsModal } from '../src/components/GameDetailsModal'
@@ -18,6 +18,9 @@ import { WishlistService } from '../src/services/WishlistService'
 import { WishlistSyncService } from '../src/services/WishlistSyncService'
 import { GameCover } from '../src/components/GameCover'
 import { FavoriteButton } from '../src/components/FavoriteButton'
+import SmartNotificationService from '../src/services/SmartNotificationService'
+import DonationPopupService from '../src/services/DonationPopupService'
+import SteamPriceHistoryService from '../src/services/SteamPriceHistoryService'
 import { DonationBanner, DonationModal } from '../src/components/DonationComponents'
 import { useDonationBanner } from '../src/hooks/useDonationBanner'
 import { AddToListModal } from '../src/components/AddToListModal'
@@ -38,6 +41,7 @@ interface Deal {
   priceBase: number
   priceFinal: number
   discountPct: number
+  kind?: 'game' | 'dlc' | 'package' | 'bundle' // Classificação real da Steam
   steamGenres?: Array<{ id: string; name: string }>
   imageUrls?: string[]
   image?: string
@@ -118,12 +122,16 @@ export default function Home() {
   const [selectedGameId, setSelectedGameId] = useState<number | null>(null)
   const [showWishlist, setShowWishlist] = useState(false)
   const [wishlistCount, setWishlistCount] = useState(0)
+  
+  // Filtro de loja
+  const [storeFilter, setStoreFilter] = useState<'all' | 'steam' | 'epic'>('all')
   const [selectedGameDetails, setSelectedGameDetails] = useState<any>(null)
   const [gameDetailsModalVisible, setGameDetailsModalVisible] = useState(false)
   const [wishlistGames, setWishlistGames] = useState<any[]>([])
   const [showDetails, setShowDetails] = useState(false)
   const [filteredDeals, setFilteredDeals] = useState<Deal[]>([])
   const [searchResults, setSearchResults] = useState<Deal[]>([])
+  const [originalSearchResults, setOriginalSearchResults] = useState<Deal[]>([])
   const [isSearching, setIsSearching] = useState(false)
   const fadeAnim = useRef(new Animated.Value(0)).current
   const [refreshing, setRefreshing] = useState(false)
@@ -135,6 +143,16 @@ export default function Home() {
   const [loadingGenres, setLoadingGenres] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
   const [showCurrencyModal, setShowCurrencyModal] = useState(false)
+
+  
+  // Estados dos novos serviços
+  const [showDonationPopup, setShowDonationPopup] = useState(false)
+  const [showSmartNotification, setShowSmartNotification] = useState(false)
+  const [currentNotification, setCurrentNotification] = useState<any>(null)
+  const [priceAnalysis, setPriceAnalysis] = useState<Map<number, any>>(new Map())
+  
+  // Filtro de busca: 'all' | 'games' | 'dlcs'
+  const [searchFilter, setSearchFilter] = useState<'all' | 'games' | 'dlcs'>('games')
   const [showTermsModal, setShowTermsModal] = useState(false)
   
   // Estados do fluxo de inicialização
@@ -180,6 +198,9 @@ export default function Home() {
   // Estado para ofertas filtradas
   const [displayDeals, setDisplayDeals] = useState<Deal[]>([])
   
+  // Memoizar gameItems para evitar loops
+  const memoizedGameItems = useMemo(() => gameItems, [gameItems])
+  
   // Função para converter GameItem para Deal (compatibilidade)
   const convertGameItemToDeal = useCallback((item: GameItem): Deal => ({
     _id: item.id,
@@ -198,12 +219,7 @@ export default function Home() {
     }
   }), [])
 
-  useEffect(() => {
-    // Inicializar app com verificação do fluxo de onboarding
-    initializeApp()
-  }, [])
-
-  const initializeApp = async () => {
+  const initializeApp = useCallback(async () => {
     try {
       console.log('🚀 Inicializando app...')
       
@@ -215,27 +231,63 @@ export default function Home() {
       
       // Determinar estado inicial baseado no histórico do usuário
       if (!hasSeenOnboardingBefore) {
-        // Primeira vez: Splash → Onboarding → Termos → App
         setAppState('splash')
       } else if (!hasAcceptedTerms) {
-        // Já viu onboarding mas não aceitou termos: Splash → Termos → App
-        setAppState('splash')
+        setAppState('splash')  
       } else {
-        // Usuário completo: Splash → App
         setAppState('splash')
       }
       
-      // Carregar dados básicos em background
-      fetchDeals()
-      loadWishlistCount()
-      loadWishlistGames()
-      
     } catch (error) {
       console.error('Erro ao inicializar app:', error)
-      // Em caso de erro, iniciar do começo
       setAppState('splash')
     }
+  }, []) // Remover dependências desnecessárias
+
+  useEffect(() => {
+    // Inicializar app com verificação do fluxo de onboarding
+    initializeApp()
+  }, [initializeApp])
+
+  // Carregar deals iniciais quando o app inicia
+  useEffect(() => {
+    if (appState === 'app') {
+      fetchDeals()
+      initializeSmartServices()
+    }
+  }, [appState])
+
+  // Inicializar serviços inteligentes (otimizado)
+  const initializeSmartServices = async () => {
+    try {
+      // Apenas verificar popup de doação (mais leve)
+      const donationService = DonationPopupService.getInstance()
+      const shouldShow = await donationService.shouldShowPopup()
+      if (shouldShow) {
+        setShowDonationPopup(true)
+        await donationService.markAsShown()
+      }
+      
+    } catch (error) {
+      console.error('Erro ao inicializar serviços:', error)
+    }
   }
+
+  // Timer para popup de doação (verificar a cada 1 hora)
+  useEffect(() => {
+    if (appState === 'app') {
+      const donationTimer = setInterval(async () => {
+        const donationService = DonationPopupService.getInstance()
+        const shouldShow = await donationService.shouldShowPopup()
+        if (shouldShow) {
+          setShowDonationPopup(true)
+          await donationService.markAsShown()
+        }
+      }, 60 * 60 * 1000) // 1 hora
+
+      return () => clearInterval(donationTimer)
+    }
+  }, [appState])
 
   // Funções de transição entre estados
   const handleSplashFinish = async () => {
@@ -321,36 +373,85 @@ export default function Home() {
     }
   }
 
+  // Epic Games temporariamente desativada para melhorias
+  const getFilteredDeals = (dealsToFilter: Deal[]) => {
+    if (storeFilter === 'all') return dealsToFilter
+    
+    return dealsToFilter.filter(deal => {
+      if (storeFilter === 'steam') {
+        return deal.store?.name === 'Steam'
+      } else if (storeFilter === 'epic') {
+        return deal.store?.name === 'Epic Games'
+      }
+      return true
+    })
+  }
+
   // Effect para usar o novo feed quando houver filtros ativos
   useEffect(() => {
-    if (activeTab === 'home') {
-      if (hasActiveFilters && gameItems.length > 0) {
+    if (activeTab === 'home' && !loading) {
+      let dealsToUse: Deal[] = []
+      
+      if (hasActiveFilters && memoizedGameItems.length > 0) {
         // Usar o novo feed filtrado
-        const convertedDeals = gameItems.map(convertGameItemToDeal)
-        setDisplayDeals(convertedDeals)
-      } else {
+        const convertedDeals = memoizedGameItems.map(convertGameItemToDeal)
+        dealsToUse = convertedDeals
+      } else if (deals.length > 0) {
         // Usar os deals originais sem filtros
-        setDisplayDeals(deals)
+        dealsToUse = deals
       }
+      
+      // Aplicar filtro de loja
+      const filteredDeals = getFilteredDeals(dealsToUse)
+      setDisplayDeals(filteredDeals)
     }
-  }, [deals, activeTab, hasActiveFilters, gameItems, convertGameItemToDeal])
+  }, [activeTab, memoizedGameItems, loading, hasActiveFilters, deals, storeFilter])
+
+  // Função para filtrar resultados de busca por tipo usando classificação real da Steam
+  const applySearchFilter = useCallback((results: Deal[]) => {
+    if (searchFilter === 'all') return results
+    
+    return results.filter((item: any) => {
+      const kind = item.kind || 'game' // Usar classificação real da Steam API
+      
+      if (searchFilter === 'dlcs') {
+        // Mostrar apenas DLCs, pacotes e bundles classificados pela Steam
+        return kind === 'dlc' || kind === 'package' || kind === 'bundle'
+      } else {
+        // searchFilter === 'games' - mostrar apenas jogos principais
+        return kind === 'game'
+      }
+    })
+  }, [searchFilter])
 
   useEffect(() => {
-    if (searchQuery.trim() === '') {
-      setFilteredDeals(deals)
-      setSearchResults([])
-    } else {
-      const filtered = deals.filter((deal: any) => 
-        deal.game?.title?.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-      setFilteredDeals(filtered)
+    if (!loading && deals.length > 0) {
+      if (searchQuery.trim() === '') {
+        setFilteredDeals(deals)
+        setSearchResults([])
+        setOriginalSearchResults([])
+      } else {
+        const filtered = deals.filter((deal: any) => 
+          deal.game?.title?.toLowerCase().includes(searchQuery.toLowerCase())
+        )
+        setFilteredDeals(filtered)
+      }
     }
-  }, [searchQuery, deals])
+  }, [searchQuery, loading, deals])
+
+  // Efeito para reaplicar filtro quando searchFilter muda
+  useEffect(() => {
+    if (originalSearchResults.length > 0) {
+      const filteredResults = applySearchFilter(originalSearchResults)
+      setSearchResults(filteredResults)
+    }
+  }, [searchFilter, originalSearchResults, applySearchFilter])
 
   // Função para buscar jogos na Steam API
   const searchSteamGames = useCallback(async (query: string) => {
     if (query.trim().length < 2) {
       setSearchResults([])
+      setOriginalSearchResults([])
       return
     }
 
@@ -358,31 +459,35 @@ export default function Home() {
       setIsSearching(true)
       console.log('Buscando jogos na Steam:', query)
 
-      const resp = await fetch(`${API_URL}/search?q=${encodeURIComponent(query)}&limit=50`)
-      if (!resp.ok) throw new Error(`Erro ${resp.status}: ${resp.statusText}`)
-      const data = await resp.json()
-
-      // If backend returned an array (adapter-level /search), use it directly
-      let sourceArray: any[] = []
-      if (Array.isArray(data)) {
-        sourceArray = data
-      } else if (data && Array.isArray(data.games)) {
-        sourceArray = data.games
+      const resp = await fetch(`${API_URL}/search?q=${encodeURIComponent(query)}&limit=20`)
+      
+      if (!resp.ok) {
+        throw new Error(`Search failed: ${resp.status}`)
       }
-
-      // Mapeamento simplificado para evitar problemas de performance
+      
+      const data = await resp.json()
+      const sourceArray = Array.isArray(data) ? data : []
+      
+      // Mapeamento corrigido para dados da rota /search
       const mappedResults = sourceArray.map((item: any, index: number) => {
-        const appId = item.appId || item.storeAppId || null
+        // Extrair appId do formato "app:12345"
+        const appId = item.id ? item.id.replace('app:', '') : null
+        
+        // Converter preços de centavos para reais
+        const priceBase = (item.priceOriginalCents || 0) / 100
+        const priceFinal = (item.priceFinalCents || 0) / 100
+        
         return {
           _id: `search-${appId || index}`,
           appId: appId ? Number(appId) : undefined,
-          priceBase: item.priceBase || 0,
-          priceFinal: item.priceFinal || 0,
+          priceBase: priceBase,
+          priceFinal: priceFinal,
           discountPct: item.discountPct || 0,
-          url: item.url || '',
+          url: `https://store.steampowered.com/app/${appId}/`,
+          kind: item.kind || 'game', // Usar classificação real da Steam
           game: {
             title: item.title || 'Título não encontrado',
-            coverUrl: item.coverUrl || item.imageUrl || ''
+            coverUrl: item.image || ''
           },
           store: {
             name: 'Steam'
@@ -391,10 +496,17 @@ export default function Home() {
       })
 
       try { console.debug('Mapped search results (preview):', mappedResults.slice(0, 6)) } catch (e) {}
-      setSearchResults(mappedResults)
+      
+      // Armazenar resultados originais
+      setOriginalSearchResults(mappedResults)
+      
+      // Aplicar filtro de tipo (games/dlcs)
+      const filteredResults = applySearchFilter(mappedResults)
+      setSearchResults(filteredResults)
     } catch (err) {
       console.error('Erro na busca Steam:', err)
       setSearchResults([])
+      setOriginalSearchResults([])
     } finally {
       setIsSearching(false)
     }
@@ -434,16 +546,9 @@ export default function Home() {
       setLoading(true)
       setError(null)
       
-      console.log('🚀 Iniciando busca de ofertas...')
-      console.log('📡 API_URL:', API_URL)
-      console.log('🔗 Fazendo requisição para:', `${API_URL}/deals?limit=50`)
-      
-      // Timeout personalizado para debug
+      // Timeout otimizado
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => {
-        controller.abort()
-        console.log('⏰ Timeout da requisição (15s)')
-      }, 15000)
+      const timeoutId = setTimeout(() => controller.abort(), 10000)
       
       // Usar diretamente a rota /deals que sabemos que funciona
       const response = await fetch(`${API_URL}/deals?limit=50`, {
@@ -456,94 +561,83 @@ export default function Home() {
       
       clearTimeout(timeoutId)
       
-      console.log('📥 Resposta recebida:', response.status, response.statusText)
-      
       if (!response.ok) {
-        const errorText = await response.text()
-        console.error(`❌ Erro na resposta: ${response.status} - ${errorText}`)
         throw new Error(`Erro ${response.status}: ${response.statusText}`)
       }
       
       const curated = await response.json()
-      console.log('📦 Dados recebidos:', curated?.length || 'não é array', typeof curated)
       
       if (!Array.isArray(curated) || curated.length === 0) {
-        console.log('⚠️ API /deals retornou vazio ou não é array')
         setDeals([])
         setError('Nenhuma oferta encontrada no momento')
         return
       }
-      
-      console.log('✅ Processando', curated.length, 'ofertas...')
-      console.log('📋 Primeiro item para debug:', JSON.stringify(curated[0], null, 2))
 
-      // Os dados já vêm na estrutura correta da API, só precisamos garantir compatibilidade
-      const sourceDeals: any[] = curated.map((item: any, index: number) => {
-        console.log(`🎮 Processando jogo ${index}: ${item.game?.title || item.title || 'SEM TÍTULO'}`)
+      // Processamento otimizado dos dados
+      const sourceDeals: any[] = curated.map((item: any, index: number) => ({
+        _id: item._id || `deal-${item.appId || index}`,
+        appId: item.appId,
+        url: item.url,
+        priceBase: item.priceBase || 0,
+        priceFinal: item.priceFinal || 0,
+        discountPct: item.discountPct || 0,
+        game: {
+          title: item.game?.title || item.title || 'Título não encontrado',
+          coverUrl: item.game?.coverUrl || item.coverUrl || (item.appId ? `https://cdn.akamai.steamstatic.com/steam/apps/${item.appId}/header.jpg` : null),
+          genres: item.game?.genres || item.genres || [],
+          tags: item.game?.tags || item.tags || []
+        },
+        store: item.store || { name: 'Steam' }
+      }))
+      
+      // Remoção otimizada de duplicatas
+      const seen = new Set()
+      const uniqueDeals = sourceDeals.filter((deal: any) => {
+        if (seen.has(deal._id)) return false
+        seen.add(deal._id)
+        return true
+      })
+
+      // Ordenação por desconto
+      uniqueDeals.sort((a: Deal, b: Deal) => b.discountPct - a.discountPct)
+      
+      // Sistema de rotação diária de "Ofertas do Dia"
+      const today = new Date()
+      const dayOfYear = Math.floor((today.getTime() - new Date(today.getFullYear(), 0, 0).getTime()) / (1000 * 60 * 60 * 24))
+      
+      // Função de embaralhamento com seed baseado no dia
+      const shuffleWithSeed = (array: Deal[], seed: number) => {
+        const shuffled = [...array]
+        let currentIndex = shuffled.length, randomIndex
         
-        return {
-          _id: item._id || `deal-${item.appId || index}`,
-          appId: item.appId,
-          url: item.url,
-          priceBase: item.priceBase || 0,
-          priceFinal: item.priceFinal || 0,
-          discountPct: item.discountPct || 0,
-          game: {
-            title: item.game?.title || item.title || 'Título não encontrado',
-            coverUrl: item.game?.coverUrl || item.coverUrl,
-            genres: item.game?.genres || item.genres || [],
-            tags: item.game?.tags || item.tags || []
-          },
-          store: item.store || { name: 'Steam' }
+        // Usar seed para garantir mesmo resultado no mesmo dia
+        const seedRandom = (seed: number) => {
+          const x = Math.sin(seed) * 10000
+          return x - Math.floor(x)
         }
-      })
-      
-      // Os dados já estão na estrutura correta, só remover duplicatas
-      const uniqueDeals = sourceDeals.filter((deal: any, index: number, self: any[]) => 
-        index === self.findIndex((d: any) => d._id === deal._id)
-      )
-      
-      // Garantir placeholders mínimos para UI
-      uniqueDeals.forEach((d: any) => {
-        if (!d.game?.title) d.game.title = 'Jogo sem título'
-        if (!d.game?.coverUrl || typeof d.game.coverUrl !== 'string' || d.game.coverUrl.trim() === '') {
-          // Try to build a Steam header image if appId is present; otherwise leave null
-          if (d.appId) d.game.coverUrl = `https://cdn.akamai.steamstatic.com/steam/apps/${d.appId}/header.jpg`
+        
+        while (currentIndex > 0) {
+          randomIndex = Math.floor(seedRandom(seed + currentIndex) * currentIndex)
+          currentIndex--
+          
+          // Trocar elementos
+          const temp = shuffled[currentIndex]
+          shuffled[currentIndex] = shuffled[randomIndex]
+          shuffled[randomIndex] = temp
         }
-      })
-
-      // Ordena por melhor desconto (base)
-      const sortedDeals = uniqueDeals.sort((a: Deal, b: Deal) => b.discountPct - a.discountPct)
-      
-      // Coletar todos os gêneros únicos para atualizar as opções do modal
-      const allGenres = new Set<string>();
-      sortedDeals.forEach((deal: Deal) => {
-        if (deal.game?.genres) {
-          deal.game.genres.forEach((genre: string) => allGenres.add(genre));
-        }
-      });
-      const sortedGenres = Array.from(allGenres).sort();
-      console.log('=== DEBUG GÊNEROS ===');
-      console.log('Total de gêneros únicos coletados:', sortedGenres.length);
-      console.log('Gêneros únicos coletados:', sortedGenres);
-      
-      // Só atualiza se realmente encontrou gêneros, senão mantém o fallback
-      if (sortedGenres.length > 0) {
-        console.log('Setando gêneros coletados da API...');
-        // Nota: setAvailableGenresFromGames removido - usando availableSteamGenres agora
-        console.log('Gêneros disponíveis:', sortedGenres.slice(0, 10));
-      } else {
-        console.log('Nenhum gênero coletado da API, mantendo fallback...');
+        
+        return shuffled
       }
-
-      // Usar os deals já ordenados por desconto sem personalização complexa
-      setDeals(sortedDeals || [])
+      
+      // Aplicar rotação diária com seed baseado no dia do ano
+      const dailyRotatedDeals = shuffleWithSeed(uniqueDeals, dayOfYear)
+      
+      console.log(`🎲 Ofertas do Dia - Rotação para ${today.toLocaleDateString()} (dia ${dayOfYear})`)
+      console.log(`🔄 ${dailyRotatedDeals.length} ofertas embaralhadas para hoje`)
+      
+      setDeals(dailyRotatedDeals)
       
     } catch (err: any) {
-      console.error('💥 Erro ao buscar ofertas:', err)
-      console.error('💥 Tipo do erro:', typeof err)
-      console.error('💥 Mensagem:', err?.message || 'Erro desconhecido')
-      
       let errorMessage = 'Erro ao carregar ofertas'
       if (err?.name === 'AbortError') {
         errorMessage = 'Timeout: Verifique sua conexão'
@@ -556,7 +650,6 @@ export default function Home() {
       setError(errorMessage)
       setDeals([])
     } finally {
-      console.log('🏁 Finalizando busca de ofertas')
       setLoading(false)
     }
   }
@@ -574,6 +667,11 @@ export default function Home() {
       setRefreshing(false)
     }
   }
+
+
+
+  // Verificar se há filtros ativos
+  const hasActiveFiltersLocal = hasActiveFilters
 
   const loadWishlistCount = async () => {
     try {
@@ -681,6 +779,23 @@ export default function Home() {
     }
   }
 
+  // Currency subtitle help      {/* Alerta de desativação temporária da Epic Games no topo */}
+      <View style={{ 
+        backgroundColor: '#F59E0B', 
+        padding: 12, 
+        borderRadius: 12,
+        marginBottom: 16
+      }}>
+        <Text style={{ 
+          color: '#1F2937', 
+          fontWeight: '600',
+          textAlign: 'center',
+          fontSize: 14
+        }}>
+          ⚠️ Jogos da Epic Games temporariamente desativados para melhorias
+        </Text>
+      </View>
+      
   // Currency subtitle helper component uses hook from context
   const CurrencySubtitle: React.FC = () => {
     try {
@@ -696,9 +811,135 @@ export default function Home() {
       current.discountPct > best.discountPct ? current : best, deals[0])
   }
 
+  // Componente para análise de preço Steam
+  const PriceAnalysisIndicator: React.FC<{ appId: number; currentPrice: number; title: string }> = ({ appId, currentPrice, title }) => {
+    const [analysis, setAnalysis] = useState<any>(null)
+    const [loading, setLoading] = useState(false)
+
+    useEffect(() => {
+      if (appId && appId > 0) {
+        const loadAnalysis = async () => {
+          try {
+            setLoading(true)
+            const priceService = SteamPriceHistoryService.getInstance()
+            const result = await priceService.getPriceAnalysis(appId, title, currentPrice)
+            setAnalysis(result)
+          } catch (error) {
+            console.error('Erro ao carregar análise de preço:', error)
+          } finally {
+            setLoading(false)
+          }
+        }
+
+        loadAnalysis()
+      }
+    }, [appId, currentPrice, title])
+
+    if (loading || !analysis) return null
+
+    const getStatusColor = () => {
+      switch (analysis.priceStatus) {
+        case 'lowest': return '#10B981'
+        case 'good': return '#F59E0B'
+        case 'average': return '#6B7280'
+        case 'high': return '#EF4444'
+        default: return '#6B7280'
+      }
+    }
+
+    const getStatusText = () => {
+      switch (analysis.priceStatus) {
+        case 'lowest': return 'Menor preço!'
+        case 'good': return 'Bom preço'
+        case 'average': return 'Preço médio'
+        case 'high': return 'Preço alto'
+        default: return ''
+      }
+    }
+
+    const getStatusIcon = () => {
+      switch (analysis.priceStatus) {
+        case 'lowest': return 'trending-down'
+        case 'good': return 'thumbs-up-outline'
+        case 'average': return 'remove-outline'
+        case 'high': return 'trending-up'
+        default: return 'help-outline'
+      }
+    }
+
+    // Mostrar apenas para deals realmente relevantes
+    if (!analysis.isGoodDeal && analysis.priceStatus === 'average') return null
+    if (analysis.priceStatus === 'high') return null // Não mostrar preços altos
+
+    return (
+      <View style={{ 
+        flexDirection: 'row', 
+        alignItems: 'center', 
+        marginTop: 4,
+        backgroundColor: analysis.priceStatus === 'lowest' ? 'rgba(16,185,129,0.1)' : 'rgba(0,0,0,0.3)',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 4,
+        borderWidth: analysis.priceStatus === 'lowest' ? 1 : 0,
+        borderColor: analysis.priceStatus === 'lowest' ? '#10B981' : 'transparent'
+      }}>
+        <Ionicons name={getStatusIcon()} size={12} color={getStatusColor()} />
+        <Text style={{ 
+          color: getStatusColor(), 
+          fontSize: 10, 
+          fontWeight: '600',
+          marginLeft: 4
+        }}>
+          {getStatusText()}
+        </Text>
+        {analysis.savingsFromAverage > 0 && (
+          <Text style={{ 
+            color: '#10B981', 
+            fontSize: 9, 
+            marginLeft: 4,
+            opacity: 0.8
+          }}>
+            (-R${analysis.savingsFromAverage.toFixed(2)})
+          </Text>
+        )}
+      </View>
+    )
+  }
+
 
   const openGameDetails = (deal: Deal) => {
     handleGamePress(deal)
+  }
+
+  // Função para analisar se o preço está alto ou baixo
+  const getPriceIndicator = (deal: Deal) => {
+    const discount = deal.discountPct || 0
+    const finalPrice = deal.priceFinal || 0
+    const originalPrice = deal.priceBase || finalPrice
+    
+    // Análise baseada no desconto e preço
+    if (discount >= 70) {
+      return { label: 'PREÇO MUITO BAIXO', color: '#10B981', bgColor: 'rgba(16, 185, 129, 0.15)' }
+    } else if (discount >= 50) {
+      return { label: 'PREÇO BAIXO', color: '#059669', bgColor: 'rgba(5, 150, 105, 0.15)' }
+    } else if (discount >= 30) {
+      return { label: 'PREÇO MÉDIO', color: '#F59E0B', bgColor: 'rgba(245, 158, 11, 0.15)' }
+    } else if (discount >= 10) {
+      return { label: 'PREÇO ALTO', color: '#DC2626', bgColor: 'rgba(220, 38, 38, 0.15)' }
+    } else if (finalPrice > 150) {
+      // Preço alto mesmo sem desconto
+      return { label: 'PREÇO MUITO ALTO', color: '#991B1B', bgColor: 'rgba(153, 27, 27, 0.15)' }
+    } else if (finalPrice < 20 && discount === 0) {
+      // Preço baixo naturalmente
+      return { label: 'PREÇO BAIXO', color: '#059669', bgColor: 'rgba(5, 150, 105, 0.15)' }
+    }
+    
+    // Se não tem desconto e preço médio
+    if (discount === 0) {
+      return { label: 'PREÇO NORMAL', color: '#6B7280', bgColor: 'rgba(107, 114, 128, 0.15)' }
+    }
+    
+    return null
   }
 
 
@@ -707,36 +948,30 @@ export default function Home() {
     <View style={{ paddingHorizontal: 20, paddingTop: 60, paddingBottom: 20 }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
         <View>
-          <Text style={{ fontSize: 32, fontWeight: '800', color: '#FFFFFF', letterSpacing: -1 }}>
-            Looton
-          </Text>
-          <Text style={{ fontSize: 16, color: '#9CA3AF', marginTop: 4 }}>
-            Melhores ofertas de jogos
-          </Text>
+          <Text style={{ fontSize: 32, fontWeight: '800', color: '#FFFFFF' }}>Looton</Text>
         </View>
-
-        {/* Ícone de configurações */}
-        <TouchableOpacity
-          onPress={() => setShowPreferencesModal(true)}
-          style={{ 
-            backgroundColor: '#374151', 
-            padding: 12, 
-            borderRadius: 12,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.3,
-            shadowRadius: 4,
-            elevation: 4
-          }}
-        >
-          <Ionicons name="settings" size={24} color="#E5E7EB" />
-        </TouchableOpacity>
-
       </View>
     </View>
   )
 
+  // Componente animado para contorno dos jogos em destaque
+  // Apenas contorno simples, sem brilho
+  const AnimatedHighlightBorder: React.FC<{ children: React.ReactNode; isHighlighted: boolean; highlightColor: string }> = ({ children, isHighlighted, highlightColor }) => {
+    if (!isHighlighted) {
+      return <>{children}</>
+    }
 
+    return (
+      <View style={{ 
+        position: 'relative',
+        borderRadius: 16,
+        borderWidth: 2,
+        borderColor: highlightColor,
+      }}>
+        {children}
+      </View>
+    )
+  }
 
   const renderGameCard = ({ item: deal }: { item: Deal & { isBestDeal?: boolean, highlightColor?: string } }) => {
     const isHighlighted = deal.discountPct >= 50;
@@ -744,23 +979,26 @@ export default function Home() {
     const highlightColor = deal.highlightColor || (isSuperDeal ? '#FFD700' : isHighlighted ? '#ff8800' : '#FFD700');
     
     return (
-      <TouchableOpacity
-        onPress={() => openGameDetails(deal)}
-        activeOpacity={0.95}
-        style={{
-          backgroundColor: '#374151',
-          borderRadius: 16,
-          marginBottom: 16,
-          overflow: 'hidden',
-          shadowColor: isHighlighted ? highlightColor : '#000',
-          shadowOffset: { width: 0, height: isHighlighted ? 0 : 4 },
-          shadowOpacity: isHighlighted ? 0.8 : 0.3,
-          shadowRadius: isHighlighted ? 12 : 8,
-          elevation: isHighlighted ? 16 : 8,
-          borderWidth: isHighlighted ? 2 : 0,
-          borderColor: isHighlighted ? highlightColor : 'transparent'
-        }}
-      >
+      <View style={{ paddingHorizontal: isHighlighted ? 6 : 0, marginBottom: 16 }}>
+        <AnimatedHighlightBorder isHighlighted={isHighlighted} highlightColor={highlightColor}>
+          <TouchableOpacity
+          onPress={() => openGameDetails(deal)}
+          activeOpacity={0.95}
+          style={{
+            backgroundColor: '#374151',
+            borderRadius: 16,
+            marginBottom: 16,
+            overflow: 'hidden',
+            // Remover todos os efeitos de sombra/brilho
+            shadowColor: 'transparent',
+            shadowOffset: { width: 0, height: 0 },
+            shadowOpacity: 0,
+            shadowRadius: 0,
+            elevation: 0,
+            borderWidth: 0,
+            borderColor: 'transparent'
+          }}
+        >
   {isHighlighted && (
         <View style={{ position: 'absolute', top: 10, right: 10, zIndex: 20, alignItems: 'center' }}>
           <View
@@ -796,14 +1034,37 @@ export default function Home() {
       />
         
         <View style={{ padding: isTablet ? 20 : 16 }}>
-        <Text style={{ 
-          color: '#FFFFFF', 
-          fontSize: isTablet ? 20 : 18, 
-          fontWeight: '700',
-          marginBottom: isTablet ? 10 : 8
-        }}>
-          {deal.game?.title || 'Sem título'}
-        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: isTablet ? 10 : 8 }}>
+          <Text style={{ 
+            color: '#FFFFFF', 
+            fontSize: isTablet ? 20 : 18, 
+            fontWeight: '700',
+            flex: 1,
+            marginRight: 8
+          }}>
+            {deal.game?.title || 'Sem título'}
+          </Text>
+          
+          {getPriceIndicator(deal) && (
+            <View style={{
+              backgroundColor: getPriceIndicator(deal)?.bgColor,
+              paddingHorizontal: 6,
+              paddingVertical: 3,
+              borderRadius: 8,
+              borderWidth: 1,
+              borderColor: getPriceIndicator(deal)?.color,
+            }}>
+              <Text style={{
+                color: getPriceIndicator(deal)?.color,
+                fontSize: 9,
+                fontWeight: '800',
+                letterSpacing: 0.5,
+              }}>
+                {getPriceIndicator(deal)?.label}
+              </Text>
+            </View>
+          )}
+        </View>
         
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <View style={{ flex: 1 }}>
@@ -861,9 +1122,11 @@ export default function Home() {
           </Text>
         </View>
       </View>
-    </TouchableOpacity>
-  )
-}
+        </TouchableOpacity>
+      </AnimatedHighlightBorder>
+      </View>
+    )
+  }
 
 // Onboarding modal render helper near the end of the file
 const OnboardingModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ visible, onClose }) => {
@@ -996,26 +1259,29 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
 
 
 
+
+
   const renderBottomNav = () => (
-    <View style={{ 
-      backgroundColor: '#374151', 
-      flexDirection: 'row',
-      paddingBottom: 34,
-      paddingTop: 16,
-      paddingHorizontal: 20,
-      borderTopLeftRadius: 24,
-      borderTopRightRadius: 24,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: -4 },
-      shadowOpacity: 0.3,
-      shadowRadius: 12,
-      elevation: 12
-    }}>
+    <SafeAreaView style={{ backgroundColor: '#374151' }}>
+      <View style={{ 
+        backgroundColor: '#374151', 
+        flexDirection: 'row',
+        paddingBottom: 10,
+        paddingTop: 16,
+        paddingHorizontal: 20,
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 12,
+        elevation: 12
+      }}>
       {[
         { key: 'home', icon: 'home', label: 'Início' },
         { key: 'hardware', icon: 'cube', label: 'Hardware' },
         { key: 'search', icon: 'search', label: 'Buscar' },
-        { key: 'favorites', icon: 'heart', label: 'Desejos' },
+        { key: 'favorites', icon: 'eye', label: 'Vigiando' },
         { key: 'profile', icon: 'person', label: 'Perfil' }
       ].map((tab: { key: string; icon: string; label: string }) => (
         <TouchableOpacity
@@ -1042,7 +1308,8 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
           </Text>
         </TouchableOpacity>
       ))}
-    </View>
+      </View>
+    </SafeAreaView>
   )
 
   // Renderização condicional baseada no estado da app
@@ -1135,11 +1402,8 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
 
               {!loading && !error && (deals.length > 0 || displayDeals.length > 0) && (
                 <>
-                  <View style={{ paddingHorizontal: isTablet ? 40 : 20, maxWidth: isTablet ? 800 : '100%', alignSelf: 'center', width: '100%' }}>
+                  <View style={{ paddingHorizontal: isTablet ? 40 : 24, maxWidth: isTablet ? 800 : '100%', alignSelf: 'center', width: '100%' }}>
                     <View style={{ 
-                      flexDirection: 'row', 
-                      justifyContent: 'space-between', 
-                      alignItems: 'center',
                       marginBottom: 20
                     }}>
                       <Text style={{ 
@@ -1147,43 +1411,8 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                         fontSize: isTablet ? 28 : 24, 
                         fontWeight: '700'
                       }}>
-                        {hasActiveFilters() ? 'Ofertas Filtradas' : 'Todas as Ofertas'}
+                        Ofertas do Dia
                       </Text>
-                      
-                      <TouchableOpacity
-                        onPress={() => setShowFilters(true)}
-                        style={{
-                          backgroundColor: hasActiveFilters() ? '#3B82F6' : '#374151',
-                          paddingHorizontal: 16,
-                          paddingVertical: 8,
-                          borderRadius: 12,
-                          flexDirection: 'row',
-                          alignItems: 'center'
-                        }}
-                      >
-                        <Ionicons 
-                          name="filter" 
-                          size={16} 
-                          color={hasActiveFilters() ? '#FFFFFF' : '#9CA3AF'} 
-                        />
-                        <Text style={{ 
-                          color: hasActiveFilters() ? '#FFFFFF' : '#9CA3AF',
-                          fontSize: 14,
-                          fontWeight: '600',
-                          marginLeft: 6
-                        }}>
-                          Filtros
-                        </Text>
-                        {hasActiveFilters() && (
-                          <View style={{
-                            backgroundColor: '#FFFFFF',
-                            width: 6,
-                            height: 6,
-                            borderRadius: 3,
-                            marginLeft: 6
-                          }} />
-                        )}
-                      </TouchableOpacity>
                     </View>
                     
                     <FlatList
@@ -1217,7 +1446,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                 </>
               )}
               
-              <View style={{ height: 120 }} />
+              <View style={{ height: 20 }} />
             </ScrollView>
           </View>
         )}
@@ -1264,7 +1493,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                   style={{
                     marginLeft: 8,
                     padding: 8,
-                    backgroundColor: hasActiveFilters() ? '#3B82F6' : '#333',
+                    backgroundColor: hasActiveFilters ? '#3B82F6' : '#333',
                     borderRadius: 8
                   }}
                   onPress={() => setShowFilters(!showFilters)}
@@ -1272,8 +1501,57 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                   <Ionicons 
                     name="options" 
                     size={16} 
-                    color={hasActiveFilters() ? '#000' : '#FFF'} 
+                    color={hasActiveFilters ? '#000' : '#FFF'} 
                   />
+                </TouchableOpacity>
+              </View>
+
+              {/* Botões de Filtro Jogos/DLCs */}
+              <View style={{ 
+                flexDirection: 'row', 
+                marginBottom: 20,
+                backgroundColor: '#374151',
+                borderRadius: 12,
+                padding: 4
+              }}>
+                <TouchableOpacity
+                  onPress={() => setSearchFilter('games')}
+                  style={{
+                    flex: 1,
+                    paddingVertical: 10,
+                    paddingHorizontal: 16,
+                    borderRadius: 8,
+                    backgroundColor: searchFilter === 'games' ? '#3B82F6' : 'transparent',
+                    alignItems: 'center'
+                  }}
+                >
+                  <Text style={{ 
+                    color: searchFilter === 'games' ? '#FFFFFF' : '#9CA3AF',
+                    fontSize: 14,
+                    fontWeight: '600'
+                  }}>
+                    🎮 Jogos
+                  </Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  onPress={() => setSearchFilter('dlcs')}
+                  style={{
+                    flex: 1,
+                    paddingVertical: 10,
+                    paddingHorizontal: 16,
+                    borderRadius: 8,
+                    backgroundColor: searchFilter === 'dlcs' ? '#3B82F6' : 'transparent',
+                    alignItems: 'center'
+                  }}
+                >
+                  <Text style={{ 
+                    color: searchFilter === 'dlcs' ? '#FFFFFF' : '#9CA3AF',
+                    fontSize: 14,
+                    fontWeight: '600'
+                  }}>
+                    📦 DLCs & Expansões
+                  </Text>
                 </TouchableOpacity>
               </View>
 
@@ -1426,50 +1704,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                 </Text>
               </View>
 
-              {/* Estatísticas */}
-              <View style={{
-                backgroundColor: '#374151',
-                borderRadius: 16,
-                padding: isTablet ? 24 : 20,
-                marginBottom: 20
-              }}>
-                <Text style={{ 
-                  color: '#FFFFFF', 
-                  fontSize: isTablet ? 20 : 18, 
-                  fontWeight: '700',
-                  marginBottom: 16,
-                  textAlign: isTablet ? 'center' : 'left'
-                }}>
-                  Suas Estatísticas
-                </Text>
-                
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <View style={{ alignItems: 'center', flex: 1 }}>
-                    <Text style={{ color: '#3B82F6', fontSize: isTablet ? 28 : 24, fontWeight: '800' }}>
-                      {deals.length}
-                    </Text>
-                    <Text style={{ color: '#9CA3AF', fontSize: isTablet ? 14 : 12, textAlign: 'center' }}>
-                      Ofertas Vistas
-                    </Text>
-                  </View>
-                  
-                  <View style={{ alignItems: 'center', flex: 1 }}>
-                    <PriceText value={0} style={{ color: '#3B82F6', fontSize: isTablet ? 28 : 24, fontWeight: '800' }} />
-                    <Text style={{ color: '#9CA3AF', fontSize: isTablet ? 14 : 12, textAlign: 'center' }}>
-                      Economizado
-                    </Text>
-                  </View>
-                  
-                  <View style={{ alignItems: 'center', flex: 1 }}>
-                    <Text style={{ color: '#F59E0B', fontSize: isTablet ? 28 : 24, fontWeight: '800' }}>
-                      0
-                    </Text>
-                    <Text style={{ color: '#9CA3AF', fontSize: isTablet ? 14 : 12, textAlign: 'center' }}>
-                      Favoritos
-                    </Text>
-                  </View>
-                </View>
-              </View>
+
 
               {/* Configurações */}
               <View style={{
@@ -1538,7 +1773,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                           {item.subtitle}
                         </Text>
                       </View>
-                      <Ionicons name="chevron-forward" size={isTablet ? 24 : 20} color="#6B7280" />
+                      <Ionicons name="chevron-forward" size={isTablet ? 24 : 20} color="#9CA3AF" />
                     </TouchableOpacity>
                   )
                 })}
@@ -1591,6 +1826,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
           discount={selectedDeal?.discountPct}
           gameTitle={selectedDeal?.game?.title}
           userId={userId}
+          store={selectedDeal?.store?.name === 'Epic Games' ? 'epic' : 'steam'}
         />
       )}
 
@@ -1735,18 +1971,14 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
         }}
       />
       
-      {/* Banner de Doação */}
-      {donation.shouldShow && (
-        <DonationBanner
-          onPress={donation.handleDonatePress}
-          onDismiss={donation.handleDismiss}
-        />
-      )}
-      
-      {/* Modal de Doação */}
+      {/* Popup de Doação Temporizado */}
       <DonationModal
-        visible={donation.isModalVisible}
-        onClose={donation.handleModalClose}
+        visible={showDonationPopup}
+        onClose={async () => {
+          const donationService = DonationPopupService.getInstance()
+          await donationService.markAsDismissed()
+          setShowDonationPopup(false)
+        }}
       />
       
       </View>

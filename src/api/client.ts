@@ -103,3 +103,43 @@ export async function authGoogle(idToken: string) {
     throw new Error(err.message || 'Network error')
   }
 }
+
+// Price History API
+export interface PriceHistoryData {
+  gameId: string
+  gameTitle: string
+  period: string
+  chartData: Array<{
+    date: string
+    prices: Record<string, number>
+  }>
+  currentPrices: Record<string, { price: number; date: string }>
+  statistics: {
+    lowest: number
+    highest: number
+    average: number
+    lowestDate: string
+    lowestStore: string
+    dataPoints: number
+  } | null
+  alerts: {
+    isBestPriceEver: boolean
+    bestPriceAlert: any | null
+  }
+  notice?: string // Informação sobre a fonte dos dados
+}
+
+export async function fetchPriceHistory(gameId: string, days = 90): Promise<PriceHistoryData> {
+  try {
+    const res = await fetchWithTimeout(`${API_URL}/price-history/${gameId}?days=${days}`)
+    if (!res.ok) {
+      let body: any = null
+      try { body = await res.json() } catch (e) {}
+      const msg = (body && (body.message || body.error)) || `HTTP ${res.status}`
+      throw new Error(msg)
+    }
+    return res.json()
+  } catch (err: any) {
+    throw new Error(err.message || 'Network error')
+  }
+}

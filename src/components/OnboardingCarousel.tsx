@@ -23,7 +23,7 @@ const slides = [
     icon: 'game-controller-outline' as const,
     title: 'Bem-vindo ao Looton',
     subtitle: 'Descubra os melhores deals em jogos',
-    description: 'Encontre promoções incríveis na Steam, Epic Games, GOG e muito mais. Tudo em um só lugar.',
+    description: 'Encontre promoções incríveis na Steam, Epic Games e muito mais. Tudo em um só lugar.',
     gradient: ['#3B82F6', '#1D4ED8'] as const,
   },
   {

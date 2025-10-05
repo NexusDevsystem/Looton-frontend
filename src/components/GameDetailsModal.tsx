@@ -17,7 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { WishlistService, WishlistItem } from '../services/WishlistService';
 import { AddToListModal } from './AddToListModal';
-import PriceAnalysisModal from './PriceAnalysisModal';
+
 
 const { width, height } = Dimensions.get('window');
 
@@ -35,6 +35,7 @@ interface GameDetailsProps {
   discount?: number;
   gameTitle?: string;
   userId?: string;
+  store?: 'steam' | 'epic';
 }
 
 interface GameDetails {
@@ -135,12 +136,13 @@ export const GameDetailsModal: React.FC<GameDetailsProps> = ({
   discount = 0,
   gameTitle = '',
   userId,
+  store = 'steam',
 }) => {
   const [gameDetails, setGameDetails] = useState<GameDetails | null>(null);
   const [loading, setLoading] = useState(false);
   const [showWishlistModal, setShowWishlistModal] = useState(false);
   const [showAddToListModal, setShowAddToListModal] = useState(false);
-  const [showPriceAnalysis, setShowPriceAnalysis] = useState(false);
+
   const [desiredPrice, setDesiredPrice] = useState('');
   const [isInWishlist, setIsInWishlist] = useState(false);
   const [wishlistItem, setWishlistItem] = useState<WishlistItem | null>(null);
@@ -155,12 +157,20 @@ export const GameDetailsModal: React.FC<GameDetailsProps> = ({
   const fetchGameDetails = async () => {
     try {
       setLoading(true);
-      console.log(`Buscando detalhes para appId: ${appId}`);
+      console.log(`Buscando detalhes para appId: ${appId}`, 'store:', store);
       
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 segundos timeout
       
-      const response = await fetch(`${API_URL}/steam/details/${appId}`, {
+      // Determinar endpoint baseado na loja
+      let endpoint = '';
+      if (store === 'epic') {
+        endpoint = `${API_URL}/epic/details/${appId}`;
+      } else {
+        endpoint = `${API_URL}/steam/details/${appId}`;
+      }
+      
+      const response = await fetch(endpoint, {
         signal: controller.signal,
         headers: {
           'Accept': 'application/json',
@@ -208,8 +218,51 @@ export const GameDetailsModal: React.FC<GameDetailsProps> = ({
       }
       
       const data = await response.json();
-      console.log(`Detalhes carregados para: ${data.name}`);
-      setGameDetails(data);
+      console.log(`Detalhes carregados para: ${data.name || data.title}`);
+      
+      // Converter dados Epic para formato Steam-like se necessário
+      if (store === 'epic') {
+        const epicToSteamFormat = {
+          appId: appId,
+          name: data.title,
+          type: 'game',
+          required_age: data.rating === 'M - Mature 17+' ? 17 : (data.rating === 'T - Teen' ? 13 : 0),
+          is_free: currentPrice === 0,
+          detailed_description: data.longDescription || data.description,
+          about_the_game: data.description,
+          short_description: data.description,
+          developers: [data.developer],
+          publishers: [data.publisher],
+          platforms: { 
+            windows: data.platforms?.includes('PC') || true, 
+            mac: false, 
+            linux: false 
+          },
+          categories: data.genres?.map((g: string) => ({ description: g })) || [],
+          genres: data.genres?.map((g: string) => ({ description: g })) || [],
+          screenshots: data.screenshots?.map((url: string) => ({ path_full: url })) || [],
+          movies: [],
+          recommendations: { total: 0 },
+          release_date: { 
+            coming_soon: false, 
+            date: data.releaseDate ? new Date(data.releaseDate).toLocaleDateString('pt-BR') : 'Data não disponível' 
+          },
+          support_info: { url: '', email: '' },
+          background: data.screenshots?.[0] || '',
+          background_raw: data.screenshots?.[0] || '',
+          pc_requirements: data.systemRequirements?.minimum ? {
+            minimum: `<strong>Sistema Operacional:</strong> ${data.systemRequirements.minimum.os}<br><strong>Processador:</strong> ${data.systemRequirements.minimum.processor}<br><strong>Memória:</strong> ${data.systemRequirements.minimum.memory}<br><strong>Placa de vídeo:</strong> ${data.systemRequirements.minimum.graphics}<br><strong>Armazenamento:</strong> ${data.systemRequirements.minimum.storage}`
+          } : { minimum: 'Requisitos não disponíveis' },
+          mac_requirements: { minimum: 'Requisitos não disponíveis' },
+          linux_requirements: { minimum: 'Requisitos não disponíveis' },
+          header_image: data.screenshots?.[0] || '',
+          capsule_image: data.screenshots?.[0] || '',
+          capsule_imagev5: data.screenshots?.[0] || ''
+        };
+        setGameDetails(epicToSteamFormat);
+      } else {
+        setGameDetails(data);
+      }
     } catch (error) {
       console.error('Erro ao buscar detalhes:', error);
       if (error instanceof Error && error.name === 'AbortError') {
@@ -277,8 +330,8 @@ export const GameDetailsModal: React.FC<GameDetailsProps> = ({
         currentPrice,
         desiredPrice: price,
         coverUrl: gameDetails?.header_image || '',
-        store: 'Steam',
-        url: `https://store.steampowered.com/app/${appId}`,
+        store: store === 'epic' ? 'Epic Games' : 'Steam',
+        url: store === 'epic' ? `https://store.epicgames.com/en-US/p/${appId}` : `https://store.steampowered.com/app/${appId}`,
         notified: false,
       };
 
@@ -328,8 +381,15 @@ export const GameDetailsModal: React.FC<GameDetailsProps> = ({
     }
   }
 
-  const openSteamPage = () => {
-    const url = `https://store.steampowered.com/app/${appId}`;
+  const openStorePage = () => {
+    let url = '';
+    if (store === 'epic') {
+      // Para Epic Games, precisamos construir a URL baseada no ID/slug
+      url = `https://store.epicgames.com/en-US/p/${appId}`;
+    } else {
+      // Para Steam, usar o formato padrão
+      url = `https://store.steampowered.com/app/${appId}`;
+    }
     Linking.openURL(url);
   };
 
@@ -367,12 +427,13 @@ export const GameDetailsModal: React.FC<GameDetailsProps> = ({
 
     const BulletList = ({ items }: { items: string[] }) => (
       <View>
-        {items.map((line, idx) => (
-          <View style={{ flexDirection: 'row', marginBottom: 6 }}>
-            <Text style={{ color: '#9CA3AF', marginRight: 8 }}>•</Text>
-            <Text style={{ color: '#D1D5DB', fontSize: 14, lineHeight: 20, flex: 1 }}>{line}</Text>
-          </View>
-        ))}
+        {items.map((line, idx) => 
+          React.createElement(View, 
+            { style: { flexDirection: 'row', marginBottom: 6 }, key: `bullet-${idx}` },
+            React.createElement(Text, { style: { color: '#9CA3AF', marginRight: 8 } }, '•'),
+            React.createElement(Text, { style: { color: '#D1D5DB', fontSize: 14, lineHeight: 20, flex: 1 } }, line)
+          )
+        )}
       </View>
     )
 
@@ -434,7 +495,7 @@ export const GameDetailsModal: React.FC<GameDetailsProps> = ({
             Detalhes do Jogo
           </Text>
           
-          <TouchableOpacity onPress={openSteamPage}>
+          <TouchableOpacity onPress={openStorePage}>
             <Ionicons name="open-outline" size={24} color="#3B82F6" />
           </TouchableOpacity>
         </View>
@@ -504,28 +565,6 @@ export const GameDetailsModal: React.FC<GameDetailsProps> = ({
                   </View>
 
                   <View style={{ flexDirection: 'row', gap: 12 }}>
-                    <TouchableOpacity
-                      onPress={() => setShowPriceAnalysis(true)}
-                      style={{
-                        backgroundColor: '#8B5CF6',
-                        paddingHorizontal: 14,
-                        paddingVertical: 8,
-                        borderRadius: 20,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                      }}
-                    >
-                      <Ionicons 
-                        name="analytics-outline" 
-                        size={16} 
-                        color="white" 
-                        style={{ marginRight: 6 }}
-                      />
-                      <Text style={{ color: 'white', fontWeight: '600' }}>
-                        Análise
-                      </Text>
-                    </TouchableOpacity>
-
                     <TouchableOpacity
                       onPress={() => {
                         if (userId) {
@@ -629,20 +668,21 @@ export const GameDetailsModal: React.FC<GameDetailsProps> = ({
                     Capturas de Tela
                   </Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                    {arr(gameDetails?.screenshots).slice(0, 5).map((screenshot, index) => (
-                      <Image
-                        source={{ uri: screenshot.path_thumbnail }}
-                        style={{
+                    {arr(gameDetails?.screenshots).slice(0, 5).map((screenshot, index) => 
+                      React.createElement(Image, {
+                        key: `screenshot-${index}`,
+                        source: { uri: screenshot.path_thumbnail },
+                        style: {
                           width: 150,
                           height: 90,
                           borderRadius: 8,
                           marginRight: 12,
-                        }}
-                        contentFit="cover"
-                        cachePolicy="disk"
-                        transition={200}
-                      />
-                    ))}
+                        },
+                        contentFit: "cover" as const,
+                        cachePolicy: "disk" as const,
+                        transition: 200,
+                      })
+                    )}
                   </ScrollView>
                 </View>
               )}
@@ -657,22 +697,23 @@ export const GameDetailsModal: React.FC<GameDetailsProps> = ({
                     Gêneros
                   </Text>
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-                    {arr(gameDetails?.genres).map((genre) => (
-                      <View
-                        style={{
+                    {arr(gameDetails?.genres).map((genre, index) => 
+                      React.createElement(View, {
+                        key: `genre-${index}`,
+                        style: {
                           backgroundColor: '#374151',
                           paddingHorizontal: 12,
                           paddingVertical: 6,
                           borderRadius: 16,
                           marginRight: 8,
                           marginBottom: 8,
-                        }}
-                      >
-                        <Text style={{ color: '#E5E7EB', fontSize: 12 }}>
-                          {genre.description}
-                        </Text>
-                      </View>
-                    ))}
+                        }
+                      },
+                        React.createElement(Text, {
+                          style: { color: '#E5E7EB', fontSize: 12 }
+                        }, genre.description)
+                      )
+                    )}
                   </View>
                 </View>
               )}
@@ -789,14 +830,7 @@ export const GameDetailsModal: React.FC<GameDetailsProps> = ({
           />
         )}
 
-        {/* Price Analysis Modal */}
-        <PriceAnalysisModal
-          visible={showPriceAnalysis}
-          onClose={() => setShowPriceAnalysis(false)}
-          gameId={appId.toString()}
-          gameTitle={gameDetails?.name || gameTitle || ''}
-          currentPrice={currentPrice}
-        />
+
 
         {/* Local wishlist modal for anonymous users (already implemented above via showWishlistModal) */}
       </View>

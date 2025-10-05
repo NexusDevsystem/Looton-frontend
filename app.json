@@ -3,6 +3,7 @@
     "name": "Looton",
     "slug": "looton-app",
     "version": "0.1.0",
+    "main": "./index.js",
     "orientation": "portrait",
     "scheme": "looton",
     "platforms": [

@@ -8,10 +8,13 @@ const arr = <T,>(v: T[] | undefined | null): T[] => (Array.isArray(v) ? v : []);
 
 export function GameCover({ imageUrls, height = 180 }: { imageUrls?: string[]; height?: number }) {
   const [idx, setIdx] = React.useState(0);
-  const urls = arr(imageUrls).filter(url => url && typeof url === 'string' && url.trim() !== '');
+  const urls = React.useMemo(() => 
+    arr(imageUrls).filter(url => url && typeof url === 'string' && url.trim() !== ''), 
+    [imageUrls]
+  );
   const src = urls[idx];
 
-  React.useEffect(() => { setIdx(0); }, [JSON.stringify(urls)]);
+  React.useEffect(() => { setIdx(0); }, [urls]);
 
   if (len(urls) === 0) return <Placeholder h={height} />;
 

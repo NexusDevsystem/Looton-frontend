@@ -24,13 +24,16 @@ export function HardwareInner() {
     return () => clearTimeout(id)
   }, [query])
 
-  // Phase 1: fast curated snapshot (minimal showcase)
+  // Carregar ofertas curadas com mais itens
   const loadCurated = useCallback(async () => {
     setError(null)
     try {
-      const res = await fetchPcDeals({ limit: 12 })
+      // Carregar mais itens iniciais para ter um feed melhor
+      const res = await fetchPcDeals({ limit: 60, full: true })
+      console.log('Carregou ofertas curadas:', res.items?.length || 0)
       setItems(res.items || [])
     } catch (e: any) {
+      console.error('Erro ao carregar ofertas curadas:', e)
       setError(e.message || 'Erro ao carregar ofertas')
       setItems([])
     } finally {

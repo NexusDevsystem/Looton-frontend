@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000'
 
@@ -76,13 +76,13 @@ export const useFilters = () => {
     setMaxPrice(undefined)
   }
 
-  const hasActiveFilters = () => {
+  const hasActiveFilters = useMemo(() => {
     return selectedGenres.length > 0 || 
            selectedTags.length > 0 || 
            selectedStores.length > 0 || 
            minDiscount > 0 || 
            maxPrice !== undefined
-  }
+  }, [selectedGenres.length, selectedTags.length, selectedStores.length, minDiscount, maxPrice])
 
   const fetchFilteredDeals = async (options: FilterOptions = {}) => {
     setLoading(true)

@@ -1,78 +1,89 @@
-import AsyncStorage from '@react-native-async-storage/async-storage'
-// simple UUIDv4 generator (no external dependency)
-function uuidv4() {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    const r = Math.random() * 16 | 0
-    const v = c === 'x' ? r : (r & 0x3 | 0x8)
-    return v.toString(16)
-  })
-}
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Keys used by the app session (per spec)
-const KEY_TOKEN = '@session/token'
-const KEY_REFRESH = '@session/refresh'
-const KEY_USER = '@session/user'
-const KEY_DEVICE = '@session/deviceId'
+const DEVICE_ID_KEY = '@looton_device_id';
+const TOKEN_KEY = '@looton_auth_token';
 
-export async function saveToken(token: string) {
-  await AsyncStorage.setItem(KEY_TOKEN, token)
-}
+// Individual functions for direct import/export
+export const login = async (credentials: { email: string; password: string }) => {
+  // Mock login implementation
+  console.log('Login attempt with:', credentials);
+  const token = `mock-jwt-token-${Date.now()}`;
+  await AsyncStorage.setItem(TOKEN_KEY, token);
+  return {
+    success: true,
+    user: {
+      id: 'mock-user-id',
+      email: credentials.email,
+      name: 'Mock User'
+    },
+    token: token
+  };
+};
 
-export async function loadToken(): Promise<string | null> {
-  return AsyncStorage.getItem(KEY_TOKEN)
-}
+export const logout = async () => {
+  // Mock logout implementation
+  console.log('User logged out');
+  await AsyncStorage.removeItem(TOKEN_KEY);
+  return { success: true };
+};
 
-export async function clearToken() {
-  await AsyncStorage.removeItem(KEY_TOKEN)
-}
+export const getCurrentUser = () => {
+  // Mock current user
+  return {
+    id: 'mock-user-id',
+    email: 'user@example.com',
+    name: 'Mock User'
+  };
+};
 
-export async function saveRefresh(refresh: string) {
-  await AsyncStorage.setItem(KEY_REFRESH, refresh)
-}
+export const isAuthenticated = async () => {
+  const token = await loadToken();
+  return !!token; // Return true if token exists
+};
 
-export async function loadRefresh(): Promise<string | null> {
-  return AsyncStorage.getItem(KEY_REFRESH)
-}
-
-export async function clearRefresh() {
-  await AsyncStorage.removeItem(KEY_REFRESH)
-}
-
-export async function saveUser(user: string) {
-  // user can be the user id or serialized JSON depending on usage
-  await AsyncStorage.setItem(KEY_USER, user)
-}
-
-export async function loadUser(): Promise<string | null> {
-  return AsyncStorage.getItem(KEY_USER)
-}
-
-export async function clearUser() {
-  await AsyncStorage.removeItem(KEY_USER)
-}
-
-export async function saveDeviceId(deviceId: string) {
-  await AsyncStorage.setItem(KEY_DEVICE, deviceId)
-}
-
-export async function loadDeviceId(): Promise<string | null> {
-  return AsyncStorage.getItem(KEY_DEVICE)
-}
-
-export async function ensureDeviceId(): Promise<string> {
-  let id = await loadDeviceId()
-  if (!id) {
-    id = uuidv4()
-    await saveDeviceId(id)
+export const loadToken = async (): Promise<string | null> => {
+  try {
+    return await AsyncStorage.getItem(TOKEN_KEY);
+  } catch (error) {
+    console.error('Error loading token:', error);
+    return null;
   }
-  return id as string
+};
+
+export const ensureDeviceId = async (): Promise<string> => {
+  try {
+    let deviceId = await AsyncStorage.getItem(DEVICE_ID_KEY);
+    if (!deviceId) {
+      // Generate a simple random device ID
+      deviceId = `device_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      await AsyncStorage.setItem(DEVICE_ID_KEY, deviceId);
+    }
+    return deviceId;
+  } catch (error) {
+    console.error('Error ensuring device ID:', error);
+    // Fallback: generate a temporary ID
+    return `temp_device_${Date.now()}`;
+  }
+};
+
+// Define the interface for AuthService
+interface AuthServiceType {
+  login: (credentials: { email: string; password: string }) => Promise<any>;
+  logout: () => Promise<any>;
+  getCurrentUser: () => any;
+  isAuthenticated: () => Promise<boolean>;
+  loadToken: () => Promise<string | null>;
+  ensureDeviceId: () => Promise<string>;
 }
 
-export async function clearAll() {
-  await Promise.all([
-    AsyncStorage.removeItem(KEY_TOKEN),
-    AsyncStorage.removeItem(KEY_REFRESH),
-    AsyncStorage.removeItem(KEY_USER),
-    AsyncStorage.removeItem(KEY_DEVICE)
-  ])
-}
+// Create the service object
+export const AuthService: AuthServiceType = {
+  login,
+  logout,
+  getCurrentUser,
+  isAuthenticated,
+  loadToken,
+  ensureDeviceId
+};
+
+export default AuthService;

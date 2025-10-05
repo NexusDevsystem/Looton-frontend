@@ -23,7 +23,25 @@ export async function fetchPcDeals(params?: { limit?: number; offset?: number; s
   if (params?.category?.length) q.set('category', params.category.join(','))
   if (params?.full) q.set('full', '1')
   if (params?.q) q.set('q', params.q)
-  const res = await fetch(`${API_URL}/pc-deals?${q.toString()}`)
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  return res.json() as Promise<{ slotDate: string; items: PcOffer[] }>
+  
+  const url = `${API_URL}/pc-deals?${q.toString()}`
+  console.log('HardwareService: Fetching from', url)
+  
+  try {
+    const res = await fetch(url)
+    console.log('HardwareService: Response status', res.status)
+    
+    if (!res.ok) {
+      const errorText = await res.text()
+      console.error('HardwareService: Error response', errorText)
+      throw new Error(`HTTP ${res.status}: ${errorText}`)
+    }
+    
+    const data = await res.json()
+    console.log('HardwareService: Success, items count:', data.items?.length || 0)
+    return data as { slotDate: string; items: PcOffer[] }
+  } catch (error) {
+    console.error('HardwareService: Fetch error', error)
+    throw error
+  }
 }
