@@ -1518,7 +1518,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
           <View style={{ flex: 1 }}>
             {renderHeader()}
             
-            {loading && (
+            {(loading || feedLoading) && (
               <View style={{ padding: 50, alignItems: 'center' }}>
                 <ActivityIndicator size="large" color="#3B82F6" />
                 <Text style={{ color: '#9CA3AF', marginTop: 20, fontSize: 16 }}>
@@ -1527,7 +1527,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
               </View>
             )}
 
-            {error && (
+            {(error || feedError) && (
               <View style={{ 
                 marginHorizontal: 20,
                 padding: 24, 
@@ -1561,9 +1561,9 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
               </View>
             )}
 
-            {!loading && !error && (deals.length > 0 || (hasActiveFilters && displayDeals.length > 0)) && (
+            {!feedLoading && !feedError && (gameItems.length > 0 || deals.length > 0 || (hasActiveFilters && displayDeals.length > 0)) && (
               <FlatList
-                data={hasActiveFilters && displayDeals.length > 0 ? displayDeals : deals}
+                data={hasActiveFilters && displayDeals.length > 0 ? displayDeals : (gameItems.length > 0 ? gameItems.map(convertGameItemToDeal) : deals)}
                 renderItem={renderGameCard}
                 keyExtractor={(item, index) => `${item._id || 'game'}-${index}`}
                 showsVerticalScrollIndicator={false}
@@ -1617,7 +1617,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
             )}
             
             {/* Renderizar FlatList vazia quando não há dados */}
-            {!loading && !error && deals.length === 0 && (!hasActiveFilters || displayDeals.length === 0) && (
+            {!loading && !feedLoading && !error && !feedError && gameItems.length === 0 && deals.length === 0 && (!hasActiveFilters || displayDeals.length === 0) && (
               <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 100 }}>
                 <Text style={{ color: '#9CA3AF', fontSize: 16 }}>Nenhuma oferta disponível no momento</Text>
               </View>
