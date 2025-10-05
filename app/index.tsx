@@ -34,7 +34,6 @@ import { fetchCuratedFeed, SteamGenre, UserPreferences } from '../src/services/S
 
 import { showToast } from '../src/utils/SimpleToast'
 import { TermsOfServiceModal } from '../src/components/TermsOfServiceModal'
-import { SplashScreen } from '../src/components/SplashScreen'
 import { OnboardingCarousel } from '../src/components/OnboardingCarousel'
 import { useGameFeed, GameItem } from '../src/hooks/useGameFeed'
 
@@ -201,7 +200,7 @@ export default function Home() {
   const [showTermsModal, setShowTermsModal] = useState(false)
   
   // Estados do fluxo de inicialização
-  const [appState, setAppState] = useState<'splash' | 'onboarding' | 'terms' | 'app'>('splash')
+  const [appState, setAppState] = useState<'onboarding' | 'terms' | 'app'>('app')
   const [hasSeenOnboarding, setHasSeenOnboarding] = useState(false)
   
   // Estado para ordenação
@@ -275,7 +274,7 @@ export default function Home() {
       
       // Determinar estado inicial baseado no histórico do usuário
       if (!hasSeenOnboardingBefore) {
-        setAppState('splash')
+        setAppState('app')
       } else if (!hasAcceptedTerms) {
         setAppState('terms')  
       } else {
@@ -284,7 +283,7 @@ export default function Home() {
       
     } catch (error) {
       console.error('Erro ao inicializar app:', error)
-      setAppState('splash')
+      setAppState('app')
     }
   }, []) // Remover dependências desnecessárias
 
@@ -1474,10 +1473,6 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
   )
 
   // Renderização condicional baseada no estado da app
-  if (appState === 'splash') {
-    return <SplashScreen onFinish={handleSplashFinish} />
-  }
-
   if (appState === 'onboarding') {
     return <OnboardingCarousel onFinish={handleOnboardingFinish} />
   }
