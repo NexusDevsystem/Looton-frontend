@@ -22,7 +22,16 @@ export async function fetchPcDeals(params?: { limit?: number; offset?: number; s
   if (params?.store?.length) q.set('store', params.store.join(','))
   if (params?.category?.length) q.set('category', params.category.join(','))
   if (params?.full) q.set('full', '1')
-  if (params?.q) q.set('q', params.q)
+  if (params?.q) {
+    // Normalizar a consulta de busca
+    const normalizedQuery = params.q
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '') // Remover acentos
+      .trim()
+    if (normalizedQuery) {
+      q.set('q', normalizedQuery)
+    }
+  }
   
   const url = `${API_URL}/pc-deals?${q.toString()}`
   console.log('HardwareService: Fetching from', url)

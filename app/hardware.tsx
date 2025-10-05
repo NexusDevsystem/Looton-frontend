@@ -18,9 +18,17 @@ export function HardwareInner() {
   const [query, setQuery] = useState('')
   const [debounced, setDebounced] = useState('')
 
-  // Debounce the search query
+  // Debounce the search query with improved timing and normalization
   useEffect(() => {
-    const id = setTimeout(() => setDebounced(query.trim()), 350)
+    const id = setTimeout(() => {
+      const trimmed = query.trim()
+      // Normalizar a consulta para melhorar a busca
+      const normalized = trimmed
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '') // Remover acentos
+        .toLowerCase()
+      setDebounced(normalized)
+    }, 300)
     return () => clearTimeout(id)
   }, [query])
 
@@ -29,7 +37,7 @@ export function HardwareInner() {
     setError(null)
     try {
       // Carregar mais itens iniciais para ter um feed melhor
-      const res = await fetchPcDeals({ limit: 60, full: true })
+      const res = await fetchPcDeals({ limit: 30, full: true })
       console.log('Carregou ofertas curadas:', res.items?.length || 0)
       setItems(res.items || [])
     } catch (e: any) {
@@ -64,7 +72,7 @@ export function HardwareInner() {
     finally {
       setRefreshing(false)
     }
-  }, [])
+  }, [debounced, page, pageSize])
 
   // Initial load: curated only; don't auto-fetch the full catalog
   useEffect(() => {
@@ -86,6 +94,7 @@ export function HardwareInner() {
       setLoading(true)
       try {
         console.log('Fazendo busca com:', debounced, 'URL:', `${API_URL}/pc-deals`)
+        // Melhorar a busca usando parâmetros mais flexíveis
         const res = await fetchPcDeals({ full: true, q: debounced, limit: pageSize, offset: 0 })
         console.log('Resposta da busca:', res)
         setItems(res.items || [])
@@ -104,27 +113,18 @@ export function HardwareInner() {
   console.log('Hardware search:', debounced, 'items:', items.length, 'first item:', items[0]?.title)
   console.log('API_URL being used:', API_URL)
   
-  // Minimal list: prefer Terabyte, but show all if none available
-  let listItems = items.filter((it) => {
-    const storeMatch = (it.store || '').toLowerCase().includes('terabyte')
-    return storeMatch
-  })
-  
-  // Fallback: if no Terabyte items, show all items
-  if (listItems.length === 0 && items.length > 0) {
-    listItems = items
-    console.log('No Terabyte items found, showing all stores')
-  }
+  // Mostrar todos os itens - remover filtro restritivo de loja
+  let listItems = items
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: tokens.colors.bg }}>
       <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 }}>
-        <Text style={{ color: tokens.colors.text, fontSize: 22, fontWeight: '800' }}>Hardware (Terabyte)</Text>
+        <Text style={{ color: tokens.colors.text, fontSize: 22, fontWeight: '800' }}>Hardware</Text>
         <View style={{ marginTop: 10, marginBottom: 6 }}>
           <TextInput
             value={query}
             onChangeText={setQuery}
-            placeholder="Buscar hardware (ex: RTX 4060, i5, SSD, memoria)"
+            placeholder="Buscar hardware (ex: RTX 4060, i5, SSD, fonte, memoria)"
             placeholderTextColor={tokens.colors.textDim}
             style={{ backgroundColor: tokens.colors.chip, color: tokens.colors.text, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 8 }}
             autoCorrect={false}
@@ -135,7 +135,7 @@ export function HardwareInner() {
         <Text style={{ color: tokens.colors.textDim, marginTop: 4, fontSize: 12 }}>
           {debounced 
             ? `Buscando por "${debounced}"... Encontrados ${listItems.length} produtos`
-            : 'Digite para buscar produtos específicos como "4060", "i5", "DDR5", etc.'
+            : 'Digite para buscar produtos específicos como "RTX 4060", "i5", "SSD", "fonte", etc.'
           }
         </Text>
       </View>
@@ -167,16 +167,22 @@ export function HardwareInner() {
                     const res = await fetchPcDeals({ full: true, q: debounced, limit: pageSize, offset: 0 })
                     setItems(res.items || [])
                     setPage(1)
-                  } catch {}
-                  finally { setRefreshing(false) }
+                  } catch (error) {
+                    console.error('Erro ao atualizar busca:', error)
+                  } finally { 
+                    setRefreshing(false) 
+                  }
                 })()
               } else {
                 // refresh curated minimal
-                loadCurated()
-                setRefreshing(false)
-                setPage(1)
+                loadCurated().finally(() => {
+                  setRefreshing(false)
+                  setPage(1)
+                })
               }
             }}
+            tintColor={tokens.colors.primary}
+            colors={[tokens.colors.primary]}
           />
         }
         ListEmptyComponent={!loading ? (

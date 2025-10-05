@@ -1,9 +1,9 @@
 import React, { useEffect } from 'react';
 import * as Notifications from 'expo-notifications';
-import { MobileAds } from 'react-native-google-mobile-ads';
 import Home from './app/index';
 import { checkUpdatesOnce } from './src/utils/updates-manager';
 import { askPushPermissionFirstLaunch, sendPushTokenToBackend } from './src/notifications';
+import { checkAndSendDailyOfferNotification } from './src/services/DailyOfferNotificationService';
 
 // Configurar handler de notificações
 Notifications.setNotificationHandler({
@@ -19,8 +19,7 @@ Notifications.setNotificationHandler({
 export default function App() {
   useEffect(() => {
     const initializeApp = async () => {
-      // Inicializar o AdMob com o Application ID
-      await MobileAds().initialize();
+      // Inicializar o AdMob com o Application ID - removido para evitar crash
       
       // Verificar updates (desabilitado para estabilidade)
       try {
@@ -44,6 +43,9 @@ export default function App() {
       } catch (error) {
         console.error('Erro ao configurar notificações:', error);
       }
+      
+      // Não verificar notificação de oferta do dia imediatamente
+      // Isso será feito na Home quando os dados estiverem disponíveis
     };
 
     initializeApp();

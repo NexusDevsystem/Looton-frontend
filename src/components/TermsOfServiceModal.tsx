@@ -29,7 +29,7 @@ export function TermsOfServiceModal({ visible, onAccept }: TermsOfServiceModalPr
               fontWeight: '700',
               textAlign: 'center'
             }}>
-              Termos de Serviço
+              Termos de Uso
             </Text>
             <Text style={{
               color: '#9CA3AF',
@@ -37,7 +37,7 @@ export function TermsOfServiceModal({ visible, onAccept }: TermsOfServiceModalPr
               marginTop: 4,
               textAlign: 'center'
             }}>
-              Looton - by Nexus DevSystem
+              Leia com atenção
             </Text>
           </View>
 
@@ -77,9 +77,8 @@ export function TermsOfServiceModal({ visible, onAccept }: TermsOfServiceModalPr
                 lineHeight: 20,
                 marginBottom: 12
               }}>
-                Este Termo regula o uso do aplicativo Looton ("App"), desenvolvido e mantido, em caráter experimental (beta), pela startup NexusDevsystem ("Nós").{'\n'}
-                Site oficial: https://www.nexusdevsystem.com{'\n'}
-                Suporte: nexusdevsystem@gmail.com{'\n'}
+                Este Termo regula o uso do aplicativo Looton (\"App\").{'\n'}
+                Suporte: contato@looton.com{'\n'}
                 Foro eleito: Belém/PA, Brasil.
               </Text>
             </View>
@@ -194,9 +193,9 @@ export function TermsOfServiceModal({ visible, onAccept }: TermsOfServiceModalPr
                 lineHeight: 20,
                 marginBottom: 12
               }}>
-                Informações de preço, prazos, estoque, frete, garantias e políticas de devolução são de responsabilidade exclusiva das lojas de terceiros para as quais o App redireciona.{'\n\n'}
-                Valores e disponibilidade podem mudar a qualquer momento, sem aviso.{'\n\n'}
-                O App pode utilizar links de afiliados; poderemos receber comissão sem custo adicional para o usuário.{'\n\n'}
+                Informações de preço, prazos, estoque, frete, garantias e políticas de devolução são de responsabilidade exclusiva das lojas de terceiros para as quais o App redireciona.{'\n'}
+                Valores e disponibilidade podem mudar a qualquer momento, sem aviso.{'\n'}
+                O App pode utilizar links de afiliados; poderemos receber comissão sem custo adicional para o usuário.{'\n'}
                 Confira sempre as informações na página do vendedor antes de concluir a compra.
               </Text>
             </View>
@@ -258,7 +257,7 @@ export function TermsOfServiceModal({ visible, onAccept }: TermsOfServiceModalPr
                 lineHeight: 20,
                 marginBottom: 12
               }}>
-                O nome, marca, logotipos, interfaces, layout e conteúdos do Looton pertencem à NexusDevsystem, salvo indicação em contrário. Marcas, nomes e conteúdos de terceiros citados pertencem aos seus respectivos titulares.
+                O nome, marca, logotipos, interfaces, layout e conteúdos do Looton são protegidos por leis de propriedade intelectual. Marcas, nomes e conteúdos de terceiros citados pertencem aos seus respectivos titulares.
               </Text>
             </View>
 
@@ -277,7 +276,7 @@ export function TermsOfServiceModal({ visible, onAccept }: TermsOfServiceModalPr
                 lineHeight: 20,
                 marginBottom: 12
               }}>
-                O App está em fase de testes (beta) e pode apresentar falhas, instabilidades, indisponibilidades e perdas de funcionalidade. Podemos alterar, suspender ou encerrar partes do App a qualquer momento, com ou sem aviso prévio.
+                O App pode apresentar falhas, instabilidades, indisponibilidades e perdas de funcionalidade. Podemos alterar, suspender ou encerrar partes do App a qualquer momento, com ou sem aviso prévio.
               </Text>
             </View>
 
@@ -338,7 +337,7 @@ export function TermsOfServiceModal({ visible, onAccept }: TermsOfServiceModalPr
                 lineHeight: 20,
                 marginBottom: 12
               }}>
-                Para dúvidas, solicitações relacionadas à LGPD ou reclamações, contate: nexusdevsystem@gmail.com
+                Para dúvidas, solicitações relacionadas à LGPD ou reclamações, contate: contato@looton.com
               </Text>
             </View>
 
@@ -380,33 +379,6 @@ export function TermsOfServiceModal({ visible, onAccept }: TermsOfServiceModalPr
               </Text>
             </View>
 
-            <View style={{
-              backgroundColor: '#374151',
-              padding: 16,
-              borderRadius: 12,
-              marginBottom: 30
-            }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                <Ionicons name="information-circle" size={20} color="#3B82F6" />
-                <Text style={{
-                  color: '#3B82F6',
-                  fontSize: 16,
-                  fontWeight: '600',
-                  marginLeft: 8
-                }}>
-                  NexusDevsystem
-                </Text>
-              </View>
-              <Text style={{
-                color: '#9CA3AF',
-                fontSize: 14,
-                lineHeight: 18
-              }}>
-                Looton v1.0.0 Beta - Todos os direitos reservados{'\n'}
-                nexusdevsystem@gmail.com{'\n'}
-                https://www.nexusdevsystem.com
-              </Text>
-            </View>
           </ScrollView>
 
           {/* Accept Button */}

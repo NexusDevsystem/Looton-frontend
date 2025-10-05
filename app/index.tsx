@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, ActivityIndicator, Image, TouchableOpacity, Dimensions, TextInput, Modal, SafeAreaView, FlatList, Animated, RefreshControl, Platform } from 'react-native'
+import { View, Text, ScrollView, ActivityIndicator, Image, TouchableOpacity, Dimensions, TextInput, Modal, SafeAreaView, FlatList, Animated, RefreshControl, Platform, Linking } from 'react-native'
 import { StatusBar } from 'expo-status-bar'
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { LinearGradient } from 'expo-linear-gradient'
@@ -23,7 +23,7 @@ import SmartNotificationService from '../src/services/SmartNotificationService'
 import SteamPriceHistoryService from '../src/services/SteamPriceHistoryService'
 import { DonationModal } from '../src/components/DonationComponents'
 import DonationService from '../src/services/DonationService'
-import AdBanner from '../src/components/AdBanner'
+import { checkAndSendDailyOfferNotification } from '../src/services/DailyOfferNotificationService'
 
 
 import { AddToListModal } from '../src/components/AddToListModal'
@@ -148,12 +148,53 @@ export default function Home() {
   const [loadingGenres, setLoadingGenres] = useState(false)
   const [showCurrencyModal, setShowCurrencyModal] = useState(false)
 
+  // Estados das notificações
+  const [dailyOfferNotificationsEnabled, setDailyOfferNotificationsEnabled] = useState(false);
   
   // Estados dos novos serviços
   const [showSmartNotification, setShowSmartNotification] = useState(false)
   const [currentNotification, setCurrentNotification] = useState<any>(null)
   const [priceAnalysis, setPriceAnalysis] = useState<Map<number, any>>(new Map())
   const [showDonationModal, setShowDonationModal] = useState(false) // Modal de doação controlado pelo usuário
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false)
+  const [showHelpModal, setShowHelpModal] = useState(false)
+  
+  // Carregar preferências de notificação ao inicializar
+  useEffect(() => {
+    const loadNotificationPreferences = async () => {
+      try {
+        const enabled = await import('../src/services/DailyOfferNotificationService')
+          .then(module => module.isDailyOfferNotificationEnabled());
+        setDailyOfferNotificationsEnabled(enabled);
+      } catch (error) {
+        console.error('Erro ao carregar preferências de notificação:', error);
+      }
+    };
+    
+    loadNotificationPreferences();
+  }, []);
+  
+  // Função para alternar notificações de oferta do dia
+  const toggleDailyOfferNotifications = async () => {
+    try {
+      const module = await import('../src/services/DailyOfferNotificationService');
+      const newState = !dailyOfferNotificationsEnabled;
+      await module.setDailyOfferNotificationEnabled(newState);
+      setDailyOfferNotificationsEnabled(newState);
+      
+      if (newState) {
+        console.log('Notificações de Oferta do Dia ativadas');
+      } else {
+        console.log('Notificações de Oferta do Dia desativadas');
+        // Cancelar qualquer notificação agendada
+        await import('expo-notifications').then(notifications => 
+          notifications.cancelAllScheduledNotificationsAsync()
+        );
+      }
+    } catch (error) {
+      console.error('Erro ao alternar notificações de oferta do dia:', error);
+    }
+  };
   
   // Filtro de busca: 'all' | 'games' | 'dlcs'
   const [searchFilter, setSearchFilter] = useState<'all' | 'games' | 'dlcs'>('games')
@@ -236,9 +277,9 @@ export default function Home() {
       if (!hasSeenOnboardingBefore) {
         setAppState('splash')
       } else if (!hasAcceptedTerms) {
-        setAppState('splash')  
+        setAppState('terms')  
       } else {
-        setAppState('splash')
+        setAppState('app')
       }
       
     } catch (error) {
@@ -638,6 +679,13 @@ export default function Home() {
       
       setDeals(dailyRotatedDeals)
       
+      // Verificar e enviar notificação de oferta do dia se aplicável
+      try {
+        await checkAndSendDailyOfferNotification(() => deals[0] || null); // Enviar a primeira oferta como oferta do dia
+      } catch (notificationError) {
+        console.error('Erro ao verificar notificação de oferta do dia:', notificationError);
+      }
+      
     } catch (err: any) {
       let errorMessage = 'Erro ao carregar ofertas'
       if (err?.name === 'AbortError') {
@@ -950,6 +998,14 @@ export default function Home() {
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
         <View>
           <Text style={{ fontSize: 32, fontWeight: '800', color: '#FFFFFF' }}>Looton</Text>
+          <Text style={{ 
+            color: '#FFFFFF', 
+            fontSize: 24, 
+            fontWeight: '700',
+            marginTop: 8
+          }}>
+            Ofertas do Dia
+          </Text>
         </View>
       </View>
     </View>
@@ -958,21 +1014,121 @@ export default function Home() {
   // Componente animado para contorno dos jogos em destaque
   // Apenas contorno simples, sem brilho
   const AnimatedHighlightBorder: React.FC<{ children: React.ReactNode; isHighlighted: boolean; highlightColor: string }> = ({ children, isHighlighted, highlightColor }) => {
-    if (!isHighlighted) {
-      return <>{children}</>
+    // Sempre retornar os filhos - o destaque será aplicado diretamente no card
+    return <>{children}</>
+  }
+
+  // Função auxiliar para renderizar o ícone da loja como logo circular
+  const renderStoreIcon = (storeName: string | undefined) => {
+    if (!storeName) {
+      return (
+        <View style={{ 
+          width: isTablet ? 24 : 20, 
+          height: isTablet ? 24 : 20, 
+          borderRadius: 12, 
+          backgroundColor: '#4B5563',
+          justifyContent: 'center',
+          alignItems: 'center'
+        }}>
+          <Ionicons name="storefront-outline" size={isTablet ? 14 : 12} color="#FFFFFF" />
+        </View>
+      );
     }
 
-    return (
-      <View style={{ 
-        position: 'relative',
-        borderRadius: 16,
-        borderWidth: 2,
-        borderColor: highlightColor,
-      }}>
-        {children}
-      </View>
-    )
-  }
+    switch (storeName) {
+      case 'Steam':
+        return (
+          <View style={{ 
+            width: isTablet ? 24 : 20, 
+            height: isTablet ? 24 : 20, 
+            borderRadius: 12, 
+            backgroundColor: '#0795D3',
+            justifyContent: 'center',
+            alignItems: 'center'
+          }}>
+            <Ionicons name="logo-steam" size={isTablet ? 14 : 12} color="#FFFFFF" />
+          </View>
+        );
+      case 'Epic Games':
+        return (
+          <View style={{ 
+            width: isTablet ? 24 : 20, 
+            height: isTablet ? 24 : 20, 
+            borderRadius: 12, 
+            backgroundColor: '#313131',
+            justifyContent: 'center',
+            alignItems: 'center'
+          }}>
+            <Ionicons name="gift" size={isTablet ? 14 : 12} color="#FFFFFF" />
+          </View>
+        );
+      case 'Origin':
+        return (
+          <View style={{ 
+            width: isTablet ? 24 : 20, 
+            height: isTablet ? 24 : 20, 
+            borderRadius: 12, 
+            backgroundColor: '#F56C26',
+            justifyContent: 'center',
+            alignItems: 'center'
+          }}>
+            <Ionicons name="logo-game-controller" size={isTablet ? 14 : 12} color="#FFFFFF" />
+          </View>
+        );
+      case 'Uplay':
+        return (
+          <View style={{ 
+            width: isTablet ? 24 : 20, 
+            height: isTablet ? 24 : 20, 
+            borderRadius: 12, 
+            backgroundColor: '#000000',
+            justifyContent: 'center',
+            alignItems: 'center'
+          }}>
+            <Ionicons name="key" size={isTablet ? 14 : 12} color="#FFFFFF" />
+          </View>
+        );
+      case 'Humble Bundle':
+        return (
+          <View style={{ 
+            width: isTablet ? 24 : 20, 
+            height: isTablet ? 24 : 20, 
+            borderRadius: 12, 
+            backgroundColor: '#ab6441',
+            justifyContent: 'center',
+            alignItems: 'center'
+          }}>
+            <Ionicons name="cube" size={isTablet ? 14 : 12} color="#FFFFFF" />
+          </View>
+        );
+      case 'Green Man Gaming':
+        return (
+          <View style={{ 
+            width: isTablet ? 24 : 20, 
+            height: isTablet ? 24 : 20, 
+            borderRadius: 12, 
+            backgroundColor: '#8BBC3E',
+            justifyContent: 'center',
+            alignItems: 'center'
+          }}>
+            <Ionicons name="leaf" size={isTablet ? 14 : 12} color="#FFFFFF" />
+          </View>
+        );
+      default:
+        return (
+          <View style={{ 
+            width: isTablet ? 24 : 20, 
+            height: isTablet ? 24 : 20, 
+            borderRadius: 12, 
+            backgroundColor: '#4B5563',
+            justifyContent: 'center',
+            alignItems: 'center'
+          }}>
+            <Ionicons name="storefront-outline" size={isTablet ? 14 : 12} color="#FFFFFF" />
+          </View>
+        );
+    }
+  };
 
   const renderGameCard = ({ item: deal }: { item: Deal & { isBestDeal?: boolean, highlightColor?: string } }) => {
     const isHighlighted = deal.discountPct >= 50;
@@ -980,17 +1136,27 @@ export default function Home() {
     const highlightColor = deal.highlightColor || (isSuperDeal ? '#FFD700' : isHighlighted ? '#ff8800' : '#FFD700');
     
     return (
-      <View style={{ paddingHorizontal: isHighlighted ? 6 : 0, marginBottom: 16 }}>
-        <AnimatedHighlightBorder isHighlighted={isHighlighted} highlightColor={highlightColor}>
+      <View style={{ marginBottom: 16 }}>
+        <View 
+          style={{
+            borderRadius: 16,
+            overflow: 'hidden',
+            // Aplicar contorno para ofertas em destaque
+            ...(isHighlighted ? {
+              borderColor: highlightColor,
+              borderWidth: 2,
+              borderCurve: 'continuous',
+            } : {}),
+          }}
+        >
           <TouchableOpacity
           onPress={() => openGameDetails(deal)}
           activeOpacity={0.95}
           style={{
             backgroundColor: '#374151',
-            borderRadius: 16,
-            marginBottom: 16,
+            borderRadius: 14, // Menor que 16 para acomodar a borda de 2px da View wrapper
             overflow: 'hidden',
-            // Remover todos os efeitos de sombra/brilho
+            // Remover todos os efeitos de sombra/brilho padrão
             shadowColor: 'transparent',
             shadowOffset: { width: 0, height: 0 },
             shadowOpacity: 0,
@@ -1001,14 +1167,14 @@ export default function Home() {
           }}
         >
   {isHighlighted && (
-        <View style={{ position: 'absolute', top: 10, right: 10, zIndex: 20, alignItems: 'center' }}>
+        <View style={{ position: 'absolute', top: 8, right: 8, zIndex: 20, alignItems: 'center' }}>
           <View
             accessible
             accessibilityLabel={isSuperDeal ? "Super Oferta!" : "Ótima Oferta!"}
             style={{
               backgroundColor: '#111827',
-              padding: 6,
-              borderRadius: 20,
+              padding: 4,
+              borderRadius: 16,
               borderWidth: 1,
               borderColor: highlightColor,
               shadowColor: highlightColor,
@@ -1020,10 +1186,10 @@ export default function Home() {
               justifyContent: 'center'
             }}
           >
-            <Ionicons name={isSuperDeal ? "flash" : "star"} size={20} color={highlightColor} />
+            <Ionicons name={isSuperDeal ? "flash" : "star"} size={16} color={highlightColor} />
           </View>
-          <Text style={{ color: highlightColor, fontSize: 11, marginTop: 6, fontWeight: '600' }}>
-            {isSuperDeal ? "Super Oferta!" : "Ótima Oferta!"}
+          <Text style={{ color: highlightColor, fontSize: 9, marginTop: 4, fontWeight: '600' }}>
+            {isSuperDeal ? "Super!" : "Destaque!"}
           </Text>
         </View>
       )}
@@ -1111,20 +1277,11 @@ export default function Home() {
           borderTopWidth: 1,
           borderTopColor: '#4B5563'
         }}>
-          <Ionicons name="storefront-outline" size={isTablet ? 18 : 16} color="#9CA3AF" />
-          <Text style={{ 
-            color: '#9CA3AF', 
-            fontSize: isTablet ? 14 : 12,
-            marginLeft: 6,
-            textTransform: 'uppercase',
-            letterSpacing: 0.5
-          }}>
-            {deal.store?.name || 'Loja'}
-          </Text>
+          {renderStoreIcon(deal.store?.name)}
         </View>
       </View>
         </TouchableOpacity>
-      </AnimatedHighlightBorder>
+      </View>
       </View>
     )
   }
@@ -1267,8 +1424,8 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
       <View style={{ 
         backgroundColor: '#374151', 
         flexDirection: 'row',
-        paddingBottom: 10,
-        paddingTop: 16,
+        paddingTop: 7,
+        paddingBottom: 55,
         paddingHorizontal: 20,
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
@@ -1276,7 +1433,9 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
         shadowOffset: { width: 0, height: -4 },
         shadowOpacity: 0.3,
         shadowRadius: 12,
-        elevation: 12
+        elevation: 12,
+        justifyContent: 'center',
+        alignItems: 'center'
       }}>
       {[
         { key: 'home', icon: 'game-controller', label: 'Games' },
@@ -1291,6 +1450,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
           style={{
             flex: 1,
             alignItems: 'center',
+            justifyContent: 'center',
             paddingVertical: 8
           }}
         >
@@ -1346,109 +1506,103 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
           <View style={{ flex: 1 }}>
             {renderHeader()}
             
-            <ScrollView 
-              style={{ flex: 1 }}
-              showsVerticalScrollIndicator={false}
-              refreshControl={
-                <RefreshControl
-                  refreshing={refreshing}
-                  onRefresh={onRefresh}
-                  tintColor="#3B82F6"
-                  colors={["#3B82F6"]}
-                />
-              }
-            >
-              {loading && (
-                <View style={{ padding: 50, alignItems: 'center' }}>
-                  <ActivityIndicator size="large" color="#3B82F6" />
-                  <Text style={{ color: '#9CA3AF', marginTop: 20, fontSize: 16 }}>
-                    Carregando ofertas...
-                  </Text>
-                </View>
-              )}
+            {loading && (
+              <View style={{ padding: 50, alignItems: 'center' }}>
+                <ActivityIndicator size="large" color="#3B82F6" />
+                <Text style={{ color: '#9CA3AF', marginTop: 20, fontSize: 16 }}>
+                  Carregando ofertas...
+                </Text>
+              </View>
+            )}
 
-              {error && (
-                <View style={{ 
-                  marginHorizontal: 20,
-                  padding: 24, 
-                  backgroundColor: '#374151', 
-                  borderRadius: 16, 
-                  marginBottom: 20,
-                  borderWidth: 1,
-                  borderColor: '#DC2626'
-                }}>
-                  <Text style={{ color: '#F87171', fontSize: 16, fontWeight: '600', marginBottom: 8 }}>
-                    Erro ao carregar ofertas
+            {error && (
+              <View style={{ 
+                marginHorizontal: 20,
+                padding: 24, 
+                backgroundColor: '#374151', 
+                borderRadius: 16, 
+                marginBottom: 20,
+                borderWidth: 1,
+                borderColor: '#DC2626'
+              }}>
+                <Text style={{ color: '#F87171', fontSize: 16, fontWeight: '600', marginBottom: 8 }}>
+                  Erro ao carregar ofertas
+                </Text>
+                <Text style={{ color: '#9CA3AF', fontSize: 14, lineHeight: 20 }}>
+                  {error}
+                </Text>
+                <TouchableOpacity
+                  onPress={fetchDeals}
+                  style={{
+                    backgroundColor: '#3B82F6',
+                    paddingHorizontal: 16,
+                    paddingVertical: 8,
+                    borderRadius: 12,
+                    marginTop: 12,
+                    alignSelf: 'flex-start'
+                  }}
+                >
+                  <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '600' }}>
+                    Tentar novamente
                   </Text>
-                  <Text style={{ color: '#9CA3AF', fontSize: 14, lineHeight: 20 }}>
-                    {error}
-                  </Text>
-                  <TouchableOpacity
-                    onPress={fetchDeals}
-                    style={{
-                      backgroundColor: '#3B82F6',
-                      paddingHorizontal: 16,
-                      paddingVertical: 8,
-                      borderRadius: 12,
-                      marginTop: 12,
-                      alignSelf: 'flex-start'
-                    }}
-                  >
-                    <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '600' }}>
-                      Tentar novamente
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              )}
+                </TouchableOpacity>
+              </View>
+            )}
 
-              {!loading && !error && (deals.length > 0 || displayDeals.length > 0) && (
-                <>
+            {!loading && !error && (deals.length > 0 || displayDeals.length > 0) && (
+              <FlatList
+                data={displayDeals.length > 0 ? displayDeals : deals}
+                renderItem={renderGameCard}
+                keyExtractor={(item, index) => `${item._id || 'game'}-${index}`}
+                showsVerticalScrollIndicator={false}
+                removeClippedSubviews={true}
+                initialNumToRender={5}
+                windowSize={5}
+                maxToRenderPerBatch={3}
+                onEndReached={() => {
+                  if (hasActiveFilters && hasNextPage && !feedLoading) {
+                    loadMore()
+                  }
+                }}
+                onEndReachedThreshold={0.1}
+                ListHeaderComponent={
                   <View style={{ paddingHorizontal: isTablet ? 40 : 24, maxWidth: isTablet ? 800 : '100%', alignSelf: 'center', width: '100%' }}>
                     <View style={{ 
                       marginBottom: 20
                     }}>
-                      <Text style={{ 
-                        color: '#FFFFFF', 
-                        fontSize: isTablet ? 28 : 24, 
-                        fontWeight: '700'
-                      }}>
-                        Ofertas do Dia
-                      </Text>
                     </View>
-                    
-                    <FlatList
-                      data={displayDeals.length > 0 ? displayDeals : deals}
-                      renderItem={renderGameCard}
-                      keyExtractor={(item, index) => `${item._id || 'game'}-${index}`}
-                      scrollEnabled={false}
-                      showsVerticalScrollIndicator={false}
-                      removeClippedSubviews={true}
-                      initialNumToRender={5}
-                      windowSize={5}
-                      maxToRenderPerBatch={3}
-                      onEndReached={() => {
-                        if (hasActiveFilters && hasNextPage && !feedLoading) {
-                          loadMore()
-                        }
-                      }}
-                      onEndReachedThreshold={0.1}
-                      ListFooterComponent={() => (
-                        hasActiveFilters && feedLoading ? (
-                          <View style={{ padding: 20, alignItems: 'center' }}>
-                            <ActivityIndicator color="#3B82F6" />
-                            <Text style={{ color: '#9CA3AF', marginTop: 8 }}>
-                              Carregando mais...
-                            </Text>
-                          </View>
-                        ) : null
-                      )}
-                    />
                   </View>
-                </>
-              )}
-              
-              <View style={{ height: 20 }} />
-            </ScrollView>
+                }
+                ListFooterComponent={() => (
+                  <View style={{ height: 20 }}>
+                    {hasActiveFilters && feedLoading ? (
+                      <View style={{ padding: 20, alignItems: 'center' }}>
+                        <ActivityIndicator color="#3B82F6" />
+                        <Text style={{ color: '#9CA3AF', marginTop: 8 }}>
+                          Carregando mais...
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+                )}
+                contentContainerStyle={{ maxWidth: isTablet ? 800 : width, alignSelf: 'center', width: '100%', paddingHorizontal: isTablet ? 40 : 24 }}
+                refreshControl={
+                  <RefreshControl
+                    refreshing={refreshing}
+                    onRefresh={onRefresh}
+                    tintColor="#3B82F6"
+                    colors={["#3B82F6"]}
+                  />
+                }
+              />
+            )}
+            
+            {/* Renderizar FlatList vazia quando não há dados */}
+            {!loading && !error && deals.length === 0 && displayDeals.length === 0 && (
+              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 100 }}>
+                <Text style={{ color: '#9CA3AF', fontSize: 16 }}>Nenhuma oferta disponível no momento</Text>
+              </View>
+            )}
           </View>
         )}
 
@@ -1675,21 +1829,21 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                 </Text>
 
                 {[
-                  { icon: 'card-outline', title: 'Moeda', subtitle: 'Real Brasileiro (BRL)' },
-                  { icon: 'shield-checkmark-outline', title: 'Privacidade', subtitle: 'Gerenciar dados' },
-                  { icon: 'help-circle-outline', title: 'Ajuda', subtitle: 'Suporte e FAQ' },
-                  { icon: 'heart-outline', title: 'Apoie o Looton', subtitle: 'Faça uma doação' }
+                  { icon: 'shield-checkmark-outline', title: 'Privacidade', subtitle: 'Política de privacidade' },
+                  { icon: 'help-circle-outline', title: 'Ajuda', subtitle: 'nexusdevsystem@gmail.com' },
+                  { icon: 'heart-outline', title: 'Apoie o Looton', subtitle: 'Faça uma doação' },
+                  { icon: 'notifications-outline', title: 'Oferta do Dia', type: 'toggle', enabled: dailyOfferNotificationsEnabled }
                 ].map((item, index) => {
-                  if (item.title === 'Moeda') {
+                  if (item.title === 'Ajuda') {
                     return (
                       <TouchableOpacity
                         key={index}
-                        onPress={() => setShowCurrencyModal(true)}
+                        onPress={() => setShowHelpModal(true)}
                         style={{
                           flexDirection: 'row',
                           alignItems: 'center',
                           padding: isTablet ? 24 : 20,
-                          borderBottomWidth: index < 2 ? 1 : 0,
+                          borderBottomWidth: index < 3 ? 1 : 0,
                           borderBottomColor: '#4B5563'
                         }}
                       >
@@ -1698,7 +1852,36 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                           <Text style={{ color: '#FFFFFF', fontSize: isTablet ? 18 : 16, fontWeight: '600' }}>
                             {item.title}
                           </Text>
-                          <CurrencySubtitle />
+                          <Text style={{ color: '#9CA3AF', fontSize: isTablet ? 16 : 14, marginTop: 2 }}>
+                            {item.subtitle}
+                          </Text>
+                        </View>
+                        <Ionicons name="chevron-forward" size={isTablet ? 24 : 20} color="#6B7280" />
+                      </TouchableOpacity>
+                    )
+                  }
+
+                  if (item.title === 'Privacidade') {
+                    return (
+                      <TouchableOpacity
+                        key={index}
+                        onPress={() => setShowPrivacyModal(true)}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          padding: isTablet ? 24 : 20,
+                          borderBottomWidth: index < 3 ? 1 : 0,
+                          borderBottomColor: '#4B5563'
+                        }}
+                      >
+                        <Ionicons name={item.icon as any} size={isTablet ? 28 : 24} color="#9CA3AF" />
+                        <View style={{ flex: 1, marginLeft: isTablet ? 20 : 16 }}>
+                          <Text style={{ color: '#FFFFFF', fontSize: isTablet ? 18 : 16, fontWeight: '600' }}>
+                            {item.title}
+                          </Text>
+                          <Text style={{ color: '#9CA3AF', fontSize: isTablet ? 16 : 14, marginTop: 2 }}>
+                            {item.subtitle}
+                          </Text>
                         </View>
                         <Ionicons name="chevron-forward" size={isTablet ? 24 : 20} color="#6B7280" />
                       </TouchableOpacity>
@@ -1714,7 +1897,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                           flexDirection: 'row',
                           alignItems: 'center',
                           padding: isTablet ? 24 : 20,
-                          borderBottomWidth: index < 3 ? 1 : 0, // Atualizado para 3 pois agora temos 4 itens
+                          borderBottomWidth: index < 3 ? 1 : 0,
                           borderBottomColor: '#4B5563'
                         }}
                       >
@@ -1727,7 +1910,53 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                             {item.subtitle}
                           </Text>
                         </View>
-                        <Ionicons name="chevron-forward" size={isTablet ? 24 : 20} color="#9CA3AF" />
+                        <Ionicons name="chevron-forward" size={isTablet ? 24 : 20} color="#6B7280" />
+                      </TouchableOpacity>
+                    )
+                  }
+
+                  if (item.type === 'toggle') {
+                    return (
+                      <TouchableOpacity
+                        key={index}
+                        onPress={toggleDailyOfferNotifications}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          padding: isTablet ? 24 : 20,
+                          borderBottomWidth: index < 3 ? 1 : 0, // Atualizado para 3 pois agora temos 4 itens
+                          borderBottomColor: '#4B5563'
+                        }}
+                      >
+                        <Ionicons name={item.icon as any} size={isTablet ? 28 : 24} color="#9CA3AF" />
+                        <View style={{ flex: 1, marginLeft: isTablet ? 20 : 16 }}>
+                          <Text style={{ color: '#FFFFFF', fontSize: isTablet ? 18 : 16, fontWeight: '600' }}>
+                            {item.title}
+                          </Text>
+                          <Text style={{ color: '#9CA3AF', fontSize: isTablet ? 16 : 14, marginTop: 2 }}>
+                            Receba a oferta do dia
+                          </Text>
+                        </View>
+                        <View
+                          style={{
+                            width: 50,
+                            height: 30,
+                            borderRadius: 15,
+                            backgroundColor: item.enabled ? '#3B82F6' : '#6B7280',
+                            justifyContent: 'center',
+                            paddingHorizontal: 2,
+                          }}
+                        >
+                          <View
+                            style={{
+                              width: 26,
+                              height: 26,
+                              borderRadius: 13,
+                              backgroundColor: '#FFFFFF',
+                              transform: [{ translateX: item.enabled ? 20 : 0 }]
+                            }}
+                          />
+                        </View>
                       </TouchableOpacity>
                     )
                   } else {
@@ -1738,7 +1967,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                           flexDirection: 'row',
                           alignItems: 'center',
                           padding: isTablet ? 24 : 20,
-                          borderBottomWidth: index < 3 ? 1 : 0, // Atualizado para 3 pois agora temos 4 itens
+                          borderBottomWidth: index < 3 ? 1 : 0,
                           borderBottomColor: '#4B5563'
                         }}
                       >
@@ -1782,7 +2011,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                   lineHeight: isTablet ? 24 : 20,
                   textAlign: isTablet ? 'center' : 'left'
                 }}>
-                  Versão 1.0.0{'\n'}
+                  Versão 1.2.0{'\n'}
                   O melhor aplicativo para encontrar ofertas de jogos.{'\n'}
                   Desenvolvido com ❤️ para gamers.
                 </Text>
@@ -1794,11 +2023,6 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
       </Animated.View>
 
       {renderBottomNav()}
-
-      {/* Banner de anúncio sutil - visível apenas na aba principal e quando não há modais abertos */}
-      {!(selectedGameId || showGameDetails || showWishlist || showCurrencyModal || showAddToListModal || showPreferencesModal || showDonationModal || showTermsModal) && (
-        <AdBanner />
-      )}
 
       {selectedGameId && (
         <GameDetailsModal
@@ -1824,8 +2048,6 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
         onClose={() => setShowCurrencyModal(false)}
       />
 
-
-
       {/* Modal de adicionar à lista */}
       {selectedGameForList && (
         <AddToListModal
@@ -1839,6 +2061,183 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
           userId={userId}
         />
       )}
+
+      {/* Modal de Privacidade */}
+      <Modal visible={showPrivacyModal} animationType="fade" transparent onRequestClose={() => setShowPrivacyModal(false)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center' }}>
+          <View style={{ 
+            width: '90%', 
+            maxWidth: 560, 
+            backgroundColor: '#374151', 
+            borderRadius: 16, 
+            padding: 20,
+            margin: 20
+          }}>
+            <View style={{ 
+              flexDirection: 'row', 
+              justifyContent: 'space-between', 
+              alignItems: 'center', 
+              marginBottom: 16 
+            }}>
+              <Text style={{ 
+                color: '#FFFFFF', 
+                fontSize: 18, 
+                fontWeight: '700' 
+              }}>
+                Política de Privacidade
+              </Text>
+              <TouchableOpacity 
+                onPress={() => setShowPrivacyModal(false)} 
+                style={{ padding: 8 }}
+              >
+                <Ionicons name="close" size={24} color="#E5E7EB" />
+              </TouchableOpacity>
+            </View>
+            
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 300 }}>
+              <Text style={{ color: '#E5E7EB', fontSize: 15, lineHeight: 22 }}>
+                Nossa política de privacidade:{'\n\n'}
+                - Coletamos apenas dados necessários para funcionamento do app (como sua lista de observação e preferências){'\n\n'}
+                - Não compartilhamos seus dados com terceiros{'\n\n'}
+                - Você pode solicitar a remoção de seus dados a qualquer momento{'\n\n'}
+                - Utilizamos notificações push para informar sobre ofertas relevantes{'\n\n'}
+                - Seus dados são armazenados de forma segura em nossos servidores
+              </Text>
+            </ScrollView>
+            
+            <View style={{ 
+              flexDirection: 'row', 
+              justifyContent: 'flex-end', 
+              marginTop: 20 
+            }}>
+              <TouchableOpacity
+                onPress={() => {
+                  Linking.openURL('mailto:nexusdevsystem@gmail.com')
+                  setShowPrivacyModal(false)
+                }}
+                style={{ 
+                  backgroundColor: '#3B82F6', 
+                  paddingHorizontal: 16, 
+                  paddingVertical: 10, 
+                  borderRadius: 8,
+                  marginLeft: 10
+                }}
+              >
+                <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '600' }}>
+                  Contato
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                onPress={() => setShowPrivacyModal(false)}
+                style={{ 
+                  backgroundColor: '#4B5563', 
+                  paddingHorizontal: 16, 
+                  paddingVertical: 10, 
+                  borderRadius: 8 
+                }}
+              >
+                <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '600' }}>
+                  Fechar
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </SafeAreaView>
+      </Modal>
+
+      {/* Modal de Ajuda */}
+      <Modal visible={showHelpModal} animationType="fade" transparent onRequestClose={() => setShowHelpModal(false)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center' }}>
+          <View style={{ 
+            width: '90%', 
+            maxWidth: 560, 
+            backgroundColor: '#374151', 
+            borderRadius: 16, 
+            padding: 20,
+            margin: 20
+          }}>
+            <View style={{ 
+              flexDirection: 'row', 
+              justifyContent: 'space-between', 
+              alignItems: 'center', 
+              marginBottom: 16 
+            }}>
+              <Text style={{ 
+                color: '#FFFFFF', 
+                fontSize: 18, 
+                fontWeight: '700' 
+              }}>
+                Central de Ajuda
+              </Text>
+              <TouchableOpacity 
+                onPress={() => setShowHelpModal(false)} 
+                style={{ padding: 8 }}
+              >
+                <Ionicons name="close" size={24} color="#E5E7EB" />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={{ marginBottom: 20 }}>
+              <Text style={{ color: '#E5E7EB', fontSize: 15, lineHeight: 22, marginBottom: 10 }}>
+                Precisa de ajuda? Temos algumas opções para você:
+              </Text>
+              
+              <TouchableOpacity
+                onPress={() => {
+                  Linking.openURL('https://www.nexusdevsystem.com')
+                  setShowHelpModal(false)
+                }}
+                style={{ 
+                  backgroundColor: '#1F2937', 
+                  padding: 15, 
+                  borderRadius: 12, 
+                  marginBottom: 10 
+                }}
+              >
+                <Text style={{ color: '#3B82F6', fontSize: 15, fontWeight: '600' }}>
+                  🌐 Visitar nosso site
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                onPress={() => {
+                  Linking.openURL('mailto:nexusdevsystem@gmail.com')
+                  setShowHelpModal(false)
+                }}
+                style={{ 
+                  backgroundColor: '#1F2937', 
+                  padding: 15, 
+                  borderRadius: 12 
+                }}
+              >
+                <Text style={{ color: '#3B82F6', fontSize: 15, fontWeight: '600' }}>
+                  📧 Enviar email
+                </Text>
+              </TouchableOpacity>
+            </View>
+            
+            <View style={{ 
+              flexDirection: 'row', 
+              justifyContent: 'flex-end' 
+            }}>
+              <TouchableOpacity
+                onPress={() => setShowHelpModal(false)}
+                style={{ 
+                  backgroundColor: '#4B5563', 
+                  paddingHorizontal: 16, 
+                  paddingVertical: 10, 
+                  borderRadius: 8 
+                }}
+              >
+                <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '600' }}>
+                  Fechar
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </SafeAreaView>
+      </Modal>
 
 
 
@@ -1891,5 +2290,186 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
       
       </View>
     </CurrencyProvider>
+  )
+
+  // Componente para Modal de Privacidade
+  const PrivacyModal = () => (
+    <Modal visible={showPrivacyModal} animationType="fade" transparent onRequestClose={() => setShowPrivacyModal(false)}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center' }}>
+        <View style={{ 
+          width: '90%', 
+          maxWidth: 560, 
+          backgroundColor: '#374151', 
+          borderRadius: 16, 
+          padding: 20,
+          margin: 20
+        }}>
+          <View style={{ 
+            flexDirection: 'row', 
+            justifyContent: 'space-between', 
+            alignItems: 'center', 
+            marginBottom: 16 
+          }}>
+            <Text style={{ 
+              color: '#FFFFFF', 
+              fontSize: 18, 
+              fontWeight: '700' 
+            }}>
+              Política de Privacidade
+            </Text>
+            <TouchableOpacity 
+              onPress={() => setShowPrivacyModal(false)} 
+              style={{ padding: 8 }}
+            >
+              <Ionicons name="close" size={24} color="#E5E7EB" />
+            </TouchableOpacity>
+          </View>
+          
+          <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 300 }}>
+            <Text style={{ color: '#E5E7EB', fontSize: 15, lineHeight: 22 }}>
+              Nossa política de privacidade:{'\n\n'}
+              - Coletamos apenas dados necessários para funcionamento do app (como sua lista de observação e preferências){'\n\n'}
+              - Não compartilhamos seus dados com terceiros{'\n\n'}
+              - Você pode solicitar a remoção de seus dados a qualquer momento{'\n\n'}
+              - Utilizamos notificações push para informar sobre ofertas relevantes{'\n\n'}
+              - Seus dados são armazenados de forma segura em nossos servidores
+            </Text>
+          </ScrollView>
+          
+          <View style={{ 
+            flexDirection: 'row', 
+            justifyContent: 'flex-end', 
+            marginTop: 20 
+          }}>
+            <TouchableOpacity
+              onPress={() => {
+                Linking.openURL('mailto:nexusdevsystem@gmail.com')
+                setShowPrivacyModal(false)
+              }}
+              style={{ 
+                backgroundColor: '#3B82F6', 
+                paddingHorizontal: 16, 
+                paddingVertical: 10, 
+                borderRadius: 8,
+                marginLeft: 10
+              }}
+            >
+              <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '600' }}>
+                Contato
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              onPress={() => setShowPrivacyModal(false)}
+              style={{ 
+                backgroundColor: '#4B5563', 
+                paddingHorizontal: 16, 
+                paddingVertical: 10, 
+                borderRadius: 8 
+              }}
+            >
+              <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '600' }}>
+                Fechar
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </SafeAreaView>
+    </Modal>
+  )
+
+  // Componente para Modal de Ajuda
+  const HelpModal = () => (
+    <Modal visible={showHelpModal} animationType="fade" transparent onRequestClose={() => setShowHelpModal(false)}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center' }}>
+        <View style={{ 
+          width: '90%', 
+          maxWidth: 560, 
+          backgroundColor: '#374151', 
+          borderRadius: 16, 
+          padding: 20,
+          margin: 20
+        }}>
+          <View style={{ 
+            flexDirection: 'row', 
+            justifyContent: 'space-between', 
+            alignItems: 'center', 
+            marginBottom: 16 
+          }}>
+            <Text style={{ 
+              color: '#FFFFFF', 
+              fontSize: 18, 
+              fontWeight: '700' 
+            }}>
+              Central de Ajuda
+            </Text>
+            <TouchableOpacity 
+              onPress={() => setShowHelpModal(false)} 
+              style={{ padding: 8 }}
+            >
+              <Ionicons name="close" size={24} color="#E5E7EB" />
+            </TouchableOpacity>
+          </View>
+          
+          <View style={{ marginBottom: 20 }}>
+            <Text style={{ color: '#E5E7EB', fontSize: 15, lineHeight: 22, marginBottom: 10 }}>
+              Precisa de ajuda? Temos algumas opções para você:
+            </Text>
+            
+            <TouchableOpacity
+              onPress={() => {
+                Linking.openURL('https://www.nexusdevsystem.com')
+                setShowHelpModal(false)
+              }}
+              style={{ 
+                backgroundColor: '#1F2937', 
+                padding: 15, 
+                borderRadius: 12, 
+                marginBottom: 10 
+              }}
+            >
+              <Text style={{ color: '#3B82F6', fontSize: 15, fontWeight: '600' }}>
+                🌐 Visitar nosso site
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              onPress={() => {
+                Linking.openURL('mailto:nexusdevsystem@gmail.com')
+                setShowHelpModal(false)
+              }}
+              style={{ 
+                backgroundColor: '#1F2937', 
+                padding: 15, 
+                borderRadius: 12 
+              }}
+            >
+              <Text style={{ color: '#3B82F6', fontSize: 15, fontWeight: '600' }}>
+                📧 Enviar email
+              </Text>
+            </TouchableOpacity>
+          </View>
+          
+          <View style={{ 
+            flexDirection: 'row', 
+            justifyContent: 'flex-end' 
+          }}>
+            <TouchableOpacity
+              onPress={() => setShowHelpModal(false)}
+              style={{ 
+                backgroundColor: '#4B5563', 
+                paddingHorizontal: 16, 
+                paddingVertical: 10, 
+                borderRadius: 8 
+              }}
+            >
+              <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '600' }}>
+                Fechar
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </SafeAreaView>
+    </Modal>
   )
 }
