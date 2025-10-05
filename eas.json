@@ -1,56 +1,22 @@
 {
   "cli": {
-    "version": ">= 13.0.0",
-    "appVersionSource": "remote"
+    "version": ">= 10.0.0"
   },
   "build": {
-    "production": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "channel": "development",
       "android": {
-        "buildType": "app-bundle",
-        "gradleCommand": ":app:bundleRelease",
-        "withoutCredentials": false
-      },
-      "env": {
-        "EXPO_PUBLIC_API_URL": "https://looton-backend.onrender.com"
+        "buildType": "debug"
       }
     },
     "preview": {
-      "android": {
-        "buildType": "apk",
-        "gradleCommand": ":app:assembleRelease",
-        "withoutCredentials": true
-      },
-      "env": {
-        "EXPO_PUBLIC_API_URL": "https://looton-backend.onrender.com"
-      }
+      "distribution": "internal",
+      "channel": "preview"
     },
-    "development": {
-      "developmentClient": true,
-      "android": {
-        "buildType": "apk",
-        "withoutCredentials": true
-      },
-      "env": {
-        "EXPO_PUBLIC_API_URL": "https://looton-backend.onrender.com"
-      }
-    },
-    "simple": {
-      "android": {
-        "buildType": "apk",
-        "withoutCredentials": true,
-        "gradleCommand": ":app:assembleDebug"
-      },
-      "env": {
-        "EXPO_PUBLIC_API_URL": "https://looton-backend.onrender.com"
-      }
-    }
-  },
-  "submit": {
     "production": {
-      "android": {
-        "serviceAccountKeyPath": "./play-console-service-account.json",
-        "track": "internal"
-      }
+      "channel": "production"
     }
   }
 }

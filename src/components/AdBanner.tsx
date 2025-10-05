@@ -1,16 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, Dimensions } from 'react-native';
-import { BannerAd, BannerAdSize, TestIds } from 'react-native-google-mobile-ads';
+import { BannerAd, BannerAdSize } from 'react-native-google-mobile-ads';
 
-// ID do Ad Unit - substitua com o seu ID real quando publicar
-// Para testar, usamos o ID de teste do Google
-const adUnitId = 'ca-app-pub-2976862302591431/6962670889'; // Seu ID real de Ad Unit para o banner
+// ID do Ad Unit - usando o ID real
+const adUnitId = 'ca-app-pub-2976862302591431/6962670889';
 
-interface AdBannerProps {
-  visible?: boolean;
-}
-
-const AdBanner = ({ visible = true }: AdBannerProps) => {
+const AdBanner = () => {
   const [adLoaded, setAdLoaded] = useState(false);
   const [adError, setAdError] = useState(false);
   const [screenWidth, setScreenWidth] = useState(Dimensions.get('window').width);
@@ -33,12 +28,10 @@ const AdBanner = ({ visible = true }: AdBannerProps) => {
     return BannerAdSize.ADAPTIVE_BANNER;
   };
 
-  // Não exibe o banner se não estiver visível ou se houver erro
-  if (!visible || adError) {
+  // Não exibe o banner se houver erro
+  if (adError) {
     return null;
   }
-
-  console.log('AdBanner renderizado com visibilidade:', visible, 'e adUnitId:', adUnitId);
 
   return (
     <View style={styles.container}>
@@ -51,12 +44,10 @@ const AdBanner = ({ visible = true }: AdBannerProps) => {
         onAdLoaded={() => {
           setAdLoaded(true);
           setAdError(false);
-          console.log('Banner de anúncio carregado com sucesso');
         }}
         onAdFailedToLoad={(error) => {
           setAdError(true);
           setAdLoaded(false);
-          console.log('Erro ao carregar banner de anúncio:', error);
         }}
       />
     </View>

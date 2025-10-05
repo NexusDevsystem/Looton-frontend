@@ -23,13 +23,15 @@ import SmartNotificationService from '../src/services/SmartNotificationService'
 import SteamPriceHistoryService from '../src/services/SteamPriceHistoryService'
 import { DonationModal } from '../src/components/DonationComponents'
 import DonationService from '../src/services/DonationService'
+import AdBanner from '../src/components/AdBanner'
+
 
 import { AddToListModal } from '../src/components/AddToListModal'
 import { FilterChips } from '../src/components/FilterChips'
 import { useFilters } from '../src/hooks/useFilters'
 import { SteamGenresPreferencesModal } from '../src/components/SteamGenresPreferencesModal'
 import { fetchCuratedFeed, SteamGenre, UserPreferences } from '../src/services/SteamGenresService'
-import AdBanner from '../src/components/AdBanner'
+
 import { showToast } from '../src/utils/SimpleToast'
 import { TermsOfServiceModal } from '../src/components/TermsOfServiceModal'
 import { SplashScreen } from '../src/components/SplashScreen'
@@ -1795,7 +1797,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
 
       {/* Banner de anúncio sutil - visível apenas na aba principal e quando não há modais abertos */}
       {!(selectedGameId || showGameDetails || showWishlist || showCurrencyModal || showAddToListModal || showPreferencesModal || showDonationModal || showTermsModal) && (
-        <AdBanner visible={activeTab === 'home'} />
+        <AdBanner />
       )}
 
       {selectedGameId && (
