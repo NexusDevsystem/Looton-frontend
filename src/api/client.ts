@@ -22,16 +22,29 @@ async function buildInit(init?: RequestInit) {
   return { ...(init || {}), headers }
 }
 
-async function fetchWithTimeout(input: RequestInfo, init?: RequestInit, timeout = 10000) {
+async function fetchWithTimeout(input: RequestInfo, init?: RequestInit, timeout = 20000) { // Aumentei para 20 segundos
   const controller = new AbortController()
   const id = setTimeout(() => controller.abort(), timeout)
   try {
-    const res = await fetch(input, { ...(init || {}), signal: controller.signal } as any)
+    // Adicionando mais configurações para lidar com serviços Render
+    const res = await fetch(input, { 
+      ...(init || {}), 
+      signal: controller.signal,
+      headers: {
+        ...((init?.headers as any) || {}),
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+      // Adicionando modo CORS explicitamente
+      mode: 'cors',
+      // Adicionando credenciais se necessário
+      credentials: 'omit'
+    } as any)
     clearTimeout(id)
     return res
   } catch (err: any) {
     clearTimeout(id)
-    if (err.name === 'AbortError') throw new Error('Request timed out')
+    if (err.name === 'AbortError') throw new Error(`Request timed out after ${timeout}ms`)
     throw err
   }
 }

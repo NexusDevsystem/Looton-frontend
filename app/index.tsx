@@ -70,20 +70,7 @@ export interface Deal {
 
 
 
-import Constants from 'expo-constants'
-
-const API_URL = (() => {
-  const fromEnv = process.env.EXPO_PUBLIC_API_URL
-  if (fromEnv && !fromEnv.includes('localhost')) return fromEnv
-  try {
-    const hostUri: any = (Constants as any)?.expoConfig?.hostUri
-    if (hostUri) {
-      const host = String(hostUri).split(':')[0]
-      if (host && host !== 'localhost') return `http://${host}:3000`
-    }
-  } catch {}
-  return fromEnv || 'http://localhost:3000'
-})()
+import { API_URL, api } from '../src/api/client'
 const { width, height } = Dimensions.get('window')
 const isTablet = width >= 768
 
@@ -552,13 +539,7 @@ export default function Home() {
       setIsSearching(true)
       console.log('Buscando jogos na Steam:', query)
 
-      const resp = await fetch(`${API_URL}/search?q=${encodeURIComponent(query)}&limit=20`)
-      
-      if (!resp.ok) {
-        throw new Error(`Search failed: ${resp.status}`)
-      }
-      
-      const data = await resp.json()
+      const data = await api<any>(`/search?q=${encodeURIComponent(query)}&limit=20`)
       const sourceArray = Array.isArray(data) ? data : []
       
       // Mapeamento corrigido para dados da rota /search
@@ -684,26 +665,8 @@ export default function Home() {
         console.log(`🔄 Atualizando ofertas - Novo dia detectado (hoje: ${currentDayOfYear}, último: ${lastUpdatedDay})`);
       }
       
-      // Timeout otimizado
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 10000)
-      
-      // Usar diretamente a rota /deals que sabemos que funciona
-      const response = await fetch(`${API_URL}/deals?limit=50`, {
-        signal: controller.signal,
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
-        }
-      })
-      
-      clearTimeout(timeoutId)
-      
-      if (!response.ok) {
-        throw new Error(`Erro ${response.status}: ${response.statusText}`)
-      }
-      
-      const curated = await response.json()
+      // Usar função api do client.ts que agora tem timeout de 20s e mais configurações
+      const curated = await api<any[]>(`/deals?limit=50`)
       
       if (!Array.isArray(curated) || curated.length === 0) {
         setDeals([])
