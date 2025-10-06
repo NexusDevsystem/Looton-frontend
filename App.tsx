@@ -1,5 +1,8 @@
 import React, { useEffect } from 'react';
+import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import * as NavigationBar from 'expo-navigation-bar';
 import Home from './app/index';
 import { checkUpdatesOnce } from './src/utils/updates-manager';
 import { askPushPermissionFirstLaunch, sendPushTokenToBackend } from './src/notifications';
@@ -49,7 +52,21 @@ export default function App() {
     };
 
     initializeApp();
+    
+    // Configurar a Navigation Bar do Android automaticamente
+    if (Platform.OS === 'android') {
+      try {
+        NavigationBar.setBackgroundColorAsync('#374151'); // Mesma cor da tab bar
+        NavigationBar.setButtonStyleAsync('light'); // Coerente com o tema escuro
+      } catch (error) {
+        console.log('Erro ao configurar Navigation Bar:', error);
+      }
+    }
   }, []);
 
-  return <Home />;
+  return (
+    <SafeAreaProvider>
+      <Home />
+    </SafeAreaProvider>
+  );
 }

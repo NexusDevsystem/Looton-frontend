@@ -1,6 +1,6 @@
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Deal } from '../app/index'; // Importar o tipo Deal do index
+import { Deal } from '../../app/index'; // Importar o tipo Deal do index
 
 // Chave para armazenar a última data que a notificação foi enviada
 const LAST_DAILY_OFFER_NOTIFICATION = 'lastDailyOfferNotification';
@@ -92,17 +92,13 @@ export const scheduleDailyOfferNotification = async (deal: Deal, timeHour: numbe
         body: `Confira ${deal.game?.title || 'esta oferta'} por apenas ${deal.priceFinal?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) || 'preço especial'} na ${deal.store?.name || 'loja'}!`,
         sound: 'default',
         priority: Notifications.AndroidNotificationPriority.HIGH,
-        channelId: 'daily-offers',
         data: { 
           dealId: deal._id,
           dealUrl: deal.url,
           type: 'daily_offer'
         },
       },
-      trigger: {
-        seconds: timeUntilNotification / 1000, // converter milissegundos para segundos
-        repeats: false, // Esta notificação é apenas uma vez por dia
-      },
+      trigger: null,
     });
 
     console.log('Notificação de Oferta do Dia agendada com sucesso');
@@ -137,7 +133,6 @@ export const sendDailyOfferNotification = async (deal: Deal) => {
         body: `Confira ${deal.game?.title || 'esta oferta'} por apenas ${deal.priceFinal?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) || 'preço especial'} na ${deal.store?.name || 'loja'}!`,
         sound: 'default',
         priority: Notifications.AndroidNotificationPriority.HIGH,
-        channelId: 'daily-offers',
         data: { 
           dealId: deal._id,
           dealUrl: deal.url,
@@ -154,6 +149,8 @@ export const sendDailyOfferNotification = async (deal: Deal) => {
     console.error('Erro ao enviar notificação de Oferta do Dia:', error);
   }
 };
+
+import { Platform } from 'react-native';
 
 // Função para verificar e enviar notificação de oferta do dia se for hora
 export const checkAndSendDailyOfferNotification = async (getCurrentDeal: () => Deal | null) => {
@@ -179,5 +176,3 @@ export const checkAndSendDailyOfferNotification = async (getCurrentDeal: () => D
     console.log('Nenhuma oferta do dia disponível para notificação');
   }
 };
-
-import { Platform } from 'react-native';

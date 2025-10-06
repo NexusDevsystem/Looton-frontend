@@ -29,6 +29,14 @@ import { checkAndSendDailyOfferNotification } from '../src/services/DailyOfferNo
 import { AddToListModal } from '../src/components/AddToListModal'
 import { FilterChips } from '../src/components/FilterChips'
 import { useFilters } from '../src/hooks/useFilters'
+
+// Lista de jogos que devem ser filtrados/removidos (não disponíveis na Steam mais)
+const GAMES_TO_FILTER = [
+  'DOOM',
+  'DOOM Eternal', 
+  'Doom',
+  'Doom Eternal'
+].map(title => title.toLowerCase()); // Converter para minúsculas para comparação case-insensitive
 import { SteamGenresPreferencesModal } from '../src/components/SteamGenresPreferencesModal'
 import { fetchCuratedFeed, SteamGenre, UserPreferences } from '../src/services/SteamGenresService'
 
@@ -38,7 +46,7 @@ import { SplashScreen } from '../src/components/SplashScreen'
 import { OnboardingCarousel } from '../src/components/OnboardingCarousel'
 import { useGameFeed, GameItem } from '../src/hooks/useGameFeed'
 
-interface Deal {
+export interface Deal {
   _id: string
   appId?: number
   url: string
@@ -137,7 +145,7 @@ export default function Home() {
   const [searchResults, setSearchResults] = useState<Deal[]>([])
   const [originalSearchResults, setOriginalSearchResults] = useState<Deal[]>([])
   const [isSearching, setIsSearching] = useState(false)
-  const fadeAnim = useRef(new Animated.Value(0)).current
+  const fadeAnim = useRef(new Animated.Value(1)).current
   const [refreshing, setRefreshing] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
   const [showAddToListModal, setShowAddToListModal] = useState(false)
@@ -210,7 +218,7 @@ export default function Home() {
   // Mock user ID - em um app real viria do contexto de autenticação
   // Leave empty to treat as unauthenticated in dev by default
   const [userId, setUserId] = useState('')
-  const slideAnim = useRef(new Animated.Value(50)).current
+  const slideAnim = useRef(new Animated.Value(0)).current
   const searchTimeout = useRef<NodeJS.Timeout | null>(null)
   const searchInputRef = useRef<TextInput>(null)
 
@@ -245,23 +253,58 @@ export default function Home() {
   // Memoizar gameItems para evitar loops
   const memoizedGameItems = useMemo(() => gameItems, [gameItems])
   
+  // Função para filtrar jogos indesejados (não disponíveis na Steam mais)
+  const shouldFilterGame = useCallback((title: string) => {
+    if (!title) return false;
+    const lowerTitle = title.toLowerCase();
+    return GAMES_TO_FILTER.some(filterTitle => lowerTitle.includes(filterTitle));
+  }, [])
+  
   // Função para converter GameItem para Deal (compatibilidade)
-  const convertGameItemToDeal = useCallback((item: GameItem): Deal => ({
-    _id: item.id,
-    url: item.url,
-    priceBase: item.priceFinalCents / 100, // assumindo que não há desconto, usar o preço final
-    priceFinal: item.priceFinalCents / 100,
-    discountPct: item.discountPct || 0,
-    game: {
-      title: item.title,
-      coverUrl: item.coverUrl || '',
-      genres: item.genres,
-      tags: item.tags
-    },
-    store: {
-      name: item.store
+  const convertGameItemToDeal = useCallback((item: GameItem): Deal | null => {
+    // Verificar se o jogo deve ser filtrado
+    if (shouldFilterGame(item.title)) {
+      return null; // Filtrar este jogo
     }
-  }), [])
+    
+    // Calcular preço base a partir do preço final e desconto percentual
+    const discountPct = item.discountPct || 0;
+    const priceFinal = item.priceFinalCents / 100;
+    let priceBase: number;
+    
+    if (discountPct > 0 && discountPct < 100) {
+      // Se houver desconto entre 0 e 100%, calcular o preço original
+      // priceBase = priceFinal / (1 - discountPct / 100)
+      priceBase = priceFinal / (1 - discountPct / 100);
+    } else if (discountPct >= 100) {
+      // Se o desconto for 100% ou mais (gratuito), o preço base é o preço final dividido por um valor muito pequeno
+      // Neste caso, vamos considerar o preço final como o preço base para evitar problemas de divisão por zero
+      priceBase = priceFinal;
+    } else {
+      // Se não houver desconto (ou desconto negativo), usar o preço final como preço base
+      priceBase = priceFinal;
+    }
+    
+    // Arredondar para 2 casas decimais para evitar problemas de precisão
+    priceBase = Math.round(priceBase * 100) / 100;
+    
+    return {
+      _id: item.id,
+      url: item.url,
+      priceBase: priceBase,
+      priceFinal: priceFinal,
+      discountPct: discountPct,
+      game: {
+        title: item.title,
+        coverUrl: item.coverUrl || '',
+        genres: item.genres,
+        tags: item.tags
+      },
+      store: {
+        name: item.store
+      }
+    };
+  }, [shouldFilterGame])
 
   const initializeApp = useCallback(async () => {
     try {
@@ -417,7 +460,7 @@ export default function Home() {
       
       if (hasActiveFilters && memoizedGameItems.length > 0) {
         // Usar o novo feed filtrado
-        const convertedDeals = memoizedGameItems.map(convertGameItemToDeal)
+        const convertedDeals = memoizedGameItems.map(convertGameItemToDeal).filter((deal): deal is Deal => deal !== null)
         dealsToUse = convertedDeals
       } else if (deals.length > 0) {
         // Usar os deals originais sem filtros
@@ -628,7 +671,7 @@ export default function Home() {
       }
 
       // Processamento otimizado dos dados
-      const sourceDeals: any[] = curated.map((item: any, index: number) => ({
+      const rawDeals: any[] = curated.map((item: any, index: number) => ({
         _id: item._id || `deal-${item.appId || index}`,
         appId: item.appId,
         url: item.url,
@@ -643,6 +686,12 @@ export default function Home() {
         },
         store: item.store || { name: 'Steam' }
       }))
+
+      // Filtrar jogos indesejados (como DOOM se não estiver mais disponível)
+      const sourceDeals: any[] = rawDeals.filter(deal => {
+        if (!deal.game?.title) return true; // Manter se não tiver título
+        return !shouldFilterGame(deal.game.title);
+      })
       
       // Remoção otimizada de duplicatas
       const seen = new Set()
@@ -848,7 +897,7 @@ export default function Home() {
         marginBottom: 16
       }}>
         <Text style={{ 
-          color: '#1F2937', 
+          color: '#FFFFFF', 
           fontWeight: '600',
           textAlign: 'center',
           fontSize: 14
@@ -1563,7 +1612,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
 
             {!feedLoading && !feedError && (gameItems.length > 0 || deals.length > 0 || (hasActiveFilters && displayDeals.length > 0)) && (
               <FlatList
-                data={hasActiveFilters && displayDeals.length > 0 ? displayDeals : (gameItems.length > 0 ? gameItems.map(convertGameItemToDeal) : deals)}
+                data={hasActiveFilters && displayDeals.length > 0 ? displayDeals : (gameItems.length > 0 ? gameItems.map(convertGameItemToDeal).filter((deal): deal is Deal => deal !== null) : deals)}
                 renderItem={renderGameCard}
                 keyExtractor={(item, index) => `${item._id || 'game'}-${index}`}
                 showsVerticalScrollIndicator={false}
@@ -1579,17 +1628,6 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                 onEndReachedThreshold={0.1}
                 ListHeaderComponent={
                   <View style={{ paddingHorizontal: isTablet ? 40 : 24, maxWidth: isTablet ? 800 : '100%', alignSelf: 'center', width: '100%' }}>
-                    <View style={{ 
-                      marginBottom: 20
-                    }}>
-                      <Text style={{ 
-                        color: '#FFFFFF', 
-                        fontSize: isTablet ? 28 : 24, 
-                        fontWeight: '700'
-                      }}>
-                        Ofertas do Dia
-                      </Text>
-                    </View>
                   </View>
                 }
                 ListFooterComponent={() => (
