@@ -3,6 +3,7 @@ import { StatusBar } from 'expo-status-bar'
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Ionicons } from '@expo/vector-icons'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { GameDetailsModal } from '../src/components/GameDetailsModal'
 import OnboardingStep1 from './onboarding/Step1'
 import OnboardingStep2 from './onboarding/Step2'
@@ -41,8 +42,6 @@ import { SteamGenresPreferencesModal } from '../src/components/SteamGenresPrefer
 import { fetchCuratedFeed, SteamGenre, UserPreferences } from '../src/services/SteamGenresService'
 
 import { showToast } from '../src/utils/SimpleToast'
-import { TermsOfServiceModal } from '../src/components/TermsOfServiceModal'
-import { SplashScreen } from '../src/components/SplashScreen'
 import { OnboardingCarousel } from '../src/components/OnboardingCarousel'
 import { useGameFeed, GameItem } from '../src/hooks/useGameFeed'
 
@@ -145,7 +144,7 @@ export default function Home() {
   const [searchResults, setSearchResults] = useState<Deal[]>([])
   const [originalSearchResults, setOriginalSearchResults] = useState<Deal[]>([])
   const [isSearching, setIsSearching] = useState(false)
-  const fadeAnim = useRef(new Animated.Value(1)).current
+  const fadeAnim = useRef(new Animated.Value(0)).current
   const [refreshing, setRefreshing] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
   const [showAddToListModal, setShowAddToListModal] = useState(false)
@@ -208,8 +207,8 @@ export default function Home() {
   const [searchFilter, setSearchFilter] = useState<'all' | 'games' | 'dlcs'>('games')
   const [showTermsModal, setShowTermsModal] = useState(false)
   
-  // Estados do fluxo de inicialização
-  const [appState, setAppState] = useState<'splash' | 'onboarding' | 'terms' | 'app'>('splash')
+  // Estados do fluxo de inicialização (sem termos por enquanto)
+  const [appState, setAppState] = useState<'onboarding' | 'app' | 'checking'>('checking')
   const [hasSeenOnboarding, setHasSeenOnboarding] = useState(false)
   
   // Estado para ordenação
@@ -218,7 +217,7 @@ export default function Home() {
   // Mock user ID - em um app real viria do contexto de autenticação
   // Leave empty to treat as unauthenticated in dev by default
   const [userId, setUserId] = useState('')
-  const slideAnim = useRef(new Animated.Value(0)).current
+  const slideAnim = useRef(new Animated.Value(100)).current
   const searchTimeout = useRef<NodeJS.Timeout | null>(null)
   const searchInputRef = useRef<TextInput>(null)
 
@@ -247,8 +246,7 @@ export default function Home() {
     loadMore 
   } = useGameFeed(selectedGenres, sortBy)
 
-  // Estado para ofertas filtradas
-  const [displayDeals, setDisplayDeals] = useState<Deal[]>([])
+
   
   // Memoizar gameItems para evitar loops
   const memoizedGameItems = useMemo(() => gameItems, [gameItems])
@@ -310,17 +308,14 @@ export default function Home() {
     try {
       console.log('🚀 Inicializando app...')
       
-      // Verificar se já viu onboarding e aceitou termos
+      // Verificar se já viu onboarding
       const hasSeenOnboardingBefore = await OnboardingService.hasSeenOnboarding()
-      const hasAcceptedTerms = await OnboardingService.hasAcceptedTerms()
       
       setHasSeenOnboarding(hasSeenOnboardingBefore)
       
       // Determinar estado inicial baseado no histórico do usuário
       if (!hasSeenOnboardingBefore) {
         setAppState('onboarding')
-      } else if (!hasAcceptedTerms) {
-        setAppState('terms')  
       } else {
         setAppState('app')
       }
@@ -331,17 +326,93 @@ export default function Home() {
     }
   }, []) // Remover dependências desnecessárias
 
-  useEffect(() => {
-    // O splash screen irá chamar initializeApp() quando terminar
-  }, [])
 
-  // Carregar deals iniciais quando o app inicia
+
+  // Iniciar verificação quando o componente montar
   useEffect(() => {
-    if (appState === 'app') {
-      fetchDeals()
-      initializeSmartServices()
+    const initializeAppAndCheck = async () => {
+      try {
+        console.log('🚀 Inicializando app...')
+        
+        // Verificar se já viu onboarding
+        const hasSeenOnboardingBefore = await OnboardingService.hasSeenOnboarding()
+        setHasSeenOnboarding(hasSeenOnboardingBefore)
+        
+        // Determinar estado inicial baseado no histórico do usuário
+        if (!hasSeenOnboardingBefore) {
+          setAppState('onboarding')
+        } else {
+          setAppState('app')
+          // Carregar deals iniciais
+          fetchDeals()
+          initializeSmartServices()
+          // Animação de entrada do app (para quando pular o onboarding)
+          Animated.parallel([
+            Animated.timing(fadeAnim, {
+              toValue: 1,
+              duration: 800,
+              useNativeDriver: true,
+            }),
+            Animated.timing(slideAnim, {
+              toValue: 0,
+              duration: 600,
+              useNativeDriver: true,
+            })
+          ]).start()
+        }
+      } catch (error) {
+        console.error('Erro ao inicializar app:', error)
+        // Even in error case, check if the onboarding was already completed
+        try {
+          const hasSeenOnboardingBefore = await OnboardingService.hasSeenOnboarding()
+          setHasSeenOnboarding(hasSeenOnboardingBefore)
+          
+          if (!hasSeenOnboardingBefore) {
+            setAppState('onboarding')
+          } else {
+            setAppState('app')
+            // Carregar deals iniciais mesmo em caso de erro primário
+            fetchDeals()
+            initializeSmartServices()
+            // Animação de entrada do app
+            Animated.parallel([
+              Animated.timing(fadeAnim, {
+                toValue: 1,
+                duration: 800,
+                useNativeDriver: true,
+              }),
+              Animated.timing(slideAnim, {
+                toValue: 0,
+                duration: 600,
+                useNativeDriver: true,
+              })
+            ]).start()
+          }
+        } catch {
+          // If all storage checks fail, default to app
+          setAppState('app')
+          // Carregar deals mesmo em caso de erro
+          fetchDeals()
+          // Animação de entrada do app
+          Animated.parallel([
+            Animated.timing(fadeAnim, {
+              toValue: 1,
+              duration: 800,
+              useNativeDriver: true,
+            }),
+            Animated.timing(slideAnim, {
+              toValue: 0,
+              duration: 600,
+              useNativeDriver: true,
+            })
+          ]).start()
+        }
+      }
     }
-  }, [appState])
+    
+    // Initial state is 'checking', so start the check
+    initializeAppAndCheck()
+  }, [])
 
 
 
@@ -355,42 +426,31 @@ export default function Home() {
     }
   }
 
-  // Funções de transição entre estados
-  const handleSplashFinish = async () => {
-    const hasSeenOnboardingBefore = await OnboardingService.hasSeenOnboarding()
-    const hasAcceptedTerms = await OnboardingService.hasAcceptedTerms()
-    
-    if (!hasSeenOnboardingBefore) {
-      setAppState('onboarding')
-    } else if (!hasAcceptedTerms) {
-      setAppState('terms')
-    } else {
-      setAppState('app')
-      // Animação de entrada do app
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-        Animated.timing(slideAnim, {
-          toValue: 0,
-          duration: 600,
-          useNativeDriver: true,
-        })
-      ]).start()
-    }
-  }
+
 
   const handleOnboardingFinish = async () => {
-    await OnboardingService.setOnboardingSeen()
-    const hasAcceptedTerms = await OnboardingService.hasAcceptedTerms()
-    
-    if (!hasAcceptedTerms) {
-      setAppState('terms')
-    } else {
+    try {
+      await OnboardingService.setOnboardingSeen()
+      setHasSeenOnboarding(true) // Update the local state as well
       setAppState('app')
       // Animação de entrada do app
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 600,
+          useNativeDriver: true,
+        })
+      ]).start()
+    } catch (error) {
+      console.error('Erro ao salvar estado de onboarding:', error)
+      // Even if saving to storage failed, still transition to app state
+      setHasSeenOnboarding(true)
+      setAppState('app')
       Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 1,
@@ -406,37 +466,10 @@ export default function Home() {
     }
   }
 
-  const handleTermsAccept = async () => {
-    await OnboardingService.setTermsAccepted()
-    setAppState('app')
-    showToast('Bem-vindo ao Looton! 🎮')
-    
-    // Animação de entrada do app
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 800,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 600,
-        useNativeDriver: true,
-      })
-    ]).start()
-  }
+
 
   const checkFirstTime = async () => {
-    try {
-      const hasAcceptedTerms = await OnboardingService.hasAcceptedTerms()
-      if (!hasAcceptedTerms) {
-        setShowTermsModal(true)
-      }
-    } catch (error) {
-      console.log('Error checking first time:', error)
-      // Em caso de erro, mostre os termos por segurança
-      setShowTermsModal(true)
-    }
+    // Verificação de termos removida - não estamos usando esta funcionalidade no momento
   }
 
   // Epic Games temporariamente desativada para melhorias
@@ -453,36 +486,9 @@ export default function Home() {
     })
   }
 
-  // Effect para usar o novo feed quando houver filtros ativos
-  useEffect(() => {
-    if (activeTab === 'home' && !loading) {
-      let dealsToUse: Deal[] = []
-      
-      if (hasActiveFilters && memoizedGameItems.length > 0) {
-        // Usar o novo feed filtrado
-        const convertedDeals = memoizedGameItems.map(convertGameItemToDeal).filter((deal): deal is Deal => deal !== null)
-        dealsToUse = convertedDeals
-      } else if (deals.length > 0) {
-        // Usar os deals originais sem filtros
-        dealsToUse = deals
-      }
-      
-      // Aplicar filtro de loja
-      const filteredDeals = getFilteredDeals(dealsToUse)
-      setDisplayDeals(filteredDeals)
-    } else if (activeTab !== 'home') {
-      // Quando sair da home, limpar displayDeals para evitar dados obsoletos
-      setDisplayDeals([])
-    }
-  }, [activeTab, memoizedGameItems, loading, hasActiveFilters, deals, storeFilter])
 
-  // Efeito colateral para garantir que displayDeals seja atualizado quando deals mudar e não houver filtros ativos
-  useEffect(() => {
-    if (activeTab === 'home' && !loading && !hasActiveFilters && deals.length > 0) {
-      const filteredDeals = getFilteredDeals(deals)
-      setDisplayDeals(filteredDeals)
-    }
-  }, [deals, activeTab, loading, hasActiveFilters, storeFilter])
+
+
 
   // Função para filtrar resultados de busca por tipo usando classificação real da Steam
   const applySearchFilter = useCallback((results: Deal[]) => {
@@ -638,10 +644,45 @@ export default function Home() {
     }
   }, [activeTab, searchQuery, searchSteamGames, clearSearch])
 
+  // Função para obter o dia do ano
+  const getDayOfYear = (date: Date): number => {
+    return Math.floor((date.getTime() - new Date(date.getFullYear(), 0, 0).getTime()) / (1000 * 60 * 60 * 24));
+  };
+
+  // Função para obter data armazenada/local
+  const getLastUpdatedDay = async (): Promise<number | null> => {
+    try {
+      const lastUpdateStr = await AsyncStorage.getItem('LAST_DEALS_UPDATE_DAY');
+      return lastUpdateStr ? parseInt(lastUpdateStr, 10) : null;
+    } catch (error) {
+      console.error('Erro ao obter última atualização:', error);
+      return null;
+    }
+  };
+
+  // Função para salvar a data do último update
+  const setLastUpdatedDay = async (day: number): Promise<void> => {
+    try {
+      await AsyncStorage.setItem('LAST_DEALS_UPDATE_DAY', day.toString());
+    } catch (error) {
+      console.error('Erro ao salvar última atualização:', error);
+    }
+  };
+
   const fetchDeals = async () => {
     try {
       setLoading(true)
       setError(null)
+      
+      // Verificar se já passou um dia desde a última atualização
+      const today = new Date();
+      const currentDayOfYear = getDayOfYear(today);
+      const lastUpdatedDay = await getLastUpdatedDay();
+      
+      // Forçar atualização se for um novo dia
+      if (lastUpdatedDay === null || lastUpdatedDay !== currentDayOfYear) {
+        console.log(`🔄 Atualizando ofertas - Novo dia detectado (hoje: ${currentDayOfYear}, último: ${lastUpdatedDay})`);
+      }
       
       // Timeout otimizado
       const controller = new AbortController()
@@ -705,9 +746,6 @@ export default function Home() {
       uniqueDeals.sort((a: Deal, b: Deal) => b.discountPct - a.discountPct)
       
       // Sistema de rotação diária de "Ofertas do Dia"
-      const today = new Date()
-      const dayOfYear = Math.floor((today.getTime() - new Date(today.getFullYear(), 0, 0).getTime()) / (1000 * 60 * 60 * 24))
-      
       // Função de embaralhamento com seed baseado no dia
       const shuffleWithSeed = (array: Deal[], seed: number) => {
         const shuffled = [...array]
@@ -733,16 +771,19 @@ export default function Home() {
       }
       
       // Aplicar rotação diária com seed baseado no dia do ano
-      const dailyRotatedDeals = shuffleWithSeed(uniqueDeals, dayOfYear)
+      const dailyRotatedDeals = shuffleWithSeed(uniqueDeals, currentDayOfYear)
       
-      console.log(`🎲 Ofertas do Dia - Rotação para ${today.toLocaleDateString()} (dia ${dayOfYear})`)
+      console.log(`🎲 Ofertas do Dia - Rotação para ${today.toLocaleDateString()} (dia ${currentDayOfYear})`)
       console.log(`🔄 ${dailyRotatedDeals.length} ofertas embaralhadas para hoje`)
       
       setDeals(dailyRotatedDeals)
       
+      // Salvar que atualizamos hoje
+      await setLastUpdatedDay(currentDayOfYear);
+      
       // Verificar e enviar notificação de oferta do dia se aplicável
       try {
-        await checkAndSendDailyOfferNotification(() => deals[0] || null); // Enviar a primeira oferta como oferta do dia
+        await checkAndSendDailyOfferNotification(() => dailyRotatedDeals[0] || null); // Enviar a primeira oferta como oferta do dia
       } catch (notificationError) {
         console.error('Erro ao verificar notificação de oferta do dia:', notificationError);
       }
@@ -769,8 +810,11 @@ export default function Home() {
     try {
       setRefreshing(true)
       await fetchDeals()
-      // Também atualizar o feed filtrado se houver filtros ativos
+      // Atualizar o feed também
       if (hasActiveFilters) {
+        refreshFeed()
+      } else {
+        // Se não tiver filtros, forçar a atualização dos gameItems
         refreshFeed()
       }
     } finally {
@@ -1535,22 +1579,23 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
   )
 
   // Renderização condicional baseada no estado da app
-  if (appState === 'splash') {
-    return <SplashScreen onFinish={() => initializeApp()} />
-  }
-
   if (appState === 'onboarding') {
     return <OnboardingCarousel onFinish={handleOnboardingFinish} />
   }
-
-  if (appState === 'terms') {
+  
+  // Show loading state while checking onboarding status
+  if (appState === 'checking') {
     return (
-      <TermsOfServiceModal
-        visible={true}
-        onAccept={handleTermsAccept}
-      />
+      <View style={{ flex: 1, backgroundColor: '#1F2937', justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color="#3B82F6" />
+        <Text style={{ color: '#9CA3AF', marginTop: 20, fontSize: 16 }}>
+          Iniciando Looton...
+        </Text>
+      </View>
     )
   }
+
+
 
   // App principal
   return (
@@ -1610,9 +1655,9 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
               </View>
             )}
 
-            {!feedLoading && !feedError && (gameItems.length > 0 || deals.length > 0 || (hasActiveFilters && displayDeals.length > 0)) && (
+            {!feedLoading && !feedError && (gameItems.length > 0 || deals.length > 0) && (
               <FlatList
-                data={hasActiveFilters && displayDeals.length > 0 ? displayDeals : (gameItems.length > 0 ? gameItems.map(convertGameItemToDeal).filter((deal): deal is Deal => deal !== null) : deals)}
+                data={hasActiveFilters && memoizedGameItems.length > 0 ? memoizedGameItems.map(convertGameItemToDeal).filter((deal): deal is Deal => deal !== null) : deals}
                 renderItem={renderGameCard}
                 keyExtractor={(item, index) => `${item._id || 'game'}-${index}`}
                 showsVerticalScrollIndicator={false}
@@ -1655,7 +1700,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
             )}
             
             {/* Renderizar FlatList vazia quando não há dados */}
-            {!loading && !feedLoading && !error && !feedError && gameItems.length === 0 && deals.length === 0 && (!hasActiveFilters || displayDeals.length === 0) && (
+            {!loading && !feedLoading && !error && !feedError && gameItems.length === 0 && deals.length === 0 && (
               <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 100 }}>
                 <Text style={{ color: '#9CA3AF', fontSize: 16 }}>Nenhuma oferta disponível no momento</Text>
               </View>

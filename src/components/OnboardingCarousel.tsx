@@ -10,8 +10,39 @@ import {
 } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Ionicons } from '@expo/vector-icons'
+import * as Notifications from 'expo-notifications';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width, height } = Dimensions.get('window')
+
+// Função para solicitar permissão de notificação
+async function requestNotificationPermission(): Promise<boolean> {
+  try {
+    const { status } = await Notifications.getPermissionsAsync();
+    
+    if (status !== 'granted') {
+      const { status: newStatus } = await Notifications.requestPermissionsAsync({
+        ios: {
+          allowAlert: true,
+          allowBadge: true,
+          allowSound: true,
+        },
+        android: {
+          allowAlert: true,
+          allowBadge: true,
+          allowSound: true,
+        },
+      });
+      
+      return newStatus === 'granted';
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Erro ao solicitar permissão de notificação:', error);
+    return false;
+  }
+}
 
 interface OnboardingCarouselProps {
   onFinish: () => void
@@ -36,10 +67,18 @@ const slides = [
   },
   {
     id: 3,
+    icon: 'notifications-outline' as const,
+    title: 'Fique por dentro',
+    subtitle: 'Ative notificações para não perder ofertas',
+    description: 'Receba alertas quando os jogos que você quer estiverem em promoção. Deseja ativar as notificações?',
+    gradient: ['#8B5CF6', '#7C3AED'] as const,
+  },
+  {
+    id: 4,
     icon: 'flask-outline' as const,
-    title: 'Versão Beta',
-    subtitle: 'Você está testando o futuro',
-    description: 'Esta é uma versão de teste. Sua opinião é muito importante para melhorarmos a experiência.',
+    title: 'Pronto para Começar',
+    subtitle: 'Você está configurado!',
+    description: 'Agora você pode aproveitar as melhores ofertas em jogos. Boas caçadas!',
     gradient: ['#F59E0B', '#D97706'] as const,
   },
 ]
@@ -62,8 +101,17 @@ export const OnboardingCarousel: React.FC<OnboardingCarouselProps> = ({ onFinish
     })
   }
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (currentIndex < slides.length - 1) {
+      // Se for o slide de notificações, solicitar permissão
+      if (currentIndex === 2) { // índice do slide de notificações
+        const granted = await requestNotificationPermission();
+        if (granted) {
+          console.log('Permissão de notificação concedida');
+        } else {
+          console.log('Permissão de notificação negada');
+        }
+      }
       goToSlide(currentIndex + 1)
     } else {
       // Animação de saída
@@ -220,55 +268,111 @@ export const OnboardingCarousel: React.FC<OnboardingCarouselProps> = ({ onFinish
             alignItems: 'center',
           }}
         >
-          {/* Botão Skip */}
-          <TouchableOpacity
-            onPress={handleSkip}
-            style={{
-              paddingVertical: 12,
-              paddingHorizontal: 24,
-            }}
-          >
-            <Text
+          {/* Botão Skip - aparece em todos os slides exceto o de notificação e o último */}
+          {currentIndex !== 2 && currentIndex < slides.length - 1 ? (
+            <TouchableOpacity
+              onPress={handleSkip}
               style={{
-                color: 'rgba(255,255,255,0.7)',
-                fontSize: 16,
-                fontWeight: '600',
+                paddingVertical: 12,
+                paddingHorizontal: 24,
               }}
             >
-              Pular
-            </Text>
-          </TouchableOpacity>
+              <Text
+                style={{
+                  color: 'rgba(255,255,255,0.7)',
+                  fontSize: 16,
+                  fontWeight: '600',
+                }}
+              >
+                Pular
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <View />
+          )}
 
-          {/* Botão Next/Finish */}
-          <TouchableOpacity
-            onPress={handleNext}
-            style={{
-              backgroundColor: 'rgba(255,255,255,0.2)',
-              paddingVertical: 16,
-              paddingHorizontal: 32,
-              borderRadius: 25,
-              flexDirection: 'row',
-              alignItems: 'center',
-              borderWidth: 1,
-              borderColor: 'rgba(255,255,255,0.3)',
-            }}
-          >
-            <Text
+          {/* Botões condicionais baseados no slide atual */}
+          {currentIndex === 2 ? ( // slide de notificação (índice 2)
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', flex: 1 }}>
+              <TouchableOpacity
+                onPress={async () => {
+                  // Pular notificações
+                  handleNext(); // chama handleNext que ainda tenta pedir a permissão mas não bloqueia
+                }}
+                style={{
+                  backgroundColor: 'rgba(255,255,255,0.2)',
+                  paddingVertical: 12,
+                  paddingHorizontal: 20,
+                  borderRadius: 20,
+                  marginRight: 10,
+                  borderWidth: 1,
+                  borderColor: 'rgba(255,255,255,0.3)',
+                }}
+              >
+                <Text
+                  style={{
+                    color: 'white',
+                    fontSize: 14,
+                    fontWeight: '600',
+                  }}
+                >
+                  Não, obrigado
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleNext}
+                style={{
+                  backgroundColor: '#10B981',
+                  paddingVertical: 12,
+                  paddingHorizontal: 20,
+                  borderRadius: 20,
+                  borderWidth: 1,
+                  borderColor: '#10B981',
+                }}
+              >
+                <Text
+                  style={{
+                    color: 'white',
+                    fontSize: 14,
+                    fontWeight: '600',
+                  }}
+                >
+                  Sim, quero notificações
+                </Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity
+              onPress={handleNext}
               style={{
-                color: 'white',
-                fontSize: 16,
-                fontWeight: 'bold',
-                marginRight: 8,
+                backgroundColor: 'rgba(255,255,255,0.2)',
+                paddingVertical: 16,
+                paddingHorizontal: 32,
+                borderRadius: 25,
+                flexDirection: 'row',
+                alignItems: 'center',
+                borderWidth: 1,
+                borderColor: 'rgba(255,255,255,0.3)',
+                alignSelf: 'flex-end',
               }}
             >
-              {currentIndex === slides.length - 1 ? 'Começar' : 'Próximo'}
-            </Text>
-            <Ionicons 
-              name={currentIndex === slides.length - 1 ? 'checkmark' : 'arrow-forward'} 
-              size={20} 
-              color="white" 
-            />
-          </TouchableOpacity>
+              <Text
+                style={{
+                  color: 'white',
+                  fontSize: 16,
+                  fontWeight: 'bold',
+                  marginRight: 8,
+                }}
+              >
+                {currentIndex === slides.length - 1 ? 'Começar' : 'Próximo'}
+              </Text>
+              <Ionicons 
+                name={currentIndex === slides.length - 1 ? 'checkmark' : 'arrow-forward'} 
+                size={20} 
+                color="white" 
+              />
+            </TouchableOpacity>
+          )}
         </View>
       </Animated.View>
     </>

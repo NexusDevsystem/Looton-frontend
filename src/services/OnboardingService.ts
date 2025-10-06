@@ -55,25 +55,8 @@ export async function getServerPrefs(userId: string) {
   return api(`/users/${userId}/genres`)
 }
 
-const TERMS_STORAGE_KEY = 'TERMS_ACCEPTED_v1'
 const ONBOARDING_SEEN_KEY = 'ONBOARDING_SEEN_v1'
-
-export async function hasAcceptedTerms(): Promise<boolean> {
-  try {
-    const value = await AsyncStorage.getItem(TERMS_STORAGE_KEY)
-    return value === 'true'
-  } catch (error) {
-    return false
-  }
-}
-
-export async function setTermsAccepted(): Promise<void> {
-  try {
-    await AsyncStorage.setItem(TERMS_STORAGE_KEY, 'true')
-  } catch (error) {
-    console.error('Error saving terms acceptance:', error)
-  }
-}
+const NOTIFICATION_PERMISSION_REQUESTED_KEY = 'NOTIFICATION_PERMISSION_REQUESTED_v1'
 
 export async function hasSeenOnboarding(): Promise<boolean> {
   try {
@@ -91,3 +74,22 @@ export async function setOnboardingSeen(): Promise<void> {
     console.error('Error saving onboarding seen:', error)
   }
 }
+
+export async function hasRequestedNotificationPermission(): Promise<boolean> {
+  try {
+    const value = await AsyncStorage.getItem(NOTIFICATION_PERMISSION_REQUESTED_KEY)
+    return value === 'true'
+  } catch (error) {
+    return false
+  }
+}
+
+export async function setNotificationPermissionRequested(): Promise<void> {
+  try {
+    await AsyncStorage.setItem(NOTIFICATION_PERMISSION_REQUESTED_KEY, 'true')
+  } catch (error) {
+    console.error('Error saving notification permission requested:', error)
+  }
+}
+
+// Funções de termos removidas - não estamos usando esta funcionalidade no momento
