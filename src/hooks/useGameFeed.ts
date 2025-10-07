@@ -51,7 +51,8 @@ const shuffleWithSeed = (array: any[], seed: number) => {
 
 export function useGameFeed(
   selectedGenres: string[], 
-  sortBy: 'best_price' | 'biggest_discount' = 'best_price'
+  sortBy: 'best_price' | 'biggest_discount' = 'best_price',
+  refreshKey?: number
 ) {
   const [data, setData] = useState<GameItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -60,6 +61,30 @@ export function useGameFeed(
   const [hasNextPage, setHasNextPage] = useState(true);
 
   const genresCsv = selectedGenres.join(',');
+
+  // Função auxiliar para delay exponencial
+  const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+  const fetchPageWithRetry = async (endpoint: string, maxRetries = 3) => {
+    let lastError;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const response = await api<GameFeedResponse | any[]>(endpoint);
+        return response;
+      } catch (error: any) {
+        lastError = error;
+        console.log(`⚠️ Tentativa ${attempt} falhou:`, error.message);
+        
+        if (attempt < maxRetries) {
+          // Esperar antes de tentar novamente (delay exponencial)
+          await sleep(Math.pow(2, attempt) * 1000);
+        }
+      }
+    }
+    
+    throw lastError; // Lançar o último erro se todas as tentativas falharem
+  };
 
   const fetchPage = useCallback(async (cursor: number, reset = false) => {
     setLoading(prevLoading => {
@@ -71,7 +96,7 @@ export function useGameFeed(
     try {
       const queryParams = new URLSearchParams({
         sortBy,
-        limit: '20',
+        limit: '30',
         cursor: cursor.toString()
       });
 
@@ -81,7 +106,7 @@ export function useGameFeed(
 
       // Se não há filtros de gênero, usar a rota /deals que funciona sem banco
       // IMPORTANTE: /deals só aceita limit, outros parâmetros podem causar problemas
-      const endpoint = genresCsv ? `/games?${queryParams.toString()}` : `/deals?limit=50`; // Aumentei o limite para ter mais variação
+      const endpoint = genresCsv ? `/games?${queryParams.toString()}` : `/deals?limit=40`; // Equilibrar entre performance e quantidade
       console.log(`🔄 Chamando endpoint: ${endpoint}`);
       const response = await api<GameFeedResponse | any[]>(endpoint);
       
@@ -110,7 +135,23 @@ export function useGameFeed(
           console.log(`🎲 Feed de jogos rotacionado para dia ${currentDayOfYear}`);
         }
         
-        items = dealsArray.map((deal: any) => ({
+        // Mostrar todos os tipos de conteúdo válidos (jogos, DLCs, pacotes) desde que tenham preço
+        console.log(`🎮 Total de deals recebidos: ${dealsArray.length}`);
+        const filteredDeals = dealsArray.filter((deal: any) => {
+          // Verificar se tem preço válido
+          const hasValidPrice = typeof deal.priceFinalCents === 'number' && deal.priceFinalCents >= 0;
+          const hasDiscount = typeof deal.discountPct === 'number' && deal.discountPct > 0;
+          
+          // Manter itens com preço válido e desconto, ou itens gratuitos
+          const isValid = hasValidPrice && (hasDiscount || deal.priceFinalCents === 0);
+          if (!isValid) {
+            console.log(`🎮 Filtrando item sem preço válido: ${deal.game?.title || deal.title} (preço: ${deal.priceFinalCents}, desconto: ${deal.discountPct})`);
+          }
+          return isValid;
+        });
+        console.log(`🎮 Após filtro: ${filteredDeals.length} itens válidos, ${dealsArray.length - filteredDeals.length} itens filtrados`);
+        
+        items = filteredDeals.map((deal: any) => ({
           id: deal._id || deal.appId?.toString(),
           title: deal.game?.title || deal.title,
           coverUrl: deal.game?.coverUrl || deal.image,
@@ -122,8 +163,8 @@ export function useGameFeed(
           url: deal.url
         }));
         
-        // Limitar a quantidade de itens a 20 para manter consistência
-        items = items.slice(0, 20);
+        // Limitar a quantidade de itens para equilibrar performance e variedade
+        items = items.slice(0, 30);
         nextCursor = null; // /deals não implementa paginação ainda
       }
       
@@ -141,7 +182,7 @@ export function useGameFeed(
     } finally {
       setLoading(false);
     }
-  }, [genresCsv, sortBy, selectedGenres]);
+  }, [genresCsv, sortBy, selectedGenres, refreshKey]);
 
   const refresh = useCallback(() => {
     setNextCursor(0);

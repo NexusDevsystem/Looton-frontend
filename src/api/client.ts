@@ -4,15 +4,37 @@ import Constants from 'expo-constants'
 // Prefer EXPO_PUBLIC_API_URL when set and not pointing to localhost. Otherwise, try Expo host for device testing.
 export const API_URL = (() => {
   const fromEnv = process.env.EXPO_PUBLIC_API_URL as string | undefined
+  
+  // Em modo de desenvolvimento local, usar localhost se não estivermos em produção
+  if (__DEV__ && !process.env.EXPO_PUBLIC_EAS_BUILD) {
+    // Se estiver em desenvolvimento local, verificar se temos uma URL de dev definida
+    const devUrl = process.env.EXPO_PUBLIC_API_URL_DEV || process.env.EXPO_PUBLIC_API_URL_LOCAL
+    if (devUrl) return devUrl
+    
+    // Caso contrário, tentar detectar automaticamente o host local
+    try {
+      const hostUri: any = (Constants as any)?.expoConfig?.hostUri
+      if (hostUri) {
+        const host = String(hostUri).split(':')[0]
+        if (host && host !== 'localhost') return `http://${host}:3000`
+      }
+    } catch {}
+    
+    // Se nada funcionar, retornar localhost para desenvolvimento local
+    return 'http://localhost:3000'
+  }
+  
+  // Em produção ou durante build EAS, usar a URL configurada explicitamente
   if (fromEnv && !fromEnv.includes('localhost')) return fromEnv
-  try {
-    const hostUri: any = (Constants as any)?.expoConfig?.hostUri
-    if (hostUri) {
-      const host = String(hostUri).split(':')[0]
-      if (host && host !== 'localhost') return `http://${host}:3000`
-    }
-  } catch {}
-  return fromEnv || 'http://localhost:3000'
+  
+  // Fallback para produção se nenhuma URL estiver definida
+  if (!fromEnv) {
+    console.error('⚠️ AVISO: EXPO_PUBLIC_API_URL não está definida. A API não funcionará corretamente.')
+    // Retornar uma URL padrão que pode ser substituída por configuração posterior
+    return 'https://looton-api-placeholder-url.com'
+  }
+  
+  return fromEnv
 })()
 
 async function buildInit(init?: RequestInit) {

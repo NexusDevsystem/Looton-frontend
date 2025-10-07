@@ -2,7 +2,7 @@
   "expo": {
     "name": "Looton",
     "slug": "looton-app",
-    "version": "0.1.0",
+    "version": "1.2.0",
     "main": "./index.js",
     "orientation": "portrait",
     "scheme": "looton",

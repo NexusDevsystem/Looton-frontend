@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   Linking,
   Platform,
+  FlatList,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -142,6 +143,7 @@ export const GameDetailsModal: React.FC<GameDetailsProps> = ({
   const [loading, setLoading] = useState(false);
   const [showWishlistModal, setShowWishlistModal] = useState(false);
   const [showAddToListModal, setShowAddToListModal] = useState(false);
+
 
   const [desiredPrice, setDesiredPrice] = useState('');
   const [isInWishlist, setIsInWishlist] = useState(false);
@@ -427,13 +429,12 @@ export const GameDetailsModal: React.FC<GameDetailsProps> = ({
 
     const BulletList = ({ items }: { items: string[] }) => (
       <View>
-        {items.map((line, idx) => 
-          React.createElement(View, 
-            { style: { flexDirection: 'row', marginBottom: 6 }, key: `bullet-${idx}` },
-            React.createElement(Text, { style: { color: '#9CA3AF', marginRight: 8 } }, '•'),
-            React.createElement(Text, { style: { color: '#D1D5DB', fontSize: 14, lineHeight: 20, flex: 1 } }, line)
-          )
-        )}
+        {items.map((line, idx) => (
+          <View style={{ flexDirection: 'row', marginBottom: 6 }} key={`bullet-${idx}`}>
+            <Text style={{ color: '#9CA3AF', marginRight: 8 }}>•</Text>
+            <Text style={{ color: '#D1D5DB', fontSize: 14, lineHeight: 20, flex: 1 }}>{line}</Text>
+          </View>
+        ))}
       </View>
     )
 
@@ -698,21 +699,19 @@ export const GameDetailsModal: React.FC<GameDetailsProps> = ({
                   </Text>
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
                     {arr(gameDetails?.genres).map((genre, index) => 
-                      React.createElement(View, {
-                        key: `genre-${index}`,
-                        style: {
+                      <View
+                        key={`genre-${index}`}
+                        style={{
                           backgroundColor: '#374151',
                           paddingHorizontal: 12,
                           paddingVertical: 6,
                           borderRadius: 16,
                           marginRight: 8,
                           marginBottom: 8,
-                        }
-                      },
-                        React.createElement(Text, {
-                          style: { color: '#E5E7EB', fontSize: 12 }
-                        }, genre.description)
-                      )
+                        }}
+                      >
+                        <Text style={{ color: '#E5E7EB', fontSize: 12 }}>{genre.description}</Text>
+                      </View>
                     )}
                   </View>
                 </View>
@@ -833,6 +832,8 @@ export const GameDetailsModal: React.FC<GameDetailsProps> = ({
 
 
         {/* Local wishlist modal for anonymous users (already implemented above via showWishlistModal) */}
+        
+
       </View>
     </Modal>
   );

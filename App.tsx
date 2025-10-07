@@ -15,13 +15,45 @@ Notifications.setNotificationHandler({
     shouldShowBanner: true,
     shouldShowList: true,
     shouldPlaySound: true, 
-    shouldSetBadge: false,
+    shouldSetBadge: true,
+    priority: Notifications.AndroidNotificationPriority.HIGH,
   }),
 });
 
 export default function App() {
   useEffect(() => {
+    // Garantir que os canais de notificação estejam configurados desde o início
+    const setupNotificationChannels = async () => {
+      if (Platform.OS === 'android') {
+        await Notifications.setNotificationChannelAsync('default', {
+          name: 'Notificações',
+          importance: Notifications.AndroidImportance.HIGH,
+          sound: 'default',
+          vibrationPattern: [0, 250, 250, 250],
+          lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+          lightColor: '#FFD700',
+          enableLights: true,
+          showBadge: true,
+        });
+        
+        await Notifications.setNotificationChannelAsync('test-notifications', {
+          name: 'Notificacoes de Teste',
+          importance: Notifications.AndroidImportance.HIGH,
+          sound: 'default',
+          vibrationPattern: [0, 250, 250, 250],
+          lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+          lightColor: '#FFD700',
+          enableLights: true,
+          showBadge: true,
+          enableVibrate: true,
+        });
+      }
+    };
+    
     const initializeApp = async () => {
+      // Configurar canais de notificação primeiro
+      await setupNotificationChannels();
+      
       // Inicializar o AdMob com o Application ID - removido para evitar crash
       
       // Verificar updates (desabilitado para estabilidade)
@@ -40,6 +72,31 @@ export default function App() {
           console.log('📱 Push token obtido:', token);
           // Enviar token para o backend
           await sendPushTokenToBackend(token);
+          
+          // Ativar automaticamente as notificações de oferta do dia
+          try {
+            const DailyOfferNotificationService = await import('./src/services/DailyOfferNotificationService');
+            await DailyOfferNotificationService.setDailyOfferNotificationEnabled(true);
+            console.log('🔔 Notificações de Oferta do Dia ativadas automaticamente');
+          } catch (serviceError) {
+            console.error('Erro ao ativar notificações de oferta do dia:', serviceError);
+          }
+          
+          // Enviar notificacao de teste imediatamente apos aceitar permissao
+          try {
+            await Notifications.scheduleNotificationAsync({
+              content: {
+                title: "🎉 Parabens!",
+                body: "Voce esta configurado para receber notificacoes do Looton! 🎮 Agora voce sera avisado sobre as melhores ofertas!",
+                sound: 'default',
+                priority: Notifications.AndroidNotificationPriority.HIGH,
+              },
+              trigger: null // Enviar imediatamente
+            });
+            console.log('✅ Notificacao de teste enviada com sucesso');
+          } catch (notificationError) {
+            console.error('Erro ao enviar notificacao de teste:', notificationError);
+          }
         } else {
           console.log('📱 Permissão de notificação não concedida ou já perguntada antes');
         }

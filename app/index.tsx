@@ -152,6 +152,16 @@ export default function Home() {
   const [showDonationModal, setShowDonationModal] = useState(false) // Modal de doação controlado pelo usuário
   const [showPrivacyModal, setShowPrivacyModal] = useState(false)
   const [showHelpModal, setShowHelpModal] = useState(false)
+  const [showNotificationsModal, setShowNotificationsModal] = useState(false)
+  
+  // Estados para as diferentes configurações de notificação
+  const [priceAlertNotificationsEnabled, setPriceAlertNotificationsEnabled] = useState(true);
+  const [wishlistNotificationsEnabled, setWishlistNotificationsEnabled] = useState(true);
+  const [smartNotificationsEnabled, setSmartNotificationsEnabled] = useState(true);
+  
+  // Estado para controle de embaralhamento aleatório
+  const [shuffledGameItems, setShuffledGameItems] = useState<GameItem[]>([]);
+  const [isShuffled, setIsShuffled] = useState(false);
   
   // Carregar preferências de notificação ao inicializar
   useEffect(() => {
@@ -160,6 +170,16 @@ export default function Home() {
         const enabled = await import('../src/services/DailyOfferNotificationService')
           .then(module => module.isDailyOfferNotificationEnabled());
         setDailyOfferNotificationsEnabled(enabled);
+        
+        // Carregar estados adicionais de notificação
+        const priceAlertEnabled = await AsyncStorage.getItem('priceAlertNotificationsEnabled');
+        setPriceAlertNotificationsEnabled(priceAlertEnabled !== 'false'); // padrão é true
+        
+        const wishlistEnabled = await AsyncStorage.getItem('wishlistNotificationsEnabled');
+        setWishlistNotificationsEnabled(wishlistEnabled !== 'false'); // padrão é true
+        
+        const smartEnabled = await AsyncStorage.getItem('smartNotificationsEnabled');
+        setSmartNotificationsEnabled(smartEnabled !== 'false'); // padrão é true
       } catch (error) {
         console.error('Erro ao carregar preferências de notificação:', error);
       }
@@ -189,6 +209,8 @@ export default function Home() {
       console.error('Erro ao alternar notificações de oferta do dia:', error);
     }
   };
+  
+
   
   // Filtro de busca: 'all' | 'games' | 'dlcs'
   const [searchFilter, setSearchFilter] = useState<'all' | 'games' | 'dlcs'>('games')
@@ -223,6 +245,11 @@ export default function Home() {
     fetchFilteredDeals
   } = useFilters()
   
+  // Estados para controle de atualização
+  const [refreshKey, setRefreshKey] = useState(0);
+  
+
+
   // Hook do novo feed
   const { 
     data: gameItems, 
@@ -231,12 +258,24 @@ export default function Home() {
     hasNextPage, 
     refresh: refreshFeed, 
     loadMore 
-  } = useGameFeed(selectedGenres, sortBy)
+  } = useGameFeed(selectedGenres, sortBy, refreshKey)
 
 
   
   // Memoizar gameItems para evitar loops
-  const memoizedGameItems = useMemo(() => gameItems, [gameItems])
+  const memoizedGameItems = useMemo(() => {
+    // Se estiver embaralhado, usar os dados embaralhados, senão os originais
+    return isShuffled && shuffledGameItems.length > 0 ? shuffledGameItems : gameItems;
+  }, [gameItems, shuffledGameItems, isShuffled]);
+  
+  // Efeito para resetar o embaralhamento quando os gameItems originais mudarem
+  // (por exemplo, quando os filtros mudam ou quando refreshFeed é chamado)
+  useEffect(() => {
+    if (gameItems.length > 0 && isShuffled) {
+      setIsShuffled(false);
+      setShuffledGameItems([]);
+    }
+  }, [gameItems]);
   
   // Função para filtrar jogos indesejados (não disponíveis na Steam mais)
   const shouldFilterGame = useCallback((title: string) => {
@@ -420,6 +459,11 @@ export default function Home() {
       await OnboardingService.setOnboardingSeen()
       setHasSeenOnboarding(true) // Update the local state as well
       setAppState('app')
+      
+      // Carregar deals iniciais após completar o onboarding
+      fetchDeals()
+      initializeSmartServices()
+      
       // Animação de entrada do app
       Animated.parallel([
         Animated.timing(fadeAnim, {
@@ -438,6 +482,11 @@ export default function Home() {
       // Even if saving to storage failed, still transition to app state
       setHasSeenOnboarding(true)
       setAppState('app')
+      
+      // Carregar deals iniciais após completar o onboarding
+      fetchDeals()
+      initializeSmartServices()
+      
       Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 1,
@@ -733,13 +782,15 @@ export default function Home() {
         return shuffled
       }
       
-      // Aplicar rotação diária com seed baseado no dia do ano
-      const dailyRotatedDeals = shuffleWithSeed(uniqueDeals, currentDayOfYear)
+      // Aplicar rotação diária com seed baseado no dia do ano (embaralhamento tradicional)
+      const dailyRotatedDeals = shuffleWithSeed(uniqueDeals, currentDayOfYear);
       
       console.log(`🎲 Ofertas do Dia - Rotação para ${today.toLocaleDateString()} (dia ${currentDayOfYear})`)
       console.log(`🔄 ${dailyRotatedDeals.length} ofertas embaralhadas para hoje`)
       
-      setDeals(dailyRotatedDeals)
+
+      
+      setDeals(dailyRotatedDeals); // Mostrar todos os dados
       
       // Salvar que atualizamos hoje
       await setLastUpdatedDay(currentDayOfYear);
@@ -767,6 +818,20 @@ export default function Home() {
       setLoading(false)
     }
   }
+
+  // Função auxiliar para embaralhar array aleatoriamente
+  const shuffleArray = (array: any[]) => {
+    const newArray = [...array];
+    for (let i = newArray.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+    }
+    return newArray;
+  };
+
+
+
+
 
   // Pull-to-refresh handler for Home
   const onRefresh = async () => {
@@ -1224,12 +1289,12 @@ export default function Home() {
             backgroundColor: '#374151',
             borderRadius: 14, // Menor que 16 para acomodar a borda de 2px da View wrapper
             overflow: 'hidden',
-            // Remover todos os efeitos de sombra/brilho padrão
-            shadowColor: 'transparent',
-            shadowOffset: { width: 0, height: 0 },
-            shadowOpacity: 0,
-            shadowRadius: 0,
-            elevation: 0,
+            // Adicionar leve sombreamento
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.2,
+            shadowRadius: 4,
+            elevation: 4,
             borderWidth: 0,
             borderColor: 'transparent'
           }}
@@ -1573,7 +1638,12 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
       }}>
         {activeTab === 'home' && (
           <View style={{ flex: 1 }}>
-            {renderHeader()}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: 20, paddingTop: 60, paddingBottom: 20 }}>
+              <View>
+                {renderHeader()}
+              </View>
+
+            </View>
             
             {(loading || feedLoading) && (
               <View style={{ padding: 50, alignItems: 'center' }}>
@@ -1620,20 +1690,31 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
 
             {!feedLoading && !feedError && (gameItems.length > 0 || deals.length > 0) && (
               <FlatList
-                data={hasActiveFilters && memoizedGameItems.length > 0 ? memoizedGameItems.map(convertGameItemToDeal).filter((deal): deal is Deal => deal !== null) : deals}
+                data={(() => {
+                  console.log(`🔍 Debug: hasActiveFilters=${hasActiveFilters}, memoizedGameItems.length=${memoizedGameItems.length}, deals.length=${deals.length}`);
+                  const result = hasActiveFilters && memoizedGameItems.length > 0 ? memoizedGameItems.map(convertGameItemToDeal).filter((deal): deal is Deal => deal !== null) : deals;
+                  console.log(`🔍 Debug: FlatList data length=${result.length}`);
+                  return result;
+                })()}
                 renderItem={renderGameCard}
                 keyExtractor={(item, index) => `${item._id || 'game'}-${index}`}
                 showsVerticalScrollIndicator={false}
                 removeClippedSubviews={true}
-                initialNumToRender={5}
-                windowSize={5}
-                maxToRenderPerBatch={3}
+                initialNumToRender={12}
+                windowSize={11}
+                maxToRenderPerBatch={6}
+                getItemLayout={(data, index) => ({
+                  length: 280, // Altura estimada de cada item
+                  offset: 280 * index,
+                  index,
+                })}
                 onEndReached={() => {
-                  if (hasActiveFilters && hasNextPage && !feedLoading) {
+                  // Sempre carregar mais itens quando chegar ao final, independentemente dos filtros
+                  if (hasNextPage && !feedLoading) {
                     loadMore()
                   }
                 }}
-                onEndReachedThreshold={0.1}
+                onEndReachedThreshold={0.5}
                 ListHeaderComponent={
                   <View style={{ paddingHorizontal: isTablet ? 40 : 24, maxWidth: isTablet ? 800 : '100%', alignSelf: 'center', width: '100%' }}>
                   </View>
@@ -1897,7 +1978,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                   { icon: 'shield-checkmark-outline', title: 'Privacidade', subtitle: 'Política de privacidade' },
                   { icon: 'help-circle-outline', title: 'Ajuda', subtitle: 'nexusdevsystem@gmail.com' },
                   { icon: 'heart-outline', title: 'Apoie o Looton', subtitle: 'Faça uma doação' },
-                  { icon: 'notifications-outline', title: 'Oferta do Dia', type: 'toggle', enabled: dailyOfferNotificationsEnabled }
+                  { icon: 'notifications-outline', title: 'Notificações', subtitle: 'Configurar notificações' }
                 ].map((item, index) => {
                   if (item.title === 'Ajuda') {
                     return (
@@ -1980,11 +2061,11 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                     )
                   }
 
-                  if (item.type === 'toggle') {
+                  if (item.title === 'Notificações') {
                     return (
                       <TouchableOpacity
                         key={index}
-                        onPress={toggleDailyOfferNotifications}
+                        onPress={() => setShowNotificationsModal(true)}
                         style={{
                           flexDirection: 'row',
                           alignItems: 'center',
@@ -1999,29 +2080,10 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                             {item.title}
                           </Text>
                           <Text style={{ color: '#9CA3AF', fontSize: isTablet ? 16 : 14, marginTop: 2 }}>
-                            Receba a oferta do dia
+                            {item.subtitle}
                           </Text>
                         </View>
-                        <View
-                          style={{
-                            width: 50,
-                            height: 30,
-                            borderRadius: 15,
-                            backgroundColor: item.enabled ? '#3B82F6' : '#6B7280',
-                            justifyContent: 'center',
-                            paddingHorizontal: 2,
-                          }}
-                        >
-                          <View
-                            style={{
-                              width: 26,
-                              height: 26,
-                              borderRadius: 13,
-                              backgroundColor: '#FFFFFF',
-                              transform: [{ translateX: item.enabled ? 20 : 0 }]
-                            }}
-                          />
-                        </View>
+                        <Ionicons name="chevron-forward" size={isTablet ? 24 : 20} color="#9CA3AF" />
                       </TouchableOpacity>
                     )
                   } else {
@@ -2032,7 +2094,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                           flexDirection: 'row',
                           alignItems: 'center',
                           padding: isTablet ? 24 : 20,
-                          borderBottomWidth: index < 3 ? 1 : 0,
+                          borderBottomWidth: index < 3 ? 1 : 0, // Atualizado para 3 pois agora temos 4 itens
                           borderBottomColor: '#4B5563'
                         }}
                       >
@@ -2353,6 +2415,321 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
         }}
       />
       
+      {/* Modal de Notificações */}
+      {showNotificationsModal && (
+        <Modal animationType="fade" transparent onRequestClose={() => setShowNotificationsModal(false)}>
+          <SafeAreaView style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center' }}>
+            <View style={{ 
+              width: '90%', 
+              maxWidth: 560, 
+              backgroundColor: '#374151', 
+              borderRadius: 16, 
+              padding: 20,
+              margin: 20
+            }}>
+              <View style={{ 
+                flexDirection: 'row', 
+                justifyContent: 'space-between', 
+                alignItems: 'center', 
+                marginBottom: 16 
+              }}>
+                <Text style={{ 
+                  color: '#FFFFFF', 
+                  fontSize: 18, 
+                  fontWeight: '700' 
+                }}>
+                  Configurações de Notificações
+                </Text>
+                <TouchableOpacity 
+                  onPress={() => setShowNotificationsModal(false)} 
+                  style={{ padding: 8 }}
+                >
+                  <Ionicons name="close" size={24} color="#E5E7EB" />
+                </TouchableOpacity>
+              </View>
+              
+              {/* Notificação de Oferta do Dia */}
+              <TouchableOpacity
+                onPress={async () => {
+                  try {
+                    const module = await import('../src/services/DailyOfferNotificationService');
+                    const newState = !dailyOfferNotificationsEnabled;
+                    await module.setDailyOfferNotificationEnabled(newState);
+                    setDailyOfferNotificationsEnabled(newState);
+                    
+                    if (newState) {
+                      console.log('Notificações de Oferta do Dia ativadas');
+                    } else {
+                      console.log('Notificações de Oferta do Dia desativadas');
+                    }
+                  } catch (error) {
+                    console.error('Erro ao alternar notificações de oferta do dia:', error);
+                  }
+                }}
+                style={{ 
+                  flexDirection: 'row', 
+                  alignItems: 'center',
+                  padding: 16,
+                  backgroundColor: '#4B5563',
+                  borderRadius: 12,
+                  marginBottom: 12
+                }}
+              >
+                <Text style={{ 
+                  color: '#FFFFFF', 
+                  fontSize: 16, 
+                  fontWeight: '600',
+                  flex: 1
+                }}>
+                  Oferta do Dia
+                </Text>
+                <View
+                  style={{
+                    width: 50,
+                    height: 30,
+                    borderRadius: 15,
+                    backgroundColor: dailyOfferNotificationsEnabled ? '#3B82F6' : '#6B7280',
+                    justifyContent: 'center',
+                    paddingHorizontal: 2,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 26,
+                      height: 26,
+                      borderRadius: 13,
+                      backgroundColor: '#FFFFFF',
+                      transform: [{ translateX: dailyOfferNotificationsEnabled ? 20 : 0 }]
+                    }}
+                  />
+                </View>
+              </TouchableOpacity>
+              
+              {/* Notificação de Alerta de Preço */}
+              <TouchableOpacity
+                onPress={async () => {
+                  try {
+                    const newState = !priceAlertNotificationsEnabled;
+                    setPriceAlertNotificationsEnabled(newState);
+                    // Armazenar preferência
+                    await AsyncStorage.setItem('priceAlertNotificationsEnabled', newState.toString());
+                    console.log('Notificações de Alerta de Preço:', newState ? 'ativadas' : 'desativadas');
+                    showToast('Configuração atualizada');
+                  } catch (error) {
+                    console.error('Erro ao alternar notificações de alerta de preço:', error);
+                  }
+                }}
+                style={{ 
+                  flexDirection: 'row', 
+                  alignItems: 'center',
+                  padding: 16,
+                  backgroundColor: '#4B5563',
+                  borderRadius: 12,
+                  marginBottom: 12
+                }}
+              >
+                <Text style={{ 
+                  color: '#FFFFFF', 
+                  fontSize: 16, 
+                  fontWeight: '600',
+                  flex: 1
+                }}>
+                  Alertas de Preço
+                </Text>
+                <View
+                  style={{
+                    width: 50,
+                    height: 30,
+                    borderRadius: 15,
+                    backgroundColor: priceAlertNotificationsEnabled ? '#3B82F6' : '#6B7280',
+                    justifyContent: 'center',
+                    paddingHorizontal: 2,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 26,
+                      height: 26,
+                      borderRadius: 13,
+                      backgroundColor: '#FFFFFF',
+                      transform: [{ translateX: priceAlertNotificationsEnabled ? 20 : 0 }]
+                    }}
+                  />
+                </View>
+              </TouchableOpacity>
+              
+              {/* Notificações de Wishlist */}
+              <TouchableOpacity
+                onPress={async () => {
+                  try {
+                    const newState = !wishlistNotificationsEnabled;
+                    setWishlistNotificationsEnabled(newState);
+                    // Armazenar preferência
+                    await AsyncStorage.setItem('wishlistNotificationsEnabled', newState.toString());
+                    console.log('Notificações de Wishlist:', newState ? 'ativadas' : 'desativadas');
+                    showToast('Configuração atualizada');
+                  } catch (error) {
+                    console.error('Erro ao alternar notificações de wishlist:', error);
+                  }
+                }}
+                style={{ 
+                  flexDirection: 'row', 
+                  alignItems: 'center',
+                  padding: 16,
+                  backgroundColor: '#4B5563',
+                  borderRadius: 12,
+                  marginBottom: 12
+                }}
+              >
+                <Text style={{ 
+                  color: '#FFFFFF', 
+                  fontSize: 16, 
+                  fontWeight: '600',
+                  flex: 1
+                }}>
+                  Wishlist
+                </Text>
+                <View
+                  style={{
+                    width: 50,
+                    height: 30,
+                    borderRadius: 15,
+                    backgroundColor: wishlistNotificationsEnabled ? '#3B82F6' : '#6B7280',
+                    justifyContent: 'center',
+                    paddingHorizontal: 2,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 26,
+                      height: 26,
+                      borderRadius: 13,
+                      backgroundColor: '#FFFFFF',
+                      transform: [{ translateX: wishlistNotificationsEnabled ? 20 : 0 }]
+                    }}
+                  />
+                </View>
+              </TouchableOpacity>
+              
+              {/* Notificações Inteligentes */}
+              <TouchableOpacity
+                onPress={async () => {
+                  try {
+                    const newState = !smartNotificationsEnabled;
+                    setSmartNotificationsEnabled(newState);
+                    // Armazenar preferência
+                    await AsyncStorage.setItem('smartNotificationsEnabled', newState.toString());
+                    console.log('Notificações Inteligentes:', newState ? 'ativadas' : 'desativadas');
+                    showToast('Configuração atualizada');
+                  } catch (error) {
+                    console.error('Erro ao alternar notificações inteligentes:', error);
+                  }
+                }}
+                style={{ 
+                  flexDirection: 'row', 
+                  alignItems: 'center',
+                  padding: 16,
+                  backgroundColor: '#4B5563',
+                  borderRadius: 12,
+                  marginBottom: 12
+                }}
+              >
+                <Text style={{ 
+                  color: '#FFFFFF', 
+                  fontSize: 16, 
+                  fontWeight: '600',
+                  flex: 1
+                }}>
+                  Inteligentes
+                </Text>
+                <View
+                  style={{
+                    width: 50,
+                    height: 30,
+                    borderRadius: 15,
+                    backgroundColor: smartNotificationsEnabled ? '#3B82F6' : '#6B7280',
+                    justifyContent: 'center',
+                    paddingHorizontal: 2,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 26,
+                      height: 26,
+                      borderRadius: 13,
+                      backgroundColor: '#FFFFFF',
+                      transform: [{ translateX: smartNotificationsEnabled ? 20 : 0 }]
+                    }}
+                  />
+                </View>
+              </TouchableOpacity>
+              
+              {/* Desativar todas as notificações */}
+              <TouchableOpacity
+                onPress={async () => {
+                  try {
+                    // Desativar todas as notificações
+                    const module = await import('../src/services/DailyOfferNotificationService');
+                    await module.setDailyOfferNotificationEnabled(false);
+                    setDailyOfferNotificationsEnabled(false);
+                    setPriceAlertNotificationsEnabled(false);
+                    setWishlistNotificationsEnabled(false);
+                    setSmartNotificationsEnabled(false);
+                    
+                    // Salvar todas as preferências como desativadas
+                    await AsyncStorage.setItem('dailyOfferNotificationEnabled', 'false');
+                    await AsyncStorage.setItem('priceAlertNotificationsEnabled', 'false');
+                    await AsyncStorage.setItem('wishlistNotificationsEnabled', 'false');
+                    await AsyncStorage.setItem('smartNotificationsEnabled', 'false');
+                    
+                    showToast('Todas as notificações desativadas');
+                  } catch (error) {
+                    console.error('Erro ao desativar todas as notificações:', error);
+                  }
+                }}
+                style={{ 
+                  flexDirection: 'row', 
+                  alignItems: 'center',
+                  padding: 16,
+                  backgroundColor: '#DC2626',
+                  borderRadius: 12
+                }}
+              >
+                <Ionicons name="notifications-off" size={20} color="#FFFFFF" style={{ marginRight: 12 }} />
+                <Text style={{ 
+                  color: '#FFFFFF', 
+                  fontSize: 16, 
+                  fontWeight: '600',
+                  flex: 1
+                }}>
+                  Desativar todas
+                </Text>
+              </TouchableOpacity>
+              
+              <View style={{ 
+                flexDirection: 'row', 
+                justifyContent: 'flex-end',
+                marginTop: 20
+              }}>
+                <TouchableOpacity
+                  onPress={() => setShowNotificationsModal(false)}
+                  style={{ 
+                    backgroundColor: '#4B5563', 
+                    paddingHorizontal: 16, 
+                    paddingVertical: 10, 
+                    borderRadius: 8 
+                  }}
+                >
+                  <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '600' }}>
+                    Fechar
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </SafeAreaView>
+        </Modal>
+      )}
+      
       </View>
     </CurrencyProvider>
   )
@@ -2442,6 +2819,163 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
       </SafeAreaView>
     </Modal>
   )
+
+  // Componente para Modal de Notificações
+  const NotificationsModal = () => {
+    const [dailyOfferEnabled, setDailyOfferEnabled] = useState(dailyOfferNotificationsEnabled);
+    
+    // Função para alternar a notificação de oferta do dia
+    const toggleDailyOfferNotification = async () => {
+      try {
+        const module = await import('../src/services/DailyOfferNotificationService');
+        const newState = !dailyOfferEnabled;
+        await module.setDailyOfferNotificationEnabled(newState);
+        setDailyOfferEnabled(newState);
+        
+        if (newState) {
+          console.log('Notificações de Oferta do Dia ativadas');
+        } else {
+          console.log('Notificações de Oferta do Dia desativadas');
+        }
+      } catch (error) {
+        console.error('Erro ao alternar notificações de oferta do dia:', error);
+      }
+    };
+    
+    // Função para desativar todas as notificações
+    const disableAllNotifications = async () => {
+      try {
+        // Desativar todas as notificações
+        const module = await import('../src/services/DailyOfferNotificationService');
+        await module.setDailyOfferNotificationEnabled(false);
+        setDailyOfferEnabled(false);
+        
+        showToast('Todas as notificações desativadas');
+      } catch (error) {
+        console.error('Erro ao desativar todas as notificações:', error);
+      }
+    };
+    
+    return (
+      <Modal visible={showNotificationsModal} animationType="fade" transparent onRequestClose={() => setShowNotificationsModal(false)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center' }}>
+          <View style={{ 
+            width: '90%', 
+            maxWidth: 560, 
+            backgroundColor: '#374151', 
+            borderRadius: 16, 
+            padding: 20,
+            margin: 20
+          }}>
+            <View style={{ 
+              flexDirection: 'row', 
+              justifyContent: 'space-between', 
+              alignItems: 'center', 
+              marginBottom: 16 
+            }}>
+              <Text style={{ 
+                color: '#FFFFFF', 
+                fontSize: 18, 
+                fontWeight: '700' 
+              }}>
+                Configurações de Notificações
+              </Text>
+              <TouchableOpacity 
+                onPress={() => setShowNotificationsModal(false)} 
+                style={{ padding: 8 }}
+              >
+                <Ionicons name="close" size={24} color="#E5E7EB" />
+              </TouchableOpacity>
+            </View>
+            
+            {/* Notificação de Oferta do Dia */}
+            <TouchableOpacity
+              onPress={toggleDailyOfferNotification}
+              style={{ 
+                flexDirection: 'row', 
+                alignItems: 'center',
+                padding: 16,
+                backgroundColor: '#4B5563',
+                borderRadius: 12,
+                marginBottom: 12
+              }}
+            >
+              <Text style={{ 
+                color: '#FFFFFF', 
+                fontSize: 16, 
+                fontWeight: '600',
+                flex: 1
+              }}>
+                Oferta do Dia
+              </Text>
+              <View
+                style={{
+                  width: 50,
+                  height: 30,
+                  borderRadius: 15,
+                  backgroundColor: dailyOfferEnabled ? '#3B82F6' : '#6B7280',
+                  justifyContent: 'center',
+                  paddingHorizontal: 2,
+                }}
+              >
+                <View
+                  style={{
+                    width: 26,
+                    height: 26,
+                    borderRadius: 13,
+                    backgroundColor: '#FFFFFF',
+                    transform: [{ translateX: dailyOfferEnabled ? 20 : 0 }]
+                  }}
+                />
+              </View>
+            </TouchableOpacity>
+            
+            {/* Desativar todas as notificações */}
+            <TouchableOpacity
+              onPress={disableAllNotifications}
+              style={{ 
+                flexDirection: 'row', 
+                alignItems: 'center',
+                padding: 16,
+                backgroundColor: '#DC2626',
+                borderRadius: 12
+              }}
+            >
+              <Ionicons name="notifications-off" size={20} color="#FFFFFF" style={{ marginRight: 12 }} />
+              <Text style={{ 
+                color: '#FFFFFF', 
+                fontSize: 16, 
+                fontWeight: '600',
+                flex: 1
+              }}>
+                Desativar todas
+              </Text>
+            </TouchableOpacity>
+            
+            <View style={{ 
+              flexDirection: 'row', 
+              justifyContent: 'flex-end',
+              marginTop: 20
+            }}>
+              <TouchableOpacity
+                onPress={() => setShowNotificationsModal(false)}
+                style={{ 
+                  backgroundColor: '#4B5563', 
+                  paddingHorizontal: 16, 
+                  paddingVertical: 10, 
+                  borderRadius: 8 
+                }}
+              >
+                <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '600' }}>
+                  Fechar
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </SafeAreaView>
+      </Modal>
+    );
+  }
 
   // Componente para Modal de Ajuda
   const HelpModal = () => (

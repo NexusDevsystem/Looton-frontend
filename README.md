@@ -6,6 +6,7 @@ Resumo
 - Plataforma: Expo (React Native)
 - Linguagem: TypeScript
 - Principais features: busca de jogos, lista de favoritos, listas personalizadas, notificações de ofertas, integração com APIs de lojas (Steam). Epic Games temporariamente desativada para melhorias.
+- Notificacoes: Aplicativo envia uma notificacao de teste divertida imediatamente apos o usuario aceitar a permissao de notificacoes.
 
 Como rodar (desenvolvimento)
 1. Instale dependências:
