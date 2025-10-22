@@ -1,0 +1,60 @@
+name: Deploy Backend
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'backend/**'
+      - '.github/workflows/deploy-backend.yml'
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./backend
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build backend
+        run: npm run build || npx tsc
+
+      # Create Firebase service account file from secret (DO NOT commit secrets to repo)
+      - name: Create Firebase service account file from secret
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -n "$FIREBASE_SERVICE_ACCOUNT" ]; then
+            echo "$FIREBASE_SERVICE_ACCOUNT" > firebase-service-account.json
+            echo "GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/firebase-service-account.json" >> $GITHUB_ENV
+          else
+            echo "No FIREBASE_SERVICE_ACCOUNT secret set; skipping creation"
+          fi
+
+      - name: Docker build
+        run: docker build -t looton-backend .
+
+      # Exemplo de push para DockerHub (opcional)
+      # - name: Login to DockerHub
+      #   uses: docker/login-action@v3
+      #   with:
+      #     username: ${{ secrets.DOCKERHUB_USERNAME }}
+      #     password: ${{ secrets.DOCKERHUB_TOKEN }}
+      #
+      # - name: Push image
+      #   run: docker tag looton-backend ${{ secrets.DOCKERHUB_USERNAME }}/looton-backend:latest && docker push ${{ secrets.DOCKERHUB_USERNAME }}/looton-backend:latest
+
+      # Exemplo de deploy para Render, Railway, etc. pode ser adicionado aqui
+      - name: Done
+        run: echo "Build finalizado. Adicione steps de deploy conforme sua infra."
