@@ -14,7 +14,8 @@ export interface WishlistItem {
 }
 
 const WISHLIST_STORAGE_KEY = '@looton_wishlist';
-const FREE_TIER_LIMIT = 5; // Limite de jogos vigiados para usuários gratuitos
+// const FREE_TIER_LIMIT = 5; // TEMPORARIAMENTE DESABILITADO - Sem limite de jogos vigiados
+const FREE_TIER_LIMIT = 999; // Limite alto temporário (ilimitado na prática)
 
 export class WishlistService {
   // Simple in-memory subscribers for changes to the wishlist
@@ -50,14 +51,14 @@ export class WishlistService {
       // Verificar se o jogo já está na wishlist
       const existingIndex = wishlist.findIndex(w => w.appId === item.appId);
       
-      // Se não existe e não é atualização, verificar limite
-      if (existingIndex === -1) {
-        const isPremium = await SubscriptionService.isPremium();
-        
-        if (!isPremium && wishlist.length >= FREE_TIER_LIMIT) {
-          throw new Error('LIMIT_REACHED');
-        }
-      }
+      // TEMPORARIAMENTE DESABILITADO - Sem limite de jogos vigiados
+      // if (existingIndex === -1) {
+      //   const isPremium = await SubscriptionService.isPremium();
+      //   
+      //   if (!isPremium && wishlist.length >= FREE_TIER_LIMIT) {
+      //     throw new Error('LIMIT_REACHED');
+      //   }
+      // }
       
       const wishlistItem: WishlistItem = {
         ...item,

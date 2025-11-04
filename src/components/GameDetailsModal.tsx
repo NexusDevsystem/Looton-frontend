@@ -374,12 +374,13 @@ export const GameDetailsModal: React.FC<GameDetailsProps> = ({
   setWatchOption(null); // Resetar a opção selecionada
   Alert.alert('Sucesso', `${gameDetails?.name || gameTitle} foi adicionado à sua lista de vigilância!`);
     } catch (error: any) {
-      if (error.message === 'LIMIT_REACHED') {
-        setShowWishlistModal(false);
-        setShowUpgradeToPremiumModal(true);
-      } else {
+      // TEMPORARIAMENTE DESABILITADO - Sem limite de jogos vigiados
+      // if (error.message === 'LIMIT_REACHED') {
+      //   setShowWishlistModal(false);
+      //   setShowUpgradeToPremiumModal(true);
+      // } else {
         Alert.alert('Erro', 'Não foi possível adicionar à lista de vigilância');
-      }
+      // }
     }
   };
 
@@ -400,12 +401,13 @@ export const GameDetailsModal: React.FC<GameDetailsProps> = ({
       setWatchOption(null); // Resetar a opção selecionada
       Alert.alert('Sucesso', `Agora você está vigiando ${gameDetails?.name || gameTitle} para qualquer promoção!`);
     } catch (error: any) {
-      if (error.message === 'LIMIT_REACHED') {
-        setShowWishlistModal(false);
-        setShowUpgradeToPremiumModal(true);
-      } else {
+      // TEMPORARIAMENTE DESABILITADO - Sem limite de jogos vigiados
+      // if (error.message === 'LIMIT_REACHED') {
+      //   setShowWishlistModal(false);
+      //   setShowUpgradeToPremiumModal(true);
+      // } else {
         Alert.alert('Erro', 'Não foi possível adicionar à lista de vigilância');
-      }
+      // }
     }
   };
 

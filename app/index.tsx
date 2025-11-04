@@ -2357,6 +2357,8 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
   )
 
   // Componente para Modal da Versão Pro
+  // TEMPORARIAMENTE DESABILITADO - Será ativado quando configurar assinaturas no Play Console
+  /*
   const ProModal = () => (
     <Modal visible={showProModal} animationType="fade" transparent onRequestClose={() => setShowProModal(false)}>
       <SafeAreaView style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center' }}>
@@ -2446,6 +2448,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
       </SafeAreaView>
     </Modal>
   )
+  */
 
   // App principal
   return (
@@ -2832,7 +2835,6 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                 </Text>
 
                 {[
-                  { icon: 'diamond-outline', title: t('settings.getPro'), subtitle: t('settings.getProDesc'), key: 'pro' },
                   { icon: 'star-outline', title: t('settings.rateApp'), subtitle: t('settings.rateAppDesc'), key: 'rate' },
                   { icon: 'language-outline', title: t('settings.language'), subtitle: t('settings.languageDesc'), key: 'language' },
                   { icon: 'share-social-outline', title: t('settings.share'), subtitle: t('settings.shareDesc'), key: 'share' },
@@ -2844,10 +2846,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                       key={index}
                       onPress={() => {
                         // Implementar ações para cada item
-                        if (item.key === 'pro') {
-                          // Mostrar modal da versão Pro
-                          setShowProModal(true);
-                        } else if (item.key === 'rate') {
+                        if (item.key === 'rate') {
                           // Abrir avaliação na Play Store
                           Linking.openURL('https://play.google.com/store/apps/details?id=com.nexusdevsystem.looton&pcampaignid=web_share');
                         } else if (item.key === 'language') {
@@ -2870,7 +2869,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                         flexDirection: 'row',
                         alignItems: 'center',
                         padding: isTablet ? 20 : 16,
-                        borderBottomWidth: index < 5 ? 1 : 0, // Não adicionar borda na última opção
+                        borderBottomWidth: index < 4 ? 1 : 0, // Não adicionar borda na última opção
                         borderBottomColor: '#4B5563'
                       }}
                     >
@@ -2878,7 +2877,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                         width: 36,
                         height: 36,
                         borderRadius: 18,
-                        backgroundColor: index === 0 ? '#FFD700' : '#3B82F6', // Dourado para o primeiro item (versão Pro), azul para os demais
+                        backgroundColor: '#3B82F6', // Azul para todos os itens
                         justifyContent: 'center',
                         alignItems: 'center',
                         marginRight: 16
@@ -3255,8 +3254,8 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
         </SafeAreaView>
       </Modal>
 
-      {/* Modal da Versão Pro */}
-      <ProModal />
+      {/* Modal da Versão Pro - TEMPORARIAMENTE DESABILITADO */}
+      {/* <ProModal /> */}
       
       </View>
     </CurrencyProvider>
