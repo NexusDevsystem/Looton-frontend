@@ -42,7 +42,7 @@ export const useFilters = () => {
     'Survival', 'Crafting', 'Free to Play', 'Early Access', 'Roguelike'
   ]
 
-  const availableStores = ['steam', 'epic']
+  const availableStores = ['steam']
 
   const toggleGenre = (genre: string) => {
     setSelectedGenres(prev => 

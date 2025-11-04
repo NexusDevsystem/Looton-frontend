@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -25,37 +25,37 @@ interface PriceAnalysisModalProps {
   currentPrice?: number;
 }
 
-// Função para formatar preço com detecção automática de formato
+// FunÃ§Ã£o para formatar preÃ§o com detecÃ§Ã£o automÃ¡tica de formato
 const formatPrice = (price: number | undefined): string => {
   if (price === undefined || price === null || isNaN(price)) {
     return 'R$ 0,00';
   }
   
-  // Se o preço é muito alto (provavelmente em centavos), dividir por 100
-  // Se é menor que 1000, assumir que já está em formato decimal
+  // Se o preÃ§o Ã© muito alto (provavelmente em centavos), dividir por 100
+  // Se Ã© menor que 1000, assumir que jÃ¡ estÃ¡ em formato decimal
   const actualPrice = price > 1000 ? price / 100 : price;
   return actualPrice.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 };
 
-// Função para formatar data
+// FunÃ§Ã£o para formatar data
 const formatDate = (dateString: string): string => {
   return new Date(dateString).toLocaleDateString('pt-BR');
 };
 
-// Função para transformar dados da API em formato do componente (Steam e Epic)
+// FunÃ§Ã£o para transformar dados da API em formato do componente (Steam)
 const transformApiDataToHistory = (apiData: PriceHistoryData): PriceHistory[] => {
   const history: PriceHistory[] = [];
   
-  console.log('🔍 Dados REAIS da Steam recebidos:', apiData.chartData.length, 'entradas');
+  console.log('ðŸ” Dados REAIS da Steam recebidos:', apiData.chartData.length, 'entradas');
   
   // Converter APENAS dados reais da Steam
   apiData.chartData.forEach((entry, index) => {
-    console.log(`📅 Entrada ${index}:`, entry.date, 'preços Steam:', entry.prices);
+    console.log(`ðŸ“… Entrada ${index}:`, entry.date, 'preÃ§os Steam:', entry.prices);
     
     // Adicionar APENAS dados reais da Steam
     if (entry.prices.steam) {
       const steamPrice = entry.prices.steam;
-      console.log(`🎮 Steam REAL: R$ ${steamPrice} em ${entry.date}`);
+      console.log(`ðŸŽ® Steam REAL: R$ ${steamPrice} em ${entry.date}`);
       history.push({
         date: entry.date,
         price: steamPrice,
@@ -64,7 +64,7 @@ const transformApiDataToHistory = (apiData: PriceHistoryData): PriceHistory[] =>
     }
   });
   
-  console.log('🎯 Total de dados REAIS processados:', history.length);
+  console.log('ðŸŽ¯ Total de dados REAIS processados:', history.length);
   return history.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 };
 
@@ -73,7 +73,7 @@ const PriceAnalysisModal: React.FC<PriceAnalysisModalProps> = ({
   onClose,
   gameId,
   gameTitle,
-  currentPrice = 49.99 // valor padrão para teste
+  currentPrice = 49.99 // valor padrÃ£o para teste
 }) => {
   const [loading, setLoading] = useState(true);
   const [priceHistory, setPriceHistory] = useState<PriceHistory[]>([]);
@@ -85,18 +85,18 @@ const PriceAnalysisModal: React.FC<PriceAnalysisModalProps> = ({
       setLoading(true);
       setError(null);
       
-      fetchPriceHistory(gameId, 30) // Buscar últimos 30 dias
+      fetchPriceHistory(gameId, 30) // Buscar Ãºltimos 30 dias
         .then((data) => {
-          console.log('📊 Dados da API recebidos:', data);
+          console.log('ðŸ“Š Dados da API recebidos:', data);
           setApiData(data);
           const history = transformApiDataToHistory(data);
-          console.log('📈 Histórico transformado:', history.length, 'items');
+          console.log('ðŸ“ˆ HistÃ³rico transformado:', history.length, 'items');
           setPriceHistory(history);
           setLoading(false);
         })
         .catch((err) => {
-          console.error('❌ Erro ao buscar histórico de preços:', err);
-          setError(err.message || 'Erro ao carregar histórico');
+          console.error('âŒ Erro ao buscar histÃ³rico de preÃ§os:', err);
+          setError(err.message || 'Erro ao carregar histÃ³rico');
           setLoading(false);
         });
     }
@@ -140,7 +140,7 @@ const PriceAnalysisModal: React.FC<PriceAnalysisModalProps> = ({
         <View style={styles.container}>
           {/* Header */}
           <View style={styles.header}>
-            <Text style={styles.title}>📊 Análise de Preços</Text>
+            <Text style={styles.title}>ðŸ“Š AnÃ¡lise de PreÃ§os</Text>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
               <Ionicons name="close" size={20} color="#9CA3AF" />
             </TouchableOpacity>
@@ -150,14 +150,14 @@ const PriceAnalysisModal: React.FC<PriceAnalysisModalProps> = ({
           <View style={styles.gameInfo}>
             <Text style={styles.gameTitle} numberOfLines={2}>{gameTitle}</Text>
             <Text style={styles.currentPrice}>
-              Preço Atual: {formatPrice(currentPrice)}
+              PreÃ§o Atual: {formatPrice(currentPrice)}
             </Text>
           </View>
 
         {loading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#3B82F6" />
-            <Text style={styles.loadingText}>Carregando histórico...</Text>
+            <Text style={styles.loadingText}>Carregando histÃ³rico...</Text>
           </View>
         ) : error ? (
           <View style={styles.errorContainer}>
@@ -178,7 +178,7 @@ const PriceAnalysisModal: React.FC<PriceAnalysisModalProps> = ({
                       setLoading(false);
                     })
                     .catch((err) => {
-                      setError(err.message || 'Erro ao carregar histórico');
+                      setError(err.message || 'Erro ao carregar histÃ³rico');
                       setLoading(false);
                     });
                 }
@@ -190,12 +190,12 @@ const PriceAnalysisModal: React.FC<PriceAnalysisModalProps> = ({
         ) : priceHistory.length === 0 ? (
           <View style={styles.noDataContainer}>
             <Ionicons name="analytics-outline" size={64} color="#6B7280" />
-            <Text style={styles.noDataTitle}>Histórico não disponível</Text>
+            <Text style={styles.noDataTitle}>HistÃ³rico nÃ£o disponÃ­vel</Text>
             <Text style={styles.noDataText}>
-              Não há dados de histórico de preços disponíveis para este jogo ainda.
+              NÃ£o hÃ¡ dados de histÃ³rico de preÃ§os disponÃ­veis para este jogo ainda.
             </Text>
             <Text style={styles.noDataSubtext}>
-              Os dados de preços são coletados automaticamente. Tente novamente mais tarde.
+              Os dados de preÃ§os sÃ£o coletados automaticamente. Tente novamente mais tarde.
             </Text>
           </View>
         ) : (
@@ -203,17 +203,17 @@ const PriceAnalysisModal: React.FC<PriceAnalysisModalProps> = ({
             {/* Resumo */}
             <View style={styles.summaryContainer}>
               <View style={styles.summaryItem}>
-                <Text style={styles.summaryLabel}>💰 Preço Atual</Text>
+                <Text style={styles.summaryLabel}>ðŸ’° PreÃ§o Atual</Text>
                 <Text style={styles.summaryValue}>{formatPrice(getLowestPrice())}</Text>
-                <Text style={styles.summaryStore}>🎮 Steam</Text>
+                <Text style={styles.summaryStore}>ðŸŽ® Steam</Text>
               </View>
               <View style={styles.summaryItem}>
-                <Text style={styles.summaryLabel}>💸 Preço Original</Text>
+                <Text style={styles.summaryLabel}>ðŸ’¸ PreÃ§o Original</Text>
                 <Text style={styles.summaryValue}>{formatPrice(getHighestPrice())}</Text>
                 <Text style={styles.summaryStore}>Steam Store</Text>
               </View>
               <View style={styles.summaryItem}>
-                <Text style={styles.summaryLabel}>🔥 Desconto</Text>
+                <Text style={styles.summaryLabel}>ðŸ”¥ Desconto</Text>
                 <Text style={styles.summaryValue}>
                   {getHighestPrice() > getLowestPrice() 
                     ? Math.round(((getHighestPrice() - getLowestPrice()) / getHighestPrice()) * 100)
@@ -223,13 +223,13 @@ const PriceAnalysisModal: React.FC<PriceAnalysisModalProps> = ({
               </View>
             </View>
 
-            {/* Lista de Histórico */}
+            {/* Lista de HistÃ³rico */}
             <View style={styles.historyContainer}>
-              <Text style={styles.sectionTitle}>📊 Dados Atuais da Steam ({priceHistory.length} registros reais)</Text>
+              <Text style={styles.sectionTitle}>ðŸ“Š Dados Atuais da Steam ({priceHistory.length} registros reais)</Text>
               {apiData?.notice && (
                 <View style={{ backgroundColor: '#374151', padding: 12, borderRadius: 8, marginBottom: 16 }}>
                   <Text style={{ color: '#F59E0B', fontSize: 12, textAlign: 'center' }}>
-                    ℹ️ {apiData.notice}
+                    â„¹ï¸ {apiData.notice}
                   </Text>
                 </View>
               )}
@@ -241,7 +241,6 @@ const PriceAnalysisModal: React.FC<PriceAnalysisModalProps> = ({
                       style: [
                         styles.historyItem,
                         item.storeName === 'Steam' && styles.steamHistoryItem,
-                        item.storeName === 'Epic Games' && styles.epicHistoryItem
                       ]
                     },
                     React.createElement(View, { style: styles.historyLeft },
@@ -250,9 +249,8 @@ const PriceAnalysisModal: React.FC<PriceAnalysisModalProps> = ({
                         style: [
                           styles.historyStore,
                           item.storeName === 'Steam' && styles.steamStore,
-                          item.storeName === 'Epic Games' && styles.epicStore
                         ] 
-                      }, item.storeName === 'Steam' ? '🎮 Steam' : '🎯 Epic Games')
+                        }, item.storeName === 'Steam' ? 'ðŸŽ® Steam' : 'ðŸŽ® Steam')
                     ),
                     React.createElement(Text, {
                       style: [
@@ -266,23 +264,23 @@ const PriceAnalysisModal: React.FC<PriceAnalysisModalProps> = ({
               ) : (
                 <View style={styles.noDataContainer}>
                   <Text style={styles.noDataText}>
-                    {apiData ? 'Nenhum dado de histórico encontrado nos últimos 30 dias' : 'Nenhum dado de histórico disponível'}
+                    {apiData ? 'Nenhum dado de histÃ³rico encontrado nos Ãºltimos 30 dias' : 'Nenhum dado de histÃ³rico disponÃ­vel'}
                   </Text>
                 </View>
               )}
             </View>
 
-            {/* Preço Atual da Steam */}
+            {/* PreÃ§o Atual da Steam */}
             {apiData?.currentPrices?.steam && (
               <View style={styles.currentPricesContainer}>
-                <Text style={styles.sectionTitle}>Preço Atual</Text>
+                <Text style={styles.sectionTitle}>PreÃ§o Atual</Text>
                 {React.createElement(View, 
                   { 
                     key: 'steam',
                     style: styles.currentPriceItem 
                   },
                   React.createElement(View, { style: styles.storeInfo },
-                    React.createElement(Text, { style: styles.storeName }, '🎮 Steam'),
+                    React.createElement(Text, { style: styles.storeName }, 'ðŸŽ® Steam'),
                     React.createElement(Text, { style: styles.priceDate }, formatDate(apiData.currentPrices.steam.date))
                   ),
                   React.createElement(Text, {
@@ -295,22 +293,22 @@ const PriceAnalysisModal: React.FC<PriceAnalysisModalProps> = ({
               </View>
             )}
 
-            {/* Informações adicionais */}
+            {/* InformaÃ§Ãµes adicionais */}
             {apiData?.statistics && (
               <View style={styles.additionalInfo}>
-                <Text style={styles.sectionTitle}>Estatísticas</Text>
+                <Text style={styles.sectionTitle}>EstatÃ­sticas</Text>
                 <Text style={styles.infoText}>
-                  📊 Total de registros: {apiData.statistics.dataPoints}
+                  ðŸ“Š Total de registros: {apiData.statistics.dataPoints}
                 </Text>
                 {apiData.statistics.lowestDate && (
                   <Text style={styles.infoText}>
-                    🏆 Melhor preço em: {formatDate(apiData.statistics.lowestDate)}
+                    ðŸ† Melhor preÃ§o em: {formatDate(apiData.statistics.lowestDate)}
                     {apiData.statistics.lowestStore && ` (${apiData.statistics.lowestStore})`}
                   </Text>
                 )}
                 {apiData.alerts.isBestPriceEver && (
                   <Text style={styles.bestPriceAlert}>
-                    🔥 Melhor preço histórico disponível!
+                    ðŸ”¥ Melhor preÃ§o histÃ³rico disponÃ­vel!
                   </Text>
                 )}
               </View>
@@ -520,7 +518,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: 20,
   },
-  // Estilos para informações adicionais
+  // Estilos para informaÃ§Ãµes adicionais
   additionalInfo: {
     paddingHorizontal: 16,
     paddingBottom: 16,
@@ -542,7 +540,7 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     marginTop: 2,
   },
-  // Estilos para preços atuais
+  // Estilos para preÃ§os atuais
   currentPricesContainer: {
     paddingHorizontal: 16,
     paddingBottom: 16,
@@ -571,20 +569,13 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     marginTop: 2,
   },
-  // Estilos específicos por loja
+  // Estilos especÃ­ficos por loja
   steamHistoryItem: {
     borderLeftWidth: 3,
     borderLeftColor: '#1B4F72', // Azul Steam
   },
-  epicHistoryItem: {
-    borderLeftWidth: 3,
-    borderLeftColor: '#7B2CBF', // Roxo Epic
-  },
   steamStore: {
     color: '#5DADE2', // Azul claro Steam
-  },
-  epicStore: {
-    color: '#BB86FC', // Roxo claro Epic
   },
 });
 

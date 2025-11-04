@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -7,42 +7,99 @@ import Home from './app/index';
 import { checkUpdatesOnce } from './src/utils/updates-manager';
 import { askPushPermissionFirstLaunch, sendPushTokenToBackend } from './src/notifications';
 import { checkAndSendDailyOfferNotification } from './src/services/DailyOfferNotificationService';
+import { registerBackgroundFetch } from './src/services/BackgroundWatchedGamesService';
+import { WatchedGameDealModal } from './src/components/WatchedGameDealModal';
+import { VersionCheckService } from './src/services/VersionCheckService';
+import { UpdateAlertModal } from './src/components/UpdateAlertModal';
 
-// Configurar handler de notificações
+// Configurar handler para PERMITIR que notificações apareçam nativamente
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
     shouldShowBanner: true,
     shouldShowList: true,
-    shouldPlaySound: true, 
+    shouldPlaySound: true,
     shouldSetBadge: true,
-    priority: Notifications.AndroidNotificationPriority.HIGH,
   }),
 });
 
 export default function App() {
+  const [dealModalVisible, setDealModalVisible] = useState(false);
+  const [dealData, setDealData] = useState<any>(null);
+  const [updateModalVisible, setUpdateModalVisible] = useState(false);
+  const [currentVersion, setCurrentVersion] = useState('');
+  const [latestVersion, setLatestVersion] = useState('');
+  const [storeUrl, setStoreUrl] = useState<string | undefined>(undefined);
+
   useEffect(() => {
+    // Configurar categorias de notificação com botões de ação
+    const setupNotificationCategories = async () => {
+      await Notifications.setNotificationCategoryAsync('WATCHED_GAME_PROMOTION', [
+        {
+          identifier: 'VIEW_DEAL',
+          buttonTitle: '🛒 Ver Oferta',
+          options: {
+            opensAppToForeground: true,
+          },
+        },
+        {
+          identifier: 'SHARE_DEAL',
+          buttonTitle: '📤 Compartilhar',
+          options: {
+            opensAppToForeground: false,
+          },
+        },
+      ]);
+      console.log('✅ Categorias de notificação configuradas');
+    };
+
     // Garantir que os canais de notificação estejam configurados desde o início
     const setupNotificationChannels = async () => {
       if (Platform.OS === 'android') {
         await Notifications.setNotificationChannelAsync('default', {
           name: 'Notificações',
-          importance: Notifications.AndroidImportance.HIGH,
+          importance: Notifications.AndroidImportance.MAX,
           sound: 'default',
           vibrationPattern: [0, 250, 250, 250],
           lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
           lightColor: '#FFD700',
           enableLights: true,
           showBadge: true,
+          enableVibrate: true,
         });
         
         await Notifications.setNotificationChannelAsync('test-notifications', {
           name: 'Notificacoes de Teste',
-          importance: Notifications.AndroidImportance.HIGH,
+          importance: Notifications.AndroidImportance.MAX,
           sound: 'default',
           vibrationPattern: [0, 250, 250, 250],
           lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
           lightColor: '#FFD700',
+          enableLights: true,
+          showBadge: true,
+          enableVibrate: true,
+        });
+        
+        await Notifications.setNotificationChannelAsync('daily-offers', {
+          name: 'Ofertas Diárias',
+          importance: Notifications.AndroidImportance.MAX,
+          sound: 'default',
+          vibrationPattern: [0, 250, 250, 250],
+          lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+          lightColor: '#FFD700',
+          enableLights: true,
+          showBadge: true,
+          enableVibrate: true,
+        });
+        
+        await Notifications.setNotificationChannelAsync('reengagement', {
+          name: 'Lembretes e Novidades',
+          description: 'Notificações para você não perder as melhores ofertas',
+          importance: Notifications.AndroidImportance.MAX,
+          sound: 'default',
+          vibrationPattern: [0, 250, 250, 250],
+          lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+          lightColor: '#3B82F6',
           enableLights: true,
           showBadge: true,
           enableVibrate: true,
@@ -53,6 +110,9 @@ export default function App() {
     const initializeApp = async () => {
       // Configurar canais de notificação primeiro
       await setupNotificationChannels();
+      
+      // Configurar categorias de notificação com botões de ação
+      await setupNotificationCategories();
       
       // Inicializar o AdMob com o Application ID - removido para evitar crash
       
@@ -73,6 +133,24 @@ export default function App() {
           // Enviar token para o backend
           await sendPushTokenToBackend(token);
           
+          // Registrar atividade do usuário para sistema de reengajamento
+          try {
+            const { ensureDeviceId } = await import('./src/services/AuthService');
+            const userId = await ensureDeviceId();
+            if (userId) {
+              // Usar URL do Render ou fallback para localhost em dev
+              const backendUrl = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.216:3000';
+              await fetch(`${backendUrl}/notifications/activity`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId, pushToken: token }),
+              });
+              console.log('✅ Atividade do usuário registrada');
+            }
+          } catch (error) {
+            console.warn('Erro ao registrar atividade:', error);
+          }
+          
           // Ativar automaticamente as notificações de oferta do dia
           try {
             const DailyOfferNotificationService = await import('./src/services/DailyOfferNotificationService');
@@ -82,21 +160,7 @@ export default function App() {
             console.error('Erro ao ativar notificações de oferta do dia:', serviceError);
           }
           
-          // Enviar notificacao de teste imediatamente apos aceitar permissao
-          try {
-            await Notifications.scheduleNotificationAsync({
-              content: {
-                title: "🎉 Parabens!",
-                body: "Voce esta configurado para receber notificacoes do Looton! 🎮 Agora voce sera avisado sobre as melhores ofertas!",
-                sound: 'default',
-                priority: Notifications.AndroidNotificationPriority.HIGH,
-              },
-              trigger: null // Enviar imediatamente
-            });
-            console.log('✅ Notificacao de teste enviada com sucesso');
-          } catch (notificationError) {
-            console.error('Erro ao enviar notificacao de teste:', notificationError);
-          }
+          // Notificação de teste removida conforme requisitos
         } else {
           console.log('📱 Permissão de notificação não concedida ou já perguntada antes');
         }
@@ -104,11 +168,101 @@ export default function App() {
         console.error('Erro ao configurar notificações:', error);
       }
       
+      // Registrar background fetch para verificar jogos vigiados mesmo com app fechado
+      try {
+        await registerBackgroundFetch();
+        console.log('🔄 Background fetch para jogos vigiados registrado');
+      } catch (error) {
+        console.error('Erro ao registrar background fetch:', error);
+      }
+      
       // Não verificar notificação de oferta do dia imediatamente
       // Isso será feito na Home quando os dados estiverem disponíveis
     };
 
     initializeApp();
+    
+    // Verificar se há atualizações disponíveis
+    const checkForAppUpdates = async () => {
+      try {
+        const versionService = VersionCheckService.getInstance();
+        const { updateAvailable, currentVersion, latestVersion, storeUrl } = await versionService.checkForUpdates();
+        
+        if (updateAvailable) {
+          setCurrentVersion(currentVersion);
+          setLatestVersion(latestVersion);
+          setStoreUrl(storeUrl);
+          setUpdateModalVisible(true);
+        }
+      } catch (error) {
+        console.error('Erro ao verificar atualizações:', error);
+      }
+    };
+    
+    // Executar verificação de atualizações após a inicialização do app
+    setTimeout(() => {
+      checkForAppUpdates();
+    }, 2000); // Pequeno atraso para garantir que o app esteja totalmente carregado
+    
+    // Listener para RE-AGENDAR notificações push quando chegam com app aberto
+    // Isso força o Android a mostrar na barra de notificações (como WhatsApp/Instagram)
+    const notificationListener = Notifications.addNotificationReceivedListener(async (notification) => {
+      const { title, body, data } = notification.request.content;
+      console.log('📬 Push recebida com app aberto, reagendando localmente:', title);
+      
+      try {
+        // Reagendar como notificação LOCAL para aparecer na barra
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: title || 'Notificação',
+            body: body || '',
+            data: data || {},
+            sound: 'default',
+            priority: Notifications.AndroidNotificationPriority.MAX,
+            vibrate: [0, 250, 250, 250],
+            badge: 1,
+          },
+          trigger: null, // Mostrar IMEDIATAMENTE
+        });
+        console.log('✅ Notificação reagendada - agora aparece na barra!');
+      } catch (error) {
+        console.error('Erro ao reagendar notificação:', error);
+      }
+    });
+    
+    // Listener APENAS para ações de notificação (quando usuário clica)
+    const notificationResponseSubscription = Notifications.addNotificationResponseReceivedListener(response => {
+      const { actionIdentifier, notification } = response;
+      const data = notification.request.content.data;
+      
+      console.log('🔔 Ação de notificação:', actionIdentifier);
+      console.log('📦 Dados:', data);
+      
+      if (data.type === 'watched_game_deal') {
+        // Preparar dados para o modal
+        setDealData({
+          title: data.title,
+          coverUrl: data.coverUrl,
+          oldPrice: data.oldPrice,
+          newPrice: data.newPrice,
+          discount: data.discount,
+          store: data.store,
+          url: data.url,
+          appId: data.appId,
+        });
+        
+        // Abrir modal
+        setDealModalVisible(true);
+        
+        if (actionIdentifier === 'VIEW_DEAL') {
+          console.log('🛒 Botão "Ver Oferta" pressionado');
+          // O modal já vai lidar com isso
+        } else if (actionIdentifier === 'SHARE_DEAL') {
+          console.log('📤 Compartilhando:', data.title);
+          // Pode adicionar Share.share() aqui no futuro
+        }
+      }
+    });
     
     // Configurar a Navigation Bar do Android automaticamente
     if (Platform.OS === 'android') {
@@ -119,11 +273,33 @@ export default function App() {
         console.log('Erro ao configurar Navigation Bar:', error);
       }
     }
+    
+    // Cleanup: remover listeners quando componente desmontar
+    return () => {
+      notificationListener.remove();
+      notificationResponseSubscription.remove();
+    };
   }, []);
 
   return (
     <SafeAreaProvider>
       <Home />
+      
+      {/* Modal de Oferta de Jogo Vigiado */}
+      <WatchedGameDealModal
+        visible={dealModalVisible}
+        onClose={() => setDealModalVisible(false)}
+        gameData={dealData}
+      />
+      
+      {/* Modal de Atualização de App */}
+      <UpdateAlertModal
+        visible={updateModalVisible}
+        currentVersion={currentVersion}
+        latestVersion={latestVersion}
+        storeUrl={storeUrl}
+        onClose={() => setUpdateModalVisible(false)}
+      />
     </SafeAreaProvider>
   );
 }

@@ -25,7 +25,7 @@ interface FavoritesAndListsScreenProps {
 export function FavoritesAndListsScreen({ visible, onClose, userId }: FavoritesAndListsScreenProps) {
   const [activeTab, setActiveTab] = useState<'watching' | 'lists'>('watching')
   const [selectedList, setSelectedList] = useState<List | null>(null)
-  const [storeFilter, setStoreFilter] = useState<'all' | 'steam' | 'epic'>('all')
+  const [storeFilter, setStoreFilter] = useState<'all' | 'steam'>('all')
   const [changeFilter, setChangeFilter] = useState<'all' | 'down' | 'up'>('all')
 
   const { 
@@ -55,7 +55,7 @@ export function FavoritesAndListsScreen({ visible, onClose, userId }: FavoritesA
 
   const filteredFavorites = favorites.filter(favorite => {
     let matchesStore = true
-    let matchesChange = true
+    const matchesChange = true
 
     if (storeFilter !== 'all') {
       matchesStore = favorite.stores?.includes(storeFilter) || false
@@ -113,7 +113,7 @@ export function FavoritesAndListsScreen({ visible, onClose, userId }: FavoritesA
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <View style={{ flexDirection: 'row', gap: 8 }}>
             {/* Filtro de loja */}
-            {['all', 'steam', 'epic'].map((store) => (
+            {['all', 'steam'].map((store) => (
               <TouchableOpacity
                 key={store}
                 onPress={() => setStoreFilter(store as any)}

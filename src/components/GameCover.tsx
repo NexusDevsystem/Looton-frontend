@@ -6,7 +6,7 @@ import { Image } from 'expo-image';
 const len = (v: any) => (Array.isArray(v) ? v.length : 0);
 const arr = <T,>(v: T[] | undefined | null): T[] => (Array.isArray(v) ? v : []);
 
-export function GameCover({ imageUrls, height = 180 }: { imageUrls?: string[]; height?: number }) {
+export function GameCover({ imageUrls, height = 180, style }: { imageUrls?: string[]; height?: number; style?: any }) {
   const [idx, setIdx] = React.useState(0);
   const urls = React.useMemo(() => 
     arr(imageUrls).filter(url => url && typeof url === 'string' && url.trim() !== ''), 
@@ -21,8 +21,8 @@ export function GameCover({ imageUrls, height = 180 }: { imageUrls?: string[]; h
   return (
     <Image
       source={{ uri: src }}
-      style={{ width: '100%', height, borderRadius: 16, backgroundColor: '#16314A' }}
-      contentFit="cover"
+      style={[{ width: '100%', height, borderRadius: 16, backgroundColor: '#16314A' }, style]}
+  resizeMode="cover"
       cachePolicy="memory-disk"
       transition={200}
       placeholder={{ blurhash: 'LEHV6nWB2yk8pyo0adR*.7kCMdnj' }}
@@ -33,6 +33,6 @@ export function GameCover({ imageUrls, height = 180 }: { imageUrls?: string[]; h
   );
 }
 
-function Placeholder({ h }: { h: number }) {
-  return <View style={{ width: '100%', height: h, borderRadius: 16, backgroundColor: '#16314A' }} />;
+function Placeholder({ h, style }: { h: number; style?: any }) {
+  return <View style={[{ width: '100%', height: h, borderRadius: 16, backgroundColor: '#16314A' }, style]} />;
 }

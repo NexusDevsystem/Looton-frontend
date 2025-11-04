@@ -39,7 +39,7 @@ export class FavoritesService {
   }
 
   static async getFavorites(userId: string, filters?: {
-    store?: 'steam' | 'epic'
+    store?: 'steam'
     changed?: 'down' | 'up'
   }): Promise<Favorite[]> {
     const params = new URLSearchParams({ userId })

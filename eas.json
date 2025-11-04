@@ -27,6 +27,15 @@
     "production": {
       "channel": "production",
       "android": {
+        "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://looton-backend.onrender.com"
+      }
+    },
+    "production-apk": {
+      "channel": "production",
+      "android": {
         "buildType": "apk"
       },
       "env": {

@@ -1,4 +1,4 @@
-import * as AuthService from '../services/AuthService'
+
 import Constants from 'expo-constants'
 
 // Prefer EXPO_PUBLIC_API_URL when set and not pointing to localhost. Otherwise, try Expo host for device testing.
@@ -38,9 +38,7 @@ export const API_URL = (() => {
 })()
 
 async function buildInit(init?: RequestInit) {
-  const token = await AuthService.loadToken?.()
   const headers: any = init?.headers ? { ...(init?.headers as any) } : {}
-  if (token) headers['Authorization'] = `Bearer ${token}`
   return { ...(init || {}), headers }
 }
 
@@ -90,54 +88,7 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json()
 }
 
-export async function authRegister(email: string, password: string, username?: string) {
-  try {
-    const deviceId = await AuthService.ensureDeviceId()
-    const body = { email, password, username, deviceId }
-    const res = await fetchWithTimeout(`${API_URL}/auth/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-    if (!res.ok) {
-      let body: any = null
-      try { body = await res.json() } catch (e) {}
-      const msg = (body && (body.message || body.error)) || `HTTP ${res.status}`
-      throw new Error(msg)
-    }
-    return res.json()
-  } catch (err: any) {
-    throw new Error(err.message || 'Network error')
-  }
-}
 
-export async function authLogin(email: string, password: string) {
-  try {
-    const deviceId = await AuthService.ensureDeviceId()
-    const res = await fetchWithTimeout(`${API_URL}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password, deviceId }) })
-    if (!res.ok) {
-      let body: any = null
-      try { body = await res.json() } catch (e) {}
-      const msg = (body && (body.message || body.error)) || `HTTP ${res.status}`
-      throw new Error(msg)
-    }
-    return res.json()
-  } catch (err: any) {
-    throw new Error(err.message || 'Network error')
-  }
-}
-
-export async function authGoogle(idToken: string) {
-  try {
-    const deviceId = await AuthService.ensureDeviceId()
-    const res = await fetchWithTimeout(`${API_URL}/auth/google`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ idToken, deviceId }) })
-    if (!res.ok) {
-      let body: any = null
-      try { body = await res.json() } catch (e) {}
-      const msg = (body && (body.message || body.error)) || `HTTP ${res.status}`
-      throw new Error(msg)
-    }
-    return res.json()
-  } catch (err: any) {
-    throw new Error(err.message || 'Network error')
-  }
-}
 
 // Price History API
 export interface PriceHistoryData {

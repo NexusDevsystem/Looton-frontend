@@ -112,26 +112,6 @@ class SmartNotificationService {
   }
 
   private showNotification(notification: SmartNotification) {
-    // Show as local notification using Expo Notifications
-    // Only use this for high-priority notifications that should show immediately
-    if (notification.type === 'price_drop' || notification.type === 'new_deal') {
-      // Use Expo to schedule a local notification
-      setTimeout(() => {
-        Notifications.scheduleNotificationAsync({
-          content: {
-            title: notification.title,
-            body: notification.message,
-            data: {
-              ...notification.data,
-              type: notification.type,
-              notificationId: notification.id
-            },
-          },
-          trigger: null, // Trigger immediately
-        });
-      }, 100); // Small delay to ensure proper execution context
-    }
-    
     // Fallback to Alert if needed for immediate user attention
     Alert.alert(
       notification.title,
@@ -140,55 +120,6 @@ class SmartNotificationService {
         { text: 'Ok', style: 'default' }
       ]
     )
-  }
-
-  // Gerar notificações inteligentes baseadas no contexto do app
-  async generateSmartNotifications(deals: any[], wishlistCount: number) {
-    const now = Date.now()
-    const today = new Date()
-    const isWeekend = today.getDay() === 0 || today.getDay() === 6
-    
-    // Verificar ofertas imperdíveis (desconto > 70%)
-    const superDeals = deals.filter(deal => deal.discountPct >= 70)
-    if (superDeals.length > 0) {
-      await this.addNotification({
-        type: 'new_deal',
-        title: '🔥 Ofertas Imperdíveis!',
-        message: `${superDeals.length} jogos com mais de 70% de desconto disponíveis!`,
-        data: { count: superDeals.length }
-      }, true) // send as push notification
-    }
-
-    // Notificação de wishlist
-    if (wishlistCount > 0) {
-      await this.addNotification({
-        type: 'wishlist_alert',
-        title: '👁️ Lista de Observação',
-        message: `Você tem ${wishlistCount} jogos na lista. Que tal verificar se algum baixou de preço?`,
-        data: { count: wishlistCount }
-      }, true) // send as push notification
-    }
-
-    // Notificação de fim de semana
-    if (isWeekend) {
-      await this.addNotification({
-        type: 'daily_deals',
-        title: '🎮 Fim de Semana Gamer!',
-        message: 'Aproveite o fim de semana com as melhores ofertas de jogos!',
-        data: { weekend: true }
-      }, true) // send as push notification
-    }
-
-    // Verificar jogos novos (simulado - em produção seria baseado em timestamp)
-    const newDeals = deals.filter(deal => deal.discountPct >= 50).slice(0, 5)
-    if (newDeals.length >= 3) {
-      await this.addNotification({
-        type: 'new_deal',
-        title: '✨ Novos Deals Encontrados!',
-        message: `${newDeals.length} novos jogos com ótimos descontos adicionados!`,
-        data: { count: newDeals.length }
-      }, true) // send as push notification
-    }
   }
 
   // Obter todas as notificações

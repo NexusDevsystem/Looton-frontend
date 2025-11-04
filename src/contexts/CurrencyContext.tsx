@@ -129,15 +129,12 @@ export const CurrencyProvider: React.FC<CurrencyProviderProps> = ({ children }) 
     if (isNaN(priceInBRL)) return 'Grátis'
     if (priceInBRL === 0) return 'Grátis'
 
-    const target = currency || DEFAULT_CURRENCY
-    const valueInTarget = convertPrice(priceInBRL)
-    const locale = localeMap[target] || 'en'
-
+    // SEMPRE MOSTRA EM BRL (R$)
     try {
-      return new Intl.NumberFormat(locale, { style: 'currency', currency: target }).format(valueInTarget)
+      return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(priceInBRL)
     } catch (e) {
       // fallback to simple formatting
-      return `${valueInTarget.toFixed(2)} ${target}`
+      return `R$ ${priceInBRL.toFixed(2)}`
     }
   }
 

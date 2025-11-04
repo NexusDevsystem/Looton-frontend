@@ -11,7 +11,8 @@ export function PcDealCard({ item, variant = 'grid' }: { item: PcOffer; variant?
     : (item.priceBaseCents && item.priceBaseCents > 0 ? Math.max(0, Math.round((1 - item.priceFinalCents / item.priceBaseCents) * 100)) : 0)
 
   const imgHeight = variant === 'grid' ? 120 : 160
-  const labelRight = (item.category || item.store || '').toString().toUpperCase()
+  const storeLabel = item.store && item.store.toLowerCase() !== 'terabyte' ? item.store : ''
+  const labelRight = (item.category || storeLabel || '').toString().toUpperCase()
 
   const priceBase = (c?: number) => (typeof c === 'number' ? formatPrice(c / 100) : '—')
   const priceFinal = (c: number) => formatPrice(c / 100)
@@ -19,9 +20,10 @@ export function PcDealCard({ item, variant = 'grid' }: { item: PcOffer; variant?
 
   // Função para abrir oferta no navegador
   const handleOpenInBrowser = () => {
+    const displayStore = item.store && item.store.toLowerCase() !== 'terabyte' ? item.store : 'desconhecida'
     Alert.alert(
       'Abrir Oferta',
-      `Você será redirecionado para o site da loja ${item.store || 'desconhecida'} para ver mais detalhes sobre este produto.`,
+      `Você será redirecionado para o site da loja ${displayStore} para ver mais detalhes sobre este produto.`,
       [
         {
           text: 'Cancelar',

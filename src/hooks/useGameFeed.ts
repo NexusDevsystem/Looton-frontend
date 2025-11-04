@@ -1,6 +1,7 @@
 // hooks/useGameFeed.ts
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../api/client';
+import { fetchEpicGames } from '../api/epic-client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export type GameItem = {
@@ -13,6 +14,7 @@ export type GameItem = {
   discountPct?: number;
   store: string;
   url: string;
+  releaseDate?: string; // Data de lançamento
 };
 
 export type GameFeedResponse = {
@@ -94,9 +96,12 @@ export function useGameFeed(
     setError(null);
 
     try {
+      // Primeiro buscar os jogos da Epic Games para colocar no topo
+      const epicGames = await fetchEpicGames();
+      
       const queryParams = new URLSearchParams({
         sortBy,
-        limit: '30',
+        limit: '100',
         cursor: cursor.toString()
       });
 
@@ -104,9 +109,9 @@ export function useGameFeed(
         queryParams.append('genres', genresCsv);
       }
 
-      // Se não há filtros de gênero, usar a rota /deals que funciona sem banco
-      // IMPORTANTE: /deals só aceita limit, outros parâmetros podem causar problemas
-      const endpoint = genresCsv ? `/games?${queryParams.toString()}` : `/deals?limit=40`; // Equilibrar entre performance e quantidade
+      // Usar a rota /deals para ofertas com rotação diária ativada
+      // Isso garante que os usuários vejam ofertas diferentes a cada dia
+      const endpoint = `/deals?limit=500&useDailyRotation=true`;
       console.log(`🔄 Chamando endpoint: ${endpoint}`);
       const response = await api<GameFeedResponse | any[]>(endpoint);
       
@@ -124,34 +129,105 @@ export function useGameFeed(
         let dealsArray = response as any[];
         console.log(`📱 Primeiro deal recebido:`, JSON.stringify(dealsArray[0], null, 2));
         
-        // Aplicar rotação diária se não houver filtros ativos
-        if (!selectedGenres || selectedGenres.length === 0) {
-          const today = new Date();
-          const currentDayOfYear = getDayOfYear(today);
+        // REMOVIDO: Rotação diária - agora o ranking faz o trabalho de ordenação
+        // O RankingService vai organizar os itens baseado nas preferências do usuário
+        
+        // Lista de títulos conhecidos que devem ser filtrados (não disponíveis na Steam mais)
+        const titlesToFilter = [
+          'DOOM',
+          'DOOM Eternal', 
+          'Doom',
+          'Doom Eternal',
+          'Paladins',
+          'Nexomon',
+          'Subnautica Below Zero Demo',
+          'VRChat Demo',
+          // Correção específica: Assassin's Creed Black Flag - Golden Edition não existe, apenas Assassin's Creed IV Black Flag
+          'Assassin\'s Creed Black Flag - Golden Edition',
+          'Assassin\'s Creed Black Flag Golden Edition',
+          'Assassin\'s Creed IV Black Flag - Gold Edition', // Outra variação possível
+          'Assassin\'s Creed IV Black Flag Gold Edition',  // Outra variação possível
+        ].map(title => title.toLowerCase());
+        
+        // Função para verificar se um título deve ser filtrado
+        const shouldFilterTitle = (title: string) => {
+          if (!title) return false;
+          const lowerTitle = title.toLowerCase();
+          return titlesToFilter.some(filterTitle => lowerTitle.includes(filterTitle));
+        };
+        
+        // Função para verificar se um item tem informações suficientes para ser exibido
+        const hasSufficientInfo = (item: any) => {
+          // Verificar se tem título
+          if (!item.game?.title && !item.title) return false;
           
-          // Embaralhar o array de deals com base no dia do ano
-          dealsArray = shuffleWithSeed(dealsArray, currentDayOfYear);
+          // Verificar se tem URL válida (deve conter steam)
+          if (!item.url || !item.url.includes('store.steampowered.com') && !item.url.includes('steamcommunity.com')) {
+            return false;
+          }
           
-          console.log(`🎲 Feed de jogos rotacionado para dia ${currentDayOfYear}`);
-        }
+          // Verificar se tem appId válido (pode ser número ou string no formato "app:123456")
+          if (item.appId) {
+            let appIdIsValid = true;
+            
+            if (typeof item.appId === 'string') {
+              if (item.appId.includes(':')) {
+                // Verificar se o appId está no formato "app:123456" e o número é válido
+                const parts = item.appId.split(':');
+                const appIdNumber = parseInt(parts[1], 10);
+                appIdIsValid = !isNaN(appIdNumber) && appIdNumber > 0;
+              } else {
+                // Verificar se a string é um número válido
+                const appIdNumber = parseInt(item.appId, 10);
+                appIdIsValid = !isNaN(appIdNumber) && appIdNumber > 0;
+              }
+            } else if (typeof item.appId === 'number') {
+              // Verificar se o número é válido
+              appIdIsValid = !isNaN(item.appId) && item.appId > 0;
+            } else {
+              appIdIsValid = false;
+            }
+            
+            if (!appIdIsValid) {
+              console.log(`🎮 Filtrando item por appId inválido: ${item.game?.title || item.title} (${item.appId})`);
+              return false;
+            }
+          }
+          
+          return true;
+        };
         
         // Mostrar todos os tipos de conteúdo válidos (jogos, DLCs, pacotes) desde que tenham preço
         console.log(`🎮 Total de deals recebidos: ${dealsArray.length}`);
         const filteredDeals = dealsArray.filter((deal: any) => {
+          // Verificar se tem informações suficientes
+          if (!hasSufficientInfo(deal)) {
+            console.log(`🎮 Filtrando item por informações insuficientes: ${deal.game?.title || deal.title}`);
+            return false;
+          }
+          
           // Verificar se tem preço válido
           const hasValidPrice = typeof deal.priceFinalCents === 'number' && deal.priceFinalCents >= 0;
           const hasDiscount = typeof deal.discountPct === 'number' && deal.discountPct > 0;
           
-          // Manter itens com preço válido e desconto, ou itens gratuitos
-          const isValid = hasValidPrice && (hasDiscount || deal.priceFinalCents === 0);
+          // Verificar se o título deve ser filtrado
+          const title = deal.game?.title || deal.title;
+          const isTitleToFilter = shouldFilterTitle(title);
+          
+          // Manter itens com preço válido e desconto, ou itens gratuitos, que têm informações suficientes e não estão na lista de exclusão
+          const isValid = hasValidPrice && (hasDiscount || deal.priceFinalCents === 0) && !isTitleToFilter;
           if (!isValid) {
-            console.log(`🎮 Filtrando item sem preço válido: ${deal.game?.title || deal.title} (preço: ${deal.priceFinalCents}, desconto: ${deal.discountPct})`);
+            if (isTitleToFilter) {
+              console.log(`🎮 Filtrando item por título conhecido como removido: ${title}`);
+            } else {
+              console.log(`🎮 Filtrando item sem preço válido: ${title} (preço: ${deal.priceFinalCents}, desconto: ${deal.discountPct})`);
+            }
           }
           return isValid;
         });
         console.log(`🎮 Após filtro: ${filteredDeals.length} itens válidos, ${dealsArray.length - filteredDeals.length} itens filtrados`);
         
-        items = filteredDeals.map((deal: any) => ({
+        const steamItems = filteredDeals.map((deal: any) => ({
           id: deal._id || deal.appId?.toString(),
           title: deal.game?.title || deal.title,
           coverUrl: deal.game?.coverUrl || deal.image,
@@ -160,11 +236,63 @@ export function useGameFeed(
           priceFinalCents: Math.round((deal.priceFinal || 0) * 100), // Converter para centavos
           discountPct: deal.discountPct,
           store: deal.store?.name || 'Steam',
-          url: deal.url
+          url: deal.url,
+          releaseDate: deal.releaseDate, // Adicionando a data de lançamento
+          // Adicionar campos necessários para o ranking
+          _id: deal._id || deal.appId?.toString(),
+          game: deal.game,
+          steamGenres: deal.steamGenres,
+          priceFinal: deal.priceFinal || 0,
+          priceBase: deal.priceBase || 0,
+          score: deal.score,
+          popularity: deal.popularity,
+          trending: deal.trending,
         }));
         
-        // Limitar a quantidade de itens para equilibrar performance e variedade
-        items = items.slice(0, 30);
+        // Combinar os jogos da Epic Games com os da Steam
+        let combinedItems = [...epicGames, ...steamItems];
+        
+        // Ordenar com hierarquia de relevância:
+        // 1. Jogos grátis da Epic sempre no topo (priceFinalCents === 0 e store === 'Epic')
+        // 2. Jogos com maior desconto e popularidade (score/trending/popularity)
+        // 3. Jogos mais recentes com desconto
+        combinedItems.sort((a, b) => {
+          // 1. Epic grátis sempre primeiro
+          const aIsEpicFree = a.store === 'Epic' && a.priceFinalCents === 0;
+          const bIsEpicFree = b.store === 'Epic' && b.priceFinalCents === 0;
+          
+          if (aIsEpicFree && !bIsEpicFree) return -1;
+          if (!aIsEpicFree && bIsEpicFree) return 1;
+          
+          // 2. Se ambos são Epic grátis, manter ordem original
+          if (aIsEpicFree && bIsEpicFree) return 0;
+          
+          // 3. Priorizar jogos com maior desconto (maior relevância para o usuário)
+          const discountDiff = (b.discountPct || 0) - (a.discountPct || 0);
+          if (Math.abs(discountDiff) > 10) return discountDiff; // Diferença significativa de desconto
+          
+          // 4. Usar score/popularity/trending se disponível
+          const aScore = (a as any).score || (a as any).popularity || (a as any).trending || 0;
+          const bScore = (b as any).score || (b as any).popularity || (b as any).trending || 0;
+          
+          if (bScore - aScore !== 0) return bScore - aScore;
+          
+          // 5. Jogos grátis (não Epic) têm prioridade sobre pagos
+          const aIsFree = a.priceFinalCents === 0;
+          const bIsFree = b.priceFinalCents === 0;
+          
+          if (aIsFree && !bIsFree) return -1;
+          if (!aIsFree && bIsFree) return 1;
+          
+          // 6. Por último, manter ordem original (que já vem do backend com alguma relevância)
+          return 0;
+        });
+        
+        items = combinedItems;
+        
+        // Limitar a 40 itens conforme especificação do sistema de preferências
+        // O ranking já foi aplicado, então pegamos os top 40
+        items = items.slice(0, 40);
         nextCursor = null; // /deals não implementa paginação ainda
       }
       

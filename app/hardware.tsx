@@ -1,15 +1,18 @@
 import { useEffect, useState, useCallback } from 'react'
-import { View, Text, FlatList, RefreshControl, SafeAreaView, TextInput, Pressable } from 'react-native'
+import { View, Text, FlatList, RefreshControl, SafeAreaView, TextInput, Pressable, ActivityIndicator } from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
 import { tokens } from '../src/theme/tokens'
 import { fetchPcDeals, PcOffer } from '../src/services/HardwareService'
 import { PcDealCard } from '../src/components/PcDealCard'
 import { CurrencyProvider } from '../src/contexts/CurrencyContext'
-import { API_URL } from '../src/api/client'
+import { SmartHardwareSearch } from '../src/services/SmartHardwareSearch'
+import { LocalHardwareCacheService } from '../src/services/LocalHardwareCacheService'
 
 // Old inline card removed in favor of PcDealCard
 
 export function HardwareInner() {
   const [items, setItems] = useState<PcOffer[]>([])
+  const [allItems, setAllItems] = useState<PcOffer[]>([]) // Base para busca client-side
   const [page, setPage] = useState(0)
   const pageSize = 60
   const [refreshing, setRefreshing] = useState(false)
@@ -18,36 +21,83 @@ export function HardwareInner() {
   const [query, setQuery] = useState('')
   const [debounced, setDebounced] = useState('')
 
-  // Debounce the search query with improved timing and normalization
+  // Debounce the search query
   useEffect(() => {
     const id = setTimeout(() => {
-      const trimmed = query.trim()
-      // Normalizar a consulta para melhorar a busca
-      const normalized = trimmed
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '') // Remover acentos
-        .toLowerCase()
-      setDebounced(normalized)
+      setDebounced(query.trim())
     }, 300)
     return () => clearTimeout(id)
   }, [query])
 
-  // Carregar ofertas curadas com mais itens
-  const loadCurated = useCallback(async () => {
-    setError(null)
+  // Tentar carregar dados do cache local primeiro
+  const loadFromCache = useCallback(async () => {
     try {
-      // Carregar mais itens iniciais para ter um feed melhor
-      const res = await fetchPcDeals({ limit: 30, full: true })
-      console.log('Carregou ofertas curadas:', res.items?.length || 0)
-      setItems(res.items || [])
+      const cachedItems = await LocalHardwareCacheService.getFromCache();
+      if (cachedItems && cachedItems.length > 0) {
+        setAllItems(cachedItems);
+        setItems(cachedItems.slice(0, 30));
+        return true;
+      }
+    } catch (error) {
+      console.error('Erro ao carregar do cache:', error);
+    }
+    return false;
+  }, []);
+
+  // Carregar todos os itens do backend (para busca client-side ultra-rápida)
+  const loadCurated = useCallback(async () => {
+    console.log('🔄 Iniciando carregamento de produtos de hardware...')
+    setError(null)
+    setLoading(true)
+    
+    // Primeiro, tentar carregar do cache para mostrar algo imediatamente
+    const hasCache = await loadFromCache();
+    if (hasCache) {
+      setLoading(false);
+    }
+
+    try {
+      // Carregar MUITOS itens do backend para ter base grande de busca inteligente
+      const res = await fetchPcDeals({ limit: 500, full: true })
+      console.log('✅ Carregou', res.items?.length || 0, 'produtos para busca inteligente')
+      setAllItems(res.items || [])
+      setItems(res.items?.slice(0, 30) || []) // Mostrar primeiros 30
+      
+      // Salvar no cache local para uso futuro
+      if (res.items && res.items.length > 0) {
+        await LocalHardwareCacheService.saveToCache(res.items);
+      }
     } catch (e: any) {
-      console.error('Erro ao carregar ofertas curadas:', e)
-      setError(e.message || 'Erro ao carregar ofertas')
-      setItems([])
+      console.error('❌ Erro ao carregar produtos do backend:', e)
+      setError(e.message || 'Erro ao carregar produtos')
+      
+      // Se o backend falhar, tentar usar dados do cache mesmo que antigos
+      const cachedItems = await LocalHardwareCacheService.getFromCache();
+      if (cachedItems && cachedItems.length > 0) {
+        setAllItems(cachedItems);
+        setItems(cachedItems.slice(0, 30));
+        setError(null); // Limpar erro se tivermos fallback
+        console.log('✅ Usando dados de fallback do cache local');
+      } else {
+        // Fallback final com dados mínimos
+        try {
+          const res = await fetchPcDeals({ limit: 100, full: false })
+          setAllItems(res.items || [])
+          setItems(res.items?.slice(0, 30) || [])
+          
+          // Salvar no cache se for bem-sucedido
+          if (res.items && res.items.length > 0) {
+            await LocalHardwareCacheService.saveToCache(res.items);
+          }
+        } catch (fallbackError) {
+          console.error('❌ Fallback falhou:', fallbackError)
+        }
+      }
     } finally {
       setLoading(false)
+      console.log('✅ Carregamento de hardware finalizado')
     }
-  }, [])
+  }, [loadFromCache])
 
   // Phase 2: paginate search results and append (only when searching)
   const loadMore = useCallback(async () => {
@@ -74,74 +124,77 @@ export function HardwareInner() {
     }
   }, [debounced, page, pageSize])
 
-  // Initial load: curated only; don't auto-fetch the full catalog
+  // Initial load: curated only
   useEffect(() => {
-    loadCurated()
+    // Primeiro tentar carregar do cache para mostrar algo imediatamente
+    loadFromCache().then(() => {
+      // Depois carregar do backend para atualizar os dados
+      loadCurated();
+    });
     setPage(1)
-  }, [loadCurated])
+  }, []) // Remove loadCurated dependency to ensure it runs only once on mount
 
-  // When search changes, reset and fetch first page of results; clearing search restores curated
+  // Aplicar busca inteligente client-side quando query mudar
   useEffect(() => {
-    setItems([])
-    setPage(0)
     if (!debounced) {
-      setLoading(true)
-      loadCurated()
-      setPage(1)
+      // Sem busca, mostrar primeiros itens do allItems
+      setItems(allItems.slice(0, 30))
       return
     }
-    ;(async () => {
-      setLoading(true)
-      try {
-        console.log('Fazendo busca com:', debounced, 'URL:', `${API_URL}/pc-deals`)
-        // Melhorar a busca usando parâmetros mais flexíveis
-        const res = await fetchPcDeals({ full: true, q: debounced, limit: pageSize, offset: 0 })
-        console.log('Resposta da busca:', res)
-        setItems(res.items || [])
-        setPage(1)
-      } catch (e: any) {
-        console.error('Erro na busca de hardware:', e)
-        setError(e.message || 'Erro na busca')
-        setItems([])
-      } finally {
-        setLoading(false)
-      }
-    })()
-  }, [debounced, loadCurated])
 
-  // Debug: log items and search to see what's being returned
-  console.log('Hardware search:', debounced, 'items:', items.length, 'first item:', items[0]?.title)
-  console.log('API_URL being used:', API_URL)
-  
-  // Mostrar todos os itens - remover filtro restritivo de loja
-  let listItems = items
+    console.log('🔍 Buscando:', debounced)
+    
+    // Aplicar busca inteligente com scoring
+    const results = SmartHardwareSearch.searchAndScore(allItems, debounced)
+    
+    console.log(`✨ ${results.length} resultados encontrados${results.length > 0 ? `. Top 3: ${results.slice(0, 3).map(r => `${r.title.substring(0, 30)}... (${r.searchScore.toFixed(1)})`).join(', ')}` : ''}`)
+    
+    setItems(results)
+  }, [debounced, allItems])
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: tokens.colors.bg }}>
       <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 }}>
         <Text style={{ color: tokens.colors.text, fontSize: 22, fontWeight: '800' }}>Hardware</Text>
         <View style={{ marginTop: 10, marginBottom: 6 }}>
-          <TextInput
-            value={query}
-            onChangeText={setQuery}
-            placeholder="Buscar hardware (ex: RTX 4060, i5, SSD, fonte, memoria)"
-            placeholderTextColor={tokens.colors.textDim}
-            style={{ backgroundColor: tokens.colors.chip, color: tokens.colors.text, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 8 }}
-            autoCorrect={false}
-            autoCapitalize="none"
-            clearButtonMode="while-editing"
-          />
+          <View style={{ 
+            flexDirection: 'row', 
+            alignItems: 'center',
+            backgroundColor: tokens.colors.chip,
+            borderRadius: 8,
+            paddingHorizontal: 12,
+            paddingVertical: 10
+          }}>
+            <Ionicons name="search-outline" size={18} color={tokens.colors.textDim} />
+            <TextInput
+              value={query}
+              onChangeText={setQuery}
+              placeholder="Buscar hardware (RTX, Ryzen, SSD...)"
+              placeholderTextColor={tokens.colors.textDim}
+              style={{ 
+                flex: 1,
+                color: tokens.colors.text,
+                paddingHorizontal: 8,
+                paddingVertical: 0
+              }}
+              autoCorrect={false}
+              autoCapitalize="none"
+              clearButtonMode="while-editing"
+            />
+          </View>
         </View>
         <Text style={{ color: tokens.colors.textDim, marginTop: 4, fontSize: 12 }}>
-          {debounced 
-            ? `Buscando por "${debounced}"... Encontrados ${listItems.length} produtos`
-            : 'Digite para buscar produtos específicos como "RTX 4060", "i5", "SSD", "fonte", etc.'
+          {loading 
+            ? 'Carregando produtos...'
+            : debounced 
+              ? `🎯 ${items.length} produto${items.length !== 1 ? 's' : ''} encontrado${items.length !== 1 ? 's' : ''} para "${debounced}"`
+              : `${allItems.length} produtos disponíveis • Busca inteligente ativa`
           }
         </Text>
       </View>
       {error && <Text style={{ color: 'tomato', paddingHorizontal: 16 }}>{error}</Text>}
       <FlatList
-        data={listItems}
+        data={items}
         keyExtractor={(it, idx) => `${it.store}-${it.ean || it.sku || it.url}-${idx}`}
         numColumns={2}
         columnWrapperStyle={{ gap: 12, paddingHorizontal: 12 }}
@@ -217,7 +270,14 @@ export function HardwareInner() {
               </Pressable>
             )}
           </View>
-        ) : null}
+        ) : (
+          <View style={{ padding: 50, alignItems: 'center' }}>
+            <ActivityIndicator size="large" color={tokens.colors.primary} />
+            <Text style={{ color: tokens.colors.textDim, marginTop: 16, fontSize: 14 }}>
+              Carregando produtos...
+            </Text>
+          </View>
+        )}
       />
     </SafeAreaView>
   )

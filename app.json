@@ -2,7 +2,7 @@
   "expo": {
     "name": "Looton",
     "slug": "looton-app",
-    "version": "1.2.0",
+    "version": "1.7",
     "main": "./index.js",
     "orientation": "portrait",
     "scheme": "looton",
@@ -12,13 +12,20 @@
     ],
     "userInterfaceStyle": "automatic",
     "newArchEnabled": false,
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/logo.png",
     "assetBundlePatterns": [
       "**/*"
     ],
-    "runtimeVersion": "1.0.0",
+    "runtimeVersion": "1.7",
     "android": {
       "package": "com.nexusdevsystem.looton",
+      "versionCode": 7,
+      "targetSdkVersion": 35,
+      "googleServicesFile": "./google-services.json",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/logo.png",
+        "backgroundColor": "#1F2937"
+      },
       "permissions": [
         "android.permission.RECEIVE_BOOT_COMPLETED",
         "android.permission.WAKE_LOCK",
@@ -28,17 +35,31 @@
         "android.permission.WAKE_LOCK",
         "android.permission.INTERNET",
         "android.permission.ACCESS_NETWORK_STATE"
-      ]
+      ],
+      "googleMobileAdsAppId": "ca-app-pub-2976862302591431~7964761364",
+      "notification": {
+        "icon": "./assets/images/logo.png",
+        "color": "#3B82F6"
+      }
     },
     "ios": {
-      "bundleIdentifier": "com.nexusdevsystem.looton"
+      "bundleIdentifier": "com.nexusdevsystem.looton",
+      "googleMobileAdsAppId": "ca-app-pub-2976862302591431~7964761364",
+      "icon": "./assets/images/logo.png"
     },
     "web": {
       "bundler": "metro",
       "output": "single"
     },
     "plugins": [
-      "expo-notifications",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/logo.png",
+          "color": "#3B82F6",
+          "sounds": []
+        }
+      ],
       [
         "expo-build-properties",
         {
@@ -51,6 +72,13 @@
           "ios": {
             "newArchEnabled": false
           }
+        }
+      ],
+      [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-2976862302591431~7964761364",
+          "iosAppId": "ca-app-pub-2976862302591431~7964761364"
         }
       ]
     ],

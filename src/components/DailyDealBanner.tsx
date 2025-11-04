@@ -4,6 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { GameCover } from './GameCover';
 import { useCurrency } from '../contexts/CurrencyContext'
+import { useLanguage } from '../contexts/LanguageContext';
 
 const { width } = Dimensions.get('window');
 
@@ -16,7 +17,10 @@ interface Deal {
   game: {
     title: string;
     coverUrl: string;
+    genres?: string[];
+    tags?: string[];
   };
+  steamGenres?: Array<{ id: string; name: string }>;
   imageUrls?: string[];
   store: {
     name: string;
@@ -30,7 +34,23 @@ interface DailyDealBannerProps {
 
 export const DailyDealBanner: React.FC<DailyDealBannerProps> = ({ deal, onPress }) => {
   const { formatPrice } = useCurrency() as any
-  const displayPrice = (deal as any).formattedPrice || (deal.priceFinal === 0 ? 'GRÁTIS' : formatPrice(deal.priceFinal))
+  const { t } = useLanguage();
+  
+  // Verificar se é um jogo de Acesso Antecipado
+  const isEarlyAccess = (deal.game?.tags && Array.isArray(deal.game.tags) && 
+       deal.game.tags.some((tag: string) => 
+         tag.toLowerCase().includes('early access') || 
+         tag.toLowerCase().includes('acesso antecipado'))) ||
+      (deal.steamGenres && Array.isArray(deal.steamGenres) && 
+       deal.steamGenres.some((genre: any) => 
+         genre.name?.toLowerCase().includes('early access') || 
+         genre.name?.toLowerCase().includes('acesso antecipado'))) ||
+      (deal.game?.genres && Array.isArray(deal.game.genres) && 
+       deal.game.genres.some((genre: string) => 
+         genre.toLowerCase().includes('early access') || 
+         genre.toLowerCase().includes('acesso antecipado')));
+             
+  const displayPrice = (deal as any).formattedPrice || (isEarlyAccess ? t('price.earlyAccess') : (deal.priceFinal === 0 ? t('price.free') : formatPrice(deal.priceFinal)))
   const displayOriginalPrice = (deal as any).originalFormattedPrice && (deal as any).originalFormattedPrice !== displayPrice
     ? (deal as any).originalFormattedPrice
     : (deal.priceBase > 0 && deal.priceBase !== deal.priceFinal ? formatPrice(deal.priceBase) : null)

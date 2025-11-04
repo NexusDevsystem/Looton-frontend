@@ -17,7 +17,7 @@ export type PcOffer = {
 
 export async function fetchPcDeals(params?: { limit?: number; offset?: number; store?: string[]; category?: string[]; full?: boolean; q?: string }) {
   const q = new URLSearchParams()
-  if (params?.limit) q.set('limit', String(params.limit))
+  if (params?.limit) q.set('limit', String(params.limit || 50)) // Valor padrão otimizado
   if (params?.offset) q.set('offset', String(params.offset))
   if (params?.store?.length) q.set('store', params.store.join(','))
   if (params?.category?.length) q.set('category', params.category.join(','))
@@ -28,6 +28,8 @@ export async function fetchPcDeals(params?: { limit?: number; offset?: number; s
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '') // Remover acentos
       .trim()
+      .toLowerCase()
+      .replace(/\s+/g, ' ') // Normalizar espaços
     if (normalizedQuery) {
       q.set('q', normalizedQuery)
     }
@@ -37,7 +39,20 @@ export async function fetchPcDeals(params?: { limit?: number; offset?: number; s
   console.log('HardwareService: Fetching from', url)
   
   try {
-    const res = await fetch(url)
+    // Adicionar timeout e configurações de requisição para melhor performance
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // Aumentar para 30 segundos de timeout
+
+    const res = await fetch(url, { 
+      signal: controller.signal,
+      headers: {
+        'Accept': 'application/json',
+        'Cache-Control': 'no-cache'
+      }
+    })
+    
+    clearTimeout(timeoutId);
+    
     console.log('HardwareService: Response status', res.status)
     
     if (!res.ok) {
