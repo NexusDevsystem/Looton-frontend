@@ -26,9 +26,9 @@
     },
     "production": {
       "channel": "production",
-      "autoIncrement": false,
       "android": {
-        "buildType": "app-bundle"
+        "buildType": "app-bundle",
+        "versionCode": 7
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://looton-backend.onrender.com"
@@ -36,9 +36,9 @@
     },
     "production-apk": {
       "channel": "production",
-      "autoIncrement": false,
       "android": {
-        "buildType": "apk"
+        "buildType": "apk",
+        "versionCode": 7
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://looton-backend.onrender.com"
