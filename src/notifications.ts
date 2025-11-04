@@ -113,35 +113,26 @@ export async function forcePushPermissionRequest(projectId: string): Promise<str
 /** Enviar push token para o backend */
 export async function sendPushTokenToBackend(pushToken: string, email?: string) {
   try {
-    // Verificar se o token já foi enviado antes para evitar envios duplicados
-    const tokenSaved = await AsyncStorage.getItem(PUSH_TOKEN_SAVED_FLAG);
-    if (tokenSaved === pushToken) {
-      console.log('Push token já foi enviado para o backend');
-      return;
-    }
+    // Obter deviceId único e persistente
+    const { ensureDeviceId } = await import('./services/AuthService');
+    const userId = await ensureDeviceId();
+    
+    // SEMPRE enviar o token para garantir que está atualizado no backend
+    console.log('📤 Enviando push token para o backend...');
 
-    // Se não tiver email, tentar obter do AsyncStorage ou usar um valor padrão
-    let userEmail = email;
-    if (!userEmail) {
-      // Aqui você pode implementar a lógica para obter o email do usuário logado
-      // Por enquanto, vamos usar um placeholder - em produção isso viria da sessão do usuário
-      userEmail = 'user@looton.app'; // Placeholder - substituir com valor real do usuário
-    }
-
-    // Enviar para o backend
+    // Enviar para o backend com userId em vez de email
     await api('/users', { 
       method: 'POST', 
       headers: { 'Content-Type': 'application/json' }, 
       body: JSON.stringify({ 
-        email: userEmail, 
+        userId: userId,
         pushToken: pushToken 
       }) 
     });
     
-    // Salvar flag indicando que o token foi enviado
-    await AsyncStorage.setItem(PUSH_TOKEN_SAVED_FLAG, pushToken);
-    console.log('Push token enviado para o backend com sucesso');
+    console.log('✅ Push token enviado para o backend com userId:', userId);
+    console.log('✅ Token:', pushToken);
   } catch (error) {
-    console.error('Erro ao enviar push token para o backend:', error);
+    console.error('❌ Erro ao enviar push token para o backend:', error);
   }
 }

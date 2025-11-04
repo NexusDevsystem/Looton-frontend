@@ -10,6 +10,28 @@ interface VersionInfo {
   storeUrl?: string;
 }
 
+// Função auxiliar para comparar versões (retorna: 1 se v1 > v2, -1 se v1 < v2, 0 se iguais)
+function compareVersions(v1: string, v2: string): number {
+  // Validar se as versões são válidas
+  if (!v1 || !v2 || typeof v1 !== 'string' || typeof v2 !== 'string') {
+    console.warn('⚠️ Versões inválidas para comparação:', v1, v2);
+    return 0;
+  }
+  
+  const parts1 = v1.split('.').map(Number);
+  const parts2 = v2.split('.').map(Number);
+  
+  for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
+    const part1 = parts1[i] || 0;
+    const part2 = parts2[i] || 0;
+    
+    if (part1 > part2) return 1;
+    if (part1 < part2) return -1;
+  }
+  
+  return 0;
+}
+
 export class VersionCheckService {
   private static instance: VersionCheckService;
   private currentVersion: string;
@@ -35,7 +57,19 @@ export class VersionCheckService {
         });
 
         const currentVersion = this.currentVersion;
-        const updateAvailable = VersionCheck.compareVersions(latestVersion, currentVersion) > 0;
+        
+        // Validar se latestVersion é válido
+        if (!latestVersion || typeof latestVersion !== 'string') {
+          console.log('⚠️ App não encontrado na Play Store ainda');
+          return {
+            currentVersion,
+            latestVersion: currentVersion,
+            updateAvailable: false,
+            storeUrl: undefined
+          };
+        }
+        
+        const updateAvailable = compareVersions(latestVersion, currentVersion) > 0;
 
         let storeUrl;
         if (updateAvailable) {
@@ -60,7 +94,19 @@ export class VersionCheckService {
         });
 
         const currentVersion = this.currentVersion;
-        const updateAvailable = VersionCheck.compareVersions(latestVersion, currentVersion) > 0;
+        
+        // Validar se latestVersion é válido
+        if (!latestVersion || typeof latestVersion !== 'string') {
+          console.log('⚠️ App não encontrado na App Store ainda');
+          return {
+            currentVersion,
+            latestVersion: currentVersion,
+            updateAvailable: false,
+            storeUrl: undefined
+          };
+        }
+        
+        const updateAvailable = compareVersions(latestVersion, currentVersion) > 0;
 
         let storeUrl;
         if (updateAvailable) {

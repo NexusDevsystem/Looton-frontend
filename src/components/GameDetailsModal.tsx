@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -20,6 +20,7 @@ import { WishlistService, WishlistItem } from '../services/WishlistService';
 import { AddToListModal } from './AddToListModal';
 import { useLanguage } from '../contexts/LanguageContext';
 import { getGooglePlaySubscriptionDeepLink, SUBSCRIPTION_INFO } from '../constants/app';
+import { API_URL } from '../api/client';
 
 
 const { width, height } = Dimensions.get('window');
@@ -27,7 +28,6 @@ const { width, height } = Dimensions.get('window');
 // ðŸ”’ BLINDAGEM CONTRA .length CRASH
 const len = (v: any) => (Array.isArray(v) ? v.length : 0);
 const arr = <T,>(v: T[] | undefined | null): T[] => (Array.isArray(v) ? v : []);
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
 
 interface GameDetailsProps {
   appId?: number | undefined;

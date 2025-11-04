@@ -24,8 +24,11 @@ import SmartNotificationService from '../src/services/SmartNotificationService';
 import { EventBus } from '../src/lib/EventBus';
 
 import SteamPriceHistoryService from '../src/services/SteamPriceHistoryService';
-import { checkAndSendDailyOfferNotification } from '../src/services/DailyOfferNotificationService';
 
+// ⚠️ Notificações locais REMOVIDAS - Backend envia tudo automaticamente
+// DailyOfferNotificationService → Removido (backend envia às 12h e 18h)
+// WatchedGamesNotificationService → Removido (backend monitora a cada 6h)
+// BackgroundWatchedGamesService → Removido (backend cuida de tudo)
 
 import { AddToListModal } from '../src/components/AddToListModal';
 import { FilterChips } from '../src/components/FilterChips';
@@ -230,16 +233,13 @@ function HomeContent() {
   const [loadingGenres, setLoadingGenres] = useState(false)
   const [showCurrencyModal, setShowCurrencyModal] = useState(false)
 
-  // Estados das notificações
-  const [dailyOfferNotificationsEnabled, setDailyOfferNotificationsEnabled] = useState(false);
-  const [backgroundFetchStatus, setBackgroundFetchStatus] = useState<string>('Verificando...');
+  // Estados das notificações (backend gerencia o envio, app apenas exibe histórico)
   const [receivedNotifications, setReceivedNotifications] = useState<any[]>([]);
   const [showNotificationsHistory, setShowNotificationsHistory] = useState(false);
   const [isPremium, setIsPremium] = useState(false);
   
   // Estado para o modal de idioma
   const [showLanguageModal, setShowLanguageModal] = useState(false);
-  const [showNotificationsModal, setShowNotificationsModal] = useState(false);
   
   // Estados dos novos serviços
   const [showSmartNotification, setShowSmartNotification] = useState(false)
@@ -308,31 +308,27 @@ function HomeContent() {
   }, [layoutType]);
   
   // Verificar se deve mostrar onboarding de preferências no primeiro acesso
-  // Carregar preferências de notificação ao inicializar
+  // (Notificações agora são gerenciadas 100% pelo backend)
+  
+  // Listener para registrar notificações no histórico SEM bloquear exibição nativa
   useEffect(() => {
-    const loadNotificationPreferences = async () => {
-      try {
-        const enabled = await import('../src/services/DailyOfferNotificationService')
-          .then(module => module.isDailyOfferNotificationEnabled());
-        setDailyOfferNotificationsEnabled(enabled);
-      } catch (error) {
-        console.error('Erro ao carregar preferências de notificação:', error);
-      }
-    };
-    
-    loadNotificationPreferences();
-    
-    // Listener para registrar notificações no histórico SEM bloquear exibição nativa
     const Notifications = require('expo-notifications');
     const subscription = Notifications.addNotificationReceivedListener((notification: any) => {
-      console.log('📬 Notificação recebida (registrando no histórico):', notification.request.content.title);
+      const { title, body, data } = notification.request.content;
+      
+      // � Ignorar notificações que já foram reagendadas (evitar duplicatas!)
+      if (data?.isLocalReschedule) {
+        return; // Não registrar notificações reagendadas no histórico
+      }
+      
+      console.log('📬 Notificação recebida (registrando no histórico):', title);
       
       // Apenas adicionar ao histórico - Android já mostrou nativamente
       setReceivedNotifications(prev => [{
         id: notification.request.identifier,
-        title: notification.request.content.title,
-        body: notification.request.content.body,
-        data: notification.request.content.data,
+        title: title,
+        body: body,
+        data: data,
         timestamp: new Date().toISOString(),
       }, ...prev]);
     });
@@ -399,74 +395,12 @@ function HomeContent() {
     };
   }, []);
   
-  // Verificar automaticamente jogos vigiados a cada 1 hora
-  useEffect(() => {
-    const checkWatchedGamesAutomatically = async () => {
-      try {
-        const module = await import('../src/services/WatchedGamesNotificationService');
-        console.log('🔍 Verificando jogos vigiados para promoções...');
-        await module.checkWatchedGamesForDeals();
-      } catch (error) {
-        console.error('Erro ao verificar jogos vigiados:', error);
-      }
-    };
-    
-    // Executar imediatamente ao abrir o app
-    checkWatchedGamesAutomatically();
-    
-    // Configurar intervalo de 1 hora (3600000ms)
-    const intervalId = setInterval(checkWatchedGamesAutomatically, 3600000);
-    
-    // Limpar intervalo quando o componente for desmontado
-    return () => clearInterval(intervalId);
-  }, []);
+  // Verificação de jogos vigiados agora é feita pelo backend a cada 6h (00:00, 06:00, 12:00, 18:00)
   
-  // Carregar status do background fetch quando o modal for aberto
-  useEffect(() => {
-    const loadBackgroundFetchStatus = async () => {
-      if (showNotificationsModal) {
-        try {
-          const module = await import('../src/services/BackgroundWatchedGamesService');
-          const status = await module.getBackgroundFetchStatus();
-          if (status) {
-            const statusText = status.isRegistered 
-              ? `Ativo (${status.statusText})`
-              : 'Não registrado';
-            setBackgroundFetchStatus(statusText);
-          } else {
-            setBackgroundFetchStatus('Erro ao verificar');
-          }
-        } catch (error) {
-          console.error('Erro ao carregar status do background fetch:', error);
-          setBackgroundFetchStatus('Indisponível');
-        }
-      }
-    };
-    
-    loadBackgroundFetchStatus();
-  }, [showNotificationsModal]);
+  // Background fetch removido - backend cuida de tudo automaticamente
   
-  // Função para alternar notificações de oferta do dia
-  const toggleDailyOfferNotifications = async () => {
-    try {
-      const module = await import('../src/services/DailyOfferNotificationService');
-      const newState = !dailyOfferNotificationsEnabled;
-      await module.setDailyOfferNotificationEnabled(newState);
-      setDailyOfferNotificationsEnabled(newState);
-      
-      if (newState) {
-        console.log('Notificações de Oferta do Dia ativadas');
-      } else {
-        console.log('Notificações de Oferta do Dia desativadas');
-        // Cancelar qualquer notificação agendada
-        await import('expo-notifications').then(notifications => 
-          notifications.cancelAllScheduledNotificationsAsync()
-        );
-      }
-    } catch (error) {
-      console.error('Erro ao alternar notificações de oferta do dia:', error);
-    }
-  };
+  // Notificações de oferta do dia são enviadas automaticamente pelo backend às 12h e 18h
+  // Não há mais necessidade de toggle local
   
   // Filtro de busca: 'all' | 'games' | 'dlcs'
   const [searchFilter, setSearchFilter] = useState<'all' | 'games' | 'dlcs'>('games')
@@ -1122,12 +1056,7 @@ function HomeContent() {
       // Salvar que atualizamos hoje
       await setLastUpdatedDay(currentDayOfYear);
       
-      // Verificar e enviar notificação de oferta do dia se aplicável
-      try {
-        await checkAndSendDailyOfferNotification(() => dailyRotatedDeals[0] || null); // Enviar a primeira oferta como oferta do dia
-      } catch (notificationError) {
-        console.error('Erro ao verificar notificação de oferta do dia:', notificationError);
-      }
+      // Notificação de oferta do dia agora é enviada pelo backend às 12h e 18h
       
     } catch (err: any) {
       let errorMessage = 'Erro ao carregar ofertas'
@@ -1440,58 +1369,26 @@ function HomeContent() {
         }
       };
       
-      // Importar e chamar a função de notificação de TESTE
-      const module = await import('../src/services/DailyOfferNotificationService');
-      await module.sendDailyOfferNotificationTest(testDeal);
-      
-      showToast('Notificação de teste enviada! 🎮');
+      // Notificações agora são enviadas pelo backend
+      // Para testar, use os endpoints de debug do backend:
+      // GET /debug/test-daily-offer
+      // GET /debug/test-watched-games
+      showToast('Use os endpoints de debug do backend para testar notificações');
     } catch (error) {
       console.error('Erro ao enviar notificação de teste:', error);
       showToast('Erro ao enviar notificação de teste');
     }
   };
 
-  // Função para testar a notificação de jogo vigiado em promoção
+  // Função para testar notificação de jogo vigiado
   const testWatchedGameNotification = async () => {
     try {
-      // Importar o serviço de wishlist para pegar um jogo real
-      const { WishlistService } = await import('../src/services/WishlistService');
-      const wishlist = await WishlistService.getWishlist();
-      
-      let gameExample;
-      let oldPrice = 199.99;
-      let newPrice = 49.99;
-      
-      if (wishlist.length > 0) {
-        // Usar o primeiro jogo da wishlist como exemplo
-        const firstGame = wishlist[0];
-        gameExample = {
-          title: firstGame.title,
-          store: firstGame.store,
-          url: firstGame.url,
-          _id: `watched-game-${firstGame.appId}`,
-          appId: firstGame.appId  // Adicionando appId para compatibilidade
-        };
-        oldPrice = firstGame.currentPrice;
-        newPrice = firstGame.currentPrice * 0.75; // 25% de desconto para simular promoção
-      } else {
-        // Usar um exemplo padrão se não houver jogos na wishlist
-        gameExample = {
-          title: 'Jogo em Vigilância',
-          store: 'Steam',
-          url: 'https://store.steampowered.com',
-          _id: 'watched-game-test',
-          appId: 123456  // Exemplo de appId
-        };
-      }
-
-      const module = await import('../src/services/DailyOfferNotificationService');
-      await module.sendWatchedGamePromotionNotification(gameExample, oldPrice, newPrice);
-      
-      showToast('Notificação de jogo vigiado enviada! 🎮');
+      // Notificações agora são enviadas pelo backend
+      // Para testar, use: GET /debug/test-watched-games
+      showToast('Use GET /debug/test-watched-games no backend para testar');
     } catch (error) {
-      console.error('Erro ao enviar notificação de jogo vigiado:', error);
-      showToast('Erro ao enviar notificação de jogo vigiado');
+      console.error('Erro:', error);
+      showToast('Erro ao processar teste');
     }
   };
 

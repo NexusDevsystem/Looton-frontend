@@ -1,6 +1,5 @@
 import { WishlistService } from './WishlistService'
-
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000'
+import { API_URL } from '../api/client'
 
 export class WishlistSyncService {
   // Read local wishlist and sync to server favorites via /favorites/sync

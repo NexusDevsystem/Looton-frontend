@@ -9,31 +9,45 @@ export const API_URL = (() => {
   if (__DEV__ && !process.env.EXPO_PUBLIC_EAS_BUILD) {
     // Se estiver em desenvolvimento local, verificar se temos uma URL de dev definida
     const devUrl = process.env.EXPO_PUBLIC_API_URL_DEV || process.env.EXPO_PUBLIC_API_URL_LOCAL
-    if (devUrl) return devUrl
+    if (devUrl) {
+      console.log('🌐 API_URL (dev):', devUrl)
+      return devUrl
+    }
     
     // Caso contrário, tentar detectar automaticamente o host local
     try {
       const hostUri: any = (Constants as any)?.expoConfig?.hostUri
       if (hostUri) {
         const host = String(hostUri).split(':')[0]
-        if (host && host !== 'localhost') return `http://${host}:3000`
+        if (host && host !== 'localhost') {
+          const url = `http://${host}:3000`
+          console.log('🌐 API_URL (auto-detected):', url)
+          return url
+        }
       }
     } catch {}
     
     // Se nada funcionar, retornar localhost para desenvolvimento local
+    console.log('🌐 API_URL (localhost):', 'http://localhost:3000')
     return 'http://localhost:3000'
   }
   
   // Em produção ou durante build EAS, usar a URL configurada explicitamente
-  if (fromEnv && !fromEnv.includes('localhost')) return fromEnv
+  if (fromEnv && !fromEnv.includes('localhost')) {
+    console.log('🌐 API_URL (production):', fromEnv)
+    return fromEnv
+  }
   
   // Fallback para produção se nenhuma URL estiver definida
   if (!fromEnv) {
     console.error('⚠️ AVISO: EXPO_PUBLIC_API_URL não está definida. A API não funcionará corretamente.')
     // Retornar uma URL padrão que pode ser substituída por configuração posterior
-    return 'https://looton-api-placeholder-url.com'
+    const fallbackUrl = 'https://looton-backend.onrender.com'
+    console.log('🌐 API_URL (fallback):', fallbackUrl)
+    return fallbackUrl
   }
   
+  console.log('🌐 API_URL (fromEnv):', fromEnv)
   return fromEnv
 })()
 

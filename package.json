@@ -1,8 +1,8 @@
 {
   "name": "looton-mobile",
-  "version": "1.4.0",
+  "version": "1.7.0",
   "private": true,
-  "main": "index.js",
+  "main": "expo/AppEntry.js",
   "scripts": {
     "start": "expo start -c",
     "android": "expo run:android",

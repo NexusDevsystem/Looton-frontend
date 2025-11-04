@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { API_URL } from '../api/client'
 
 const STORAGE_KEY = '@looton:selected_currency'
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000'
 
 type CurrencyContextValue = {
   currency: string

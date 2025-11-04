@@ -96,6 +96,9 @@ android {
         versionName "1.7"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
+        
+        // Specify which variant of react-native-iap to use (Play Store)
+        missingDimensionStrategy 'store', 'play'
     }
     signingConfigs {
         debug {

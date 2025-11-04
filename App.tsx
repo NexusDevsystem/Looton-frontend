@@ -6,11 +6,11 @@ import * as NavigationBar from 'expo-navigation-bar';
 import Home from './app/index';
 import { checkUpdatesOnce } from './src/utils/updates-manager';
 import { askPushPermissionFirstLaunch, sendPushTokenToBackend } from './src/notifications';
-import { checkAndSendDailyOfferNotification } from './src/services/DailyOfferNotificationService';
-import { registerBackgroundFetch } from './src/services/BackgroundWatchedGamesService';
 import { WatchedGameDealModal } from './src/components/WatchedGameDealModal';
 import { VersionCheckService } from './src/services/VersionCheckService';
 import { UpdateAlertModal } from './src/components/UpdateAlertModal';
+import { API_URL } from './src/api/client';
+import { LanguageProvider } from './src/contexts/LanguageContext';
 
 // Configurar handler para PERMITIR que notificações apareçam nativamente
 Notifications.setNotificationHandler({
@@ -130,37 +130,15 @@ export default function App() {
         
         if (token) {
           console.log('📱 Push token obtido:', token);
-          // Enviar token para o backend
+          
+          // Enviar token para o backend - ÚNICO PASSO NECESSÁRIO!
+          // Backend cuidará de TODAS as notificações automaticamente
           await sendPushTokenToBackend(token);
           
-          // Registrar atividade do usuário para sistema de reengajamento
-          try {
-            const { ensureDeviceId } = await import('./src/services/AuthService');
-            const userId = await ensureDeviceId();
-            if (userId) {
-              // Usar URL do Render ou fallback para localhost em dev
-              const backendUrl = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.216:3000';
-              await fetch(`${backendUrl}/notifications/activity`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId, pushToken: token }),
-              });
-              console.log('✅ Atividade do usuário registrada');
-            }
-          } catch (error) {
-            console.warn('Erro ao registrar atividade:', error);
-          }
-          
-          // Ativar automaticamente as notificações de oferta do dia
-          try {
-            const DailyOfferNotificationService = await import('./src/services/DailyOfferNotificationService');
-            await DailyOfferNotificationService.setDailyOfferNotificationEnabled(true);
-            console.log('🔔 Notificações de Oferta do Dia ativadas automaticamente');
-          } catch (serviceError) {
-            console.error('Erro ao ativar notificações de oferta do dia:', serviceError);
-          }
-          
-          // Notificação de teste removida conforme requisitos
+          console.log('✅ Push token registrado no backend');
+          console.log('✅ Você receberá notificações automaticamente:');
+          console.log('   - Ofertas do Dia: 12h e 18h');
+          console.log('   - Jogos Vigiados: quando preço cair');
         } else {
           console.log('📱 Permissão de notificação não concedida ou já perguntada antes');
         }
@@ -168,16 +146,9 @@ export default function App() {
         console.error('Erro ao configurar notificações:', error);
       }
       
-      // Registrar background fetch para verificar jogos vigiados mesmo com app fechado
-      try {
-        await registerBackgroundFetch();
-        console.log('🔄 Background fetch para jogos vigiados registrado');
-      } catch (error) {
-        console.error('Erro ao registrar background fetch:', error);
-      }
-      
-      // Não verificar notificação de oferta do dia imediatamente
-      // Isso será feito na Home quando os dados estiverem disponíveis
+      // ✅ TODAS as notificações são enviadas pelo BACKEND!
+      // Não há mais notificações locais ou background fetch
+      // Sistema 100% remoto e confiável
     };
 
     initializeApp();
@@ -204,31 +175,9 @@ export default function App() {
       checkForAppUpdates();
     }, 2000); // Pequeno atraso para garantir que o app esteja totalmente carregado
     
-    // Listener para RE-AGENDAR notificações push quando chegam com app aberto
-    // Isso força o Android a mostrar na barra de notificações (como WhatsApp/Instagram)
-    const notificationListener = Notifications.addNotificationReceivedListener(async (notification) => {
-      const { title, body, data } = notification.request.content;
-      console.log('📬 Push recebida com app aberto, reagendando localmente:', title);
-      
-      try {
-        // Reagendar como notificação LOCAL para aparecer na barra
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: title || 'Notificação',
-            body: body || '',
-            data: data || {},
-            sound: 'default',
-            priority: Notifications.AndroidNotificationPriority.MAX,
-            vibrate: [0, 250, 250, 250],
-            badge: 1,
-          },
-          trigger: null, // Mostrar IMEDIATAMENTE
-        });
-        console.log('✅ Notificação reagendada - agora aparece na barra!');
-      } catch (error) {
-        console.error('Erro ao reagendar notificação:', error);
-      }
-    });
+    // ⚠️ REMOVIDO: Listener de reagendamento (causava notificações duplicadas)
+    // As notificações push JÁ aparecem nativamente no Android
+    // O histórico é gerenciado em app/index.tsx
     
     // Listener APENAS para ações de notificação (quando usuário clica)
     const notificationResponseSubscription = Notifications.addNotificationResponseReceivedListener(response => {
@@ -276,30 +225,31 @@ export default function App() {
     
     // Cleanup: remover listeners quando componente desmontar
     return () => {
-      notificationListener.remove();
       notificationResponseSubscription.remove();
     };
   }, []);
 
   return (
-    <SafeAreaProvider>
-      <Home />
-      
-      {/* Modal de Oferta de Jogo Vigiado */}
-      <WatchedGameDealModal
-        visible={dealModalVisible}
-        onClose={() => setDealModalVisible(false)}
-        gameData={dealData}
-      />
-      
-      {/* Modal de Atualização de App */}
-      <UpdateAlertModal
-        visible={updateModalVisible}
-        currentVersion={currentVersion}
-        latestVersion={latestVersion}
-        storeUrl={storeUrl}
-        onClose={() => setUpdateModalVisible(false)}
-      />
-    </SafeAreaProvider>
+    <LanguageProvider>
+      <SafeAreaProvider>
+        <Home />
+        
+        {/* Modal de Oferta de Jogo Vigiado */}
+        <WatchedGameDealModal
+          visible={dealModalVisible}
+          onClose={() => setDealModalVisible(false)}
+          gameData={dealData}
+        />
+        
+        {/* Modal de Atualização de App */}
+        <UpdateAlertModal
+          visible={updateModalVisible}
+          currentVersion={currentVersion}
+          latestVersion={latestVersion}
+          storeUrl={storeUrl}
+          onClose={() => setUpdateModalVisible(false)}
+        />
+      </SafeAreaProvider>
+    </LanguageProvider>
   );
 }
