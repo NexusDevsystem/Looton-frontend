@@ -37,7 +37,7 @@ export class VersionCheckService {
   private currentVersion: string;
 
   private constructor() {
-    this.currentVersion = Constants.expoConfig?.version || '1.0.0';
+    this.currentVersion = Constants.expoConfig?.version || '1.7';
   }
 
   public static getInstance(): VersionCheckService {
