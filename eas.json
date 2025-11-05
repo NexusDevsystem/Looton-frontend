@@ -17,6 +17,7 @@
     "preview": {
       "distribution": "internal",
       "channel": "preview",
+      "autoIncrement": false,
       "android": {
         "buildType": "apk"
       },
