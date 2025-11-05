@@ -29,11 +29,7 @@
       "channel": "production",
       "autoIncrement": false,
       "android": {
-        "buildType": "app-bundle",
-        "gradleCommand": ":app:bundleRelease"
-      },
-      "cache": {
-        "clear": true
+        "buildType": "app-bundle"
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://looton-backend.onrender.com"
