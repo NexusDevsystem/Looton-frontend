@@ -2,7 +2,7 @@
   "expo": {
     "name": "Looton",
     "slug": "looton-app",
-    "version": "1.8",
+    "version": "1.7",
     "orientation": "portrait",
     "scheme": "looton",
     "entryPoint": "index.js",
@@ -16,7 +16,7 @@
     "assetBundlePatterns": [
       "**/*"
     ],
-    "runtimeVersion": "1.8",
+    "runtimeVersion": "1.7",
     "android": {
       "package": "com.nexusdevsystem.looton",
       "versionCode": 8,
