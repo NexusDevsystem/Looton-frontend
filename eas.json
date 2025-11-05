@@ -26,6 +26,7 @@
     },
     "production": {
       "channel": "production",
+      "appVersionSource": "local",
       "android": {
         "buildType": "app-bundle"
       },
