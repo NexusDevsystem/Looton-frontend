@@ -103,72 +103,27 @@ export const OnboardingCarousel: React.FC<OnboardingCarouselProps> = ({ onFinish
 
   const handleNext = async () => {
     if (currentIndex < slides.length - 1) {
-      // Se for o slide de notificações, solicitar permissão
+      // Se for o slide de notificações, solicitar permissão e registrar token
       if (currentIndex === 2) { // índice do slide de notificações
         const granted = await requestNotificationPermission();
         if (granted) {
-          console.log('Permissão de notificação concedida');
+          console.log('✅ Permissão de notificação concedida');
           
-          // Ativar automaticamente as notificações de ofertas diárias
+          // Registrar push token no backend
           try {
-            const { setDailyOfferNotificationEnabled, scheduleDailyOfferNotification } = await import('../services/DailyOfferNotificationService');
-            await setDailyOfferNotificationEnabled(true);
-            console.log('✅ Notificações de Ofertas Diárias ativadas automaticamente');
+            const { getCurrentPushToken, sendPushTokenToBackend } = await import('../notifications');
             
-            // Agendar notificação diária recorrente (12h todos os dias)
-            // Criar um deal fake só para agendar (será atualizado pelo backend)
-            const fakeDeal = {
-              _id: 'daily-offer',
-              game: { title: 'Super Oferta do Dia' },
-              priceFinal: 29.99,
-              store: { name: 'Steam' },
-              url: '',
-            } as any;
-            
-            await scheduleDailyOfferNotification(fakeDeal, 12); // 12h todos os dias
-            console.log('📅 Notificação diária recorrente agendada para 12h');
-          } catch (error) {
-            console.error('Erro ao ativar notificações de ofertas diárias:', error);
-          }
-          
-          // Enviar notificação de confirmação via PUSH (funciona sempre)
-          try {
-            // Importar sendPushTokenToBackend para garantir que o token está no backend
-            const { sendPushTokenToBackend } = await import('../notifications');
-            
-            // Obter o push token
-            const pushToken = await Notifications.getExpoPushTokenAsync({
-              projectId: '41306841-8939-4568-a1a1-af93af0428d1'
-            });
-            
-            if (pushToken?.data) {
-              // Enviar token para o backend
-              await sendPushTokenToBackend(pushToken.data);
-              console.log('✅ Push token enviado:', pushToken.data);
-              
-              // Enviar notificação de confirmação via API do backend (PUSH NOTIFICATION REMOTA)
-              try {
-                const { api } = await import('../api/client');
-                await api('/notifications/send-confirmation', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    pushToken: pushToken.data,
-                    title: '🎉 Notificações Ativadas!',
-                    body: 'Você receberá alertas de ofertas diárias todos os dias às 12h e quando seus jogos vigiados entrarem em promoção.',
-                  })
-                });
-                console.log('✅ Notificação push REMOTA enviada via backend');
-              } catch (apiError) {
-                console.error('❌ Erro ao enviar notificação push:', apiError);
-                // SEM FALLBACK - apenas push notifications remotas do servidor
-              }
+            // Obter e enviar push token
+            const pushToken = await getCurrentPushToken('41306841-8939-4568-a1a1-af93af0428d1');
+            if (pushToken) {
+              await sendPushTokenToBackend(pushToken);
+              console.log('✅ Push token registrado no backend:', pushToken);
             }
           } catch (error) {
-            console.error('Erro ao enviar notificação de confirmação:', error);
+            console.error('❌ Erro ao registrar push token:', error);
           }
         } else {
-          console.log('Permissão de notificação negada');
+          console.log('⚠️ Permissão de notificação negada');
         }
       }
       goToSlide(currentIndex + 1)

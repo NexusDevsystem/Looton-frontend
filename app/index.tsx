@@ -274,6 +274,28 @@ function HomeContent() {
     loadLayoutPreference();
   }, []);
 
+  // 🔔 Registrar push token automaticamente quando o app abre
+  useEffect(() => {
+    const registerPushToken = async () => {
+      try {
+        const { getCurrentPushToken, sendPushTokenToBackend } = await import('../src/notifications');
+        const pushToken = await getCurrentPushToken('41306841-8939-4568-a1a1-af93af0428d1');
+        
+        if (pushToken) {
+          console.log('✅ Push token obtido:', pushToken.substring(0, 30) + '...');
+          await sendPushTokenToBackend(pushToken);
+          console.log('✅ Push token enviado para o backend');
+        } else {
+          console.log('⚠️ Nenhum push token disponível (permissão não concedida)');
+        }
+      } catch (error) {
+        console.error('❌ Erro ao registrar push token:', error);
+      }
+    };
+    
+    registerPushToken();
+  }, []);
+
   // Verificar status premium do usuário
   useEffect(() => {
     const checkPremium = async () => {
