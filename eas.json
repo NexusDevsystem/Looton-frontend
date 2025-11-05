@@ -36,6 +36,7 @@
     },
     "production-apk": {
       "channel": "production",
+      "autoIncrement": false,
       "android": {
         "buildType": "apk"
       },
