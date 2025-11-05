@@ -19,7 +19,7 @@
     "runtimeVersion": "1.7",
     "android": {
       "package": "com.nexusdevsystem.looton",
-      "versionCode": 7,
+      "versionCode": 10,
       "targetSdkVersion": 35,
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
