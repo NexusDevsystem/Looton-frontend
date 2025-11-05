@@ -3,7 +3,7 @@
     "name": "Looton",
     "slug": "looton-app",
     "version": "1.7",
-    "main": "expo/AppEntry.js",
+    "main": "index.js",
     "orientation": "portrait",
     "scheme": "looton",
     "platforms": [
