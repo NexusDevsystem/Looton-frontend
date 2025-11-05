@@ -28,6 +28,7 @@
     "production": {
       "channel": "production",
       "autoIncrement": false,
+      "prebuildCommand": "npx expo prebuild --clean",
       "android": {
         "buildType": "app-bundle"
       },
@@ -38,6 +39,7 @@
     "production-apk": {
       "channel": "production",
       "autoIncrement": false,
+      "prebuildCommand": "npx expo prebuild --clean",
       "android": {
         "buildType": "apk"
       },
