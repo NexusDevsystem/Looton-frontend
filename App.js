@@ -12,7 +12,7 @@ import { UpdateAlertModal } from './src/components/UpdateAlertModal';
 import { API_URL } from './src/api/client';
 import { LanguageProvider } from './src/contexts/LanguageContext';
 
-// Configurar handler para PERMITIR que notifica├º├Áes apare├ºam nativamente
+// Configurar handler para PERMITIR que notificações apareçam nativamente
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,

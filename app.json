@@ -16,7 +16,7 @@
     "assetBundlePatterns": [
       "**/*"
     ],
-    "runtimeVersion": "1.7.0",
+    "runtimeVersion": "1.7",
     "android": {
       "package": "com.nexusdevsystem.looton",
       "versionCode": 7,

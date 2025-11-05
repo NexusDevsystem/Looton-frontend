@@ -23,7 +23,7 @@ eas build --platform android --profile production
 - ✅ Arquivo `.aab` (Android App Bundle)
 - ✅ Otimizado para Google Play Store
 - ✅ Tamanho menor (Google gera APKs otimizados)
-- ✅ Versão: **1.7** / **versionCode: 7**
+- ✅ Versão: **1.7.0** / **versionCode: 7**
 
 ---
 
@@ -37,7 +37,7 @@ eas build --platform android --profile production-apk
 **O que gera:**
 - ✅ Arquivo `.apk` (instalável diretamente)
 - ✅ Para testes ou distribuição fora da Play Store
-- ✅ Versão: **1.7** / **versionCode: 7**
+- ✅ Versão: **1.7.0** / **versionCode: 7**
 
 ---
 
@@ -57,7 +57,7 @@ eas build --platform android --profile preview
 
 ## 📋 Checklist Antes de Buildar:
 
-- [x] **Versão atualizada** (app.json: version 1.7, versionCode 7)
+- [x] **Versão atualizada** (app.json: version 1.7.0, versionCode 7)
 - [x] **google-services.json** presente
 - [x] **API_URL configurada** (https://looton-backend.onrender.com)
 - [x] **Notificações testadas** ✅
@@ -121,7 +121,7 @@ eas build --platform android --profile production
 |-------|-------|
 | **App Name** | Looton |
 | **Package** | com.nexusdevsystem.looton |
-| **Version** | 1.7 |
+| **Version** | 1.7.0 |
 | **Version Code** | 7 |
 | **Target SDK** | 35 |
 | **Backend URL** | https://looton-backend.onrender.com |
