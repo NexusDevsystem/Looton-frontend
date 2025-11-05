@@ -96,6 +96,9 @@ android {
         versionName "1.7"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
+        
+        // Fix react-native-iap ambiguity - use Google Play flavor
+        missingDimensionStrategy 'store', 'play'
     }
     signingConfigs {
         debug {
