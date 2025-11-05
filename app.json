@@ -16,10 +16,10 @@
     "assetBundlePatterns": [
       "**/*"
     ],
-    "runtimeVersion": "1.7",
+    "runtimeVersion": "1.7.0",
     "android": {
       "package": "com.nexusdevsystem.looton",
-      "versionCode": 10,
+      "versionCode": 7,
       "targetSdkVersion": 35,
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
