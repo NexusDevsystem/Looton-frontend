@@ -161,8 +161,8 @@ export function useGameFeed(
           // Verificar se tem título
           if (!item.game?.title && !item.title) return false;
           
-          // Verificar se tem URL válida (deve conter steam)
-          if (!item.url || !item.url.includes('store.steampowered.com') && !item.url.includes('steamcommunity.com')) {
+          // Verificar se tem URL válida (Steam, Epic ou outras lojas válidas)
+          if (!item.url) {
             return false;
           }
           
