@@ -12,6 +12,10 @@
 export class SmartHardwareSearch {
   // Mapa de sinônimos e variações comuns
   private static synonyms: Record<string, string[]> = {
+    // Termos gerais para placas de vídeo
+    'gpu': ['placa de video', 'placa de vídeo', 'placa de video nvidia', 'placa de video amd', 'placa de vídeo nvidia', 'placa de vídeo amd', 'gpu', 'gráficos'],
+    'video': ['placa de video', 'placa de vídeo', 'video card', 'graphics card'],
+    
     // GPUs NVIDIA
     'rtx': ['geforce rtx', 'nvidia rtx', 'rtx'],
     'gtx': ['geforce gtx', 'nvidia gtx', 'gtx'],
@@ -35,6 +39,10 @@ export class SmartHardwareSearch {
     '6800': ['rx 6800', '6800', '6800 xt'],
     '6700': ['rx 6700', '6700', '6700 xt'],
     '6600': ['rx 6600', '6600', '6600 xt'],
+    
+    // Termos gerais para processadores
+    'cpu': ['processador', 'cpu', 'processor'],
+    'processador': ['cpu', 'processador', 'processor'],
     
     // CPUs Intel
     'i9': ['intel i9', 'core i9', 'i9'],
@@ -157,6 +165,34 @@ export class SmartHardwareSearch {
     return matches / Math.max(tokens1.length, tokens2.length);
   }
 
+  // Função para identificar se um termo está relacionado a outro mesmo com variações
+  static isRelatedTerm(itemTitle: string, searchQuery: string): boolean {
+    const normalizedItem = this.normalize(itemTitle);
+    const normalizedQuery = this.normalize(searchQuery);
+
+    // Verificar se é uma correspondência direta
+    if (normalizedItem.includes(normalizedQuery)) return true;
+
+    // Verificar correspondências de sinônimos
+    const querySynonyms = this.expandWithSynonyms(searchQuery);
+    for (const synonym of querySynonyms) {
+      if (normalizedItem.includes(synonym)) return true;
+    }
+
+    // Verificar termos específicos relacionados a categorias
+    if (normalizedQuery.includes('gpu') || normalizedQuery.includes('video')) {
+      const gpuTerms = ['placa', 'video', 'vídeo', 'nvidia', 'amd', 'rtx', 'gtx', 'rx', 'radeon', 'geforce', 'graphics', 'gráfica', 'gráficos'];
+      if (gpuTerms.some(term => normalizedItem.includes(term))) return true;
+    }
+
+    if (normalizedQuery.includes('cpu') || normalizedQuery.includes('processador')) {
+      const cpuTerms = ['processador', 'intel', 'amd', 'core', 'i3', 'i5', 'i7', 'i9', 'ryzen', 'processor', 'cpu'];
+      if (cpuTerms.some(term => normalizedItem.includes(term))) return true;
+    }
+
+    return false;
+  }
+
   // Extrair informações importantes (números de modelo, marcas, etc.)
   static extractKeyInfo(text: string): string[] {
     const normalized = this.normalize(text);
@@ -227,7 +263,12 @@ export class SmartHardwareSearch {
           score = maxExpansionScore;
         }
 
-        // 4. Bonus por key info matching
+        // 4. Verificar se o item está relacionado mesmo com variações
+        if (this.isRelatedTerm(item.title, query)) {
+          score = Math.max(score, 75); // Ajustar score se for identificado como relacionado
+        }
+
+        // 5. Bonus por key info matching
         let keyInfoMatches = 0;
         queryKeyInfo.forEach(keyQuery => {
           if (itemKeyInfo.some(keyItem => 
@@ -243,7 +284,7 @@ export class SmartHardwareSearch {
           score += (keyInfoMatches / queryKeyInfo.length) * 20;
         }
 
-        // 5. Bonus se todos os tokens da query aparecem no item
+        // 6. Bonus se todos os tokens da query aparecem no item
         const queryTokens = this.normalize(query).split(' ');
         const allTokensPresent = queryTokens.every(token => 
           itemNormalized.includes(token)
@@ -257,7 +298,7 @@ export class SmartHardwareSearch {
           searchScore: Math.min(score, 100) // Máximo de 100
         };
       })
-      .filter(item => item.searchScore > 15) // Filtrar resultados com score muito baixo
+      .filter(item => item.searchScore > 10) // Filtrar resultados com score muito baixo
       .sort((a, b) => b.searchScore - a.searchScore); // Ordenar por score (maior primeiro)
   }
 }

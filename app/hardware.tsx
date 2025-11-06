@@ -169,7 +169,7 @@ export function HardwareInner() {
             <TextInput
               value={query}
               onChangeText={setQuery}
-              placeholder="Buscar hardware (RTX, Ryzen, SSD...)"
+              placeholder="Buscar hardware (GPU, CPU, RTX, Ryzen, SSD...)"
               placeholderTextColor={tokens.colors.textDim}
               style={{ 
                 flex: 1,
@@ -245,7 +245,7 @@ export function HardwareInner() {
             </Text>
             <Text style={{ color: tokens.colors.textDim, textAlign: 'center', lineHeight: 20, marginBottom: 12 }}>
               {debounced 
-                ? `Nenhum produto encontrado para "${debounced}". Tente termos como:\n• GPUs: "4060", "RTX", "RX 6600"\n• CPUs: "i5", "Ryzen 5", "processador"\n• Outros: "SSD", "memória", "fonte"`
+                ? `Nenhum produto encontrado para "${debounced}". Tente termos como:\n• GPUs: "GPU", "4060", "RTX", "RX 6600", "placa de video"\n• CPUs: "CPU", "i5", "Ryzen 5", "processador"\n• Outros: "SSD", "memória", "fonte"`
                 : 'As ofertas de hardware são atualizadas a cada 30 minutos. Puxe para baixo para tentar novamente ou use a busca acima.'
               }
             </Text>
