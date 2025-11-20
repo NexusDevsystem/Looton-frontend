@@ -1,4 +1,4 @@
-# 📦 Guia de Build - Looton App v1.7
+# 📦 Guia de Build - Looton App v1.8
 
 ## 🎯 Gerar Build AAB para Google Play Store
 
@@ -23,7 +23,7 @@ eas build --platform android --profile production
 - ✅ Arquivo `.aab` (Android App Bundle)
 - ✅ Otimizado para Google Play Store
 - ✅ Tamanho menor (Google gera APKs otimizados)
-- ✅ Versão: **1.7.0** / **versionCode: 7**
+- ✅ Versão: **1.8** / **versionCode: 9**
 
 ---
 
@@ -37,7 +37,7 @@ eas build --platform android --profile production-apk
 **O que gera:**
 - ✅ Arquivo `.apk` (instalável diretamente)
 - ✅ Para testes ou distribuição fora da Play Store
-- ✅ Versão: **1.7.0** / **versionCode: 7**
+- ✅ Versão: **1.8** / **versionCode: 9**
 
 ---
 
@@ -57,7 +57,7 @@ eas build --platform android --profile preview
 
 ## 📋 Checklist Antes de Buildar:
 
-- [x] **Versão atualizada** (app.json: version 1.7.0, versionCode 7)
+- [x] **Versão atualizada** (app.json: version 1.8, versionCode 9)
 - [x] **google-services.json** presente
 - [x] **API_URL configurada** (https://looton-backend.onrender.com)
 - [x] **Notificações testadas** ✅
@@ -121,8 +121,8 @@ eas build --platform android --profile production
 |-------|-------|
 | **App Name** | Looton |
 | **Package** | com.nexusdevsystem.looton |
-| **Version** | 1.7.0 |
-| **Version Code** | 7 |
+| **Version** | 1.8 |
+| **Version Code** | 9 |
 | **Target SDK** | 35 |
 | **Backend URL** | https://looton-backend.onrender.com |
 
@@ -165,7 +165,7 @@ eas build --platform android --profile production --clear-cache
 
 ---
 
-## 📝 Notas de Versão 1.7:
+## 📝 Notas de Versão 1.8:
 
 **Novidades:**
 - 🔔 Sistema de notificações automáticas (12h, 16:10h, 18h)

@@ -10,8 +10,6 @@ import {
   Modal,
   ActivityIndicator,
   Linking,
-  Platform,
-  FlatList,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -21,13 +19,10 @@ import { AddToListModal } from './AddToListModal';
 import { useLanguage } from '../contexts/LanguageContext';
 import { getGooglePlaySubscriptionDeepLink, SUBSCRIPTION_INFO } from '../constants/app';
 import { API_URL } from '../api/client';
+import { len, arr } from '../utils/array-utils';
 
 
-const { width, height } = Dimensions.get('window');
-
-// ðŸ”’ BLINDAGEM CONTRA .length CRASH
-const len = (v: any) => (Array.isArray(v) ? v.length : 0);
-const arr = <T,>(v: T[] | undefined | null): T[] => (Array.isArray(v) ? v : []);
+const { width } = Dimensions.get('window');
 
 interface GameDetailsProps {
   appId?: number | undefined;
@@ -38,7 +33,7 @@ interface GameDetailsProps {
   discount?: number;
   gameTitle?: string;
   userId?: string;
-  store?: 'steam';
+  store?: 'steam' | 'epic';
   gameData?: any;
   useLocalDataOnly?: boolean;
 }
@@ -167,45 +162,103 @@ export const GameDetailsModal: React.FC<GameDetailsProps> = ({
       try {
         const data = gd as any;
 
+        // Para jogos da Epic, os dados vêm em data.game ou diretamente em data
+        const gameInfo = data.game || data;
+
+        // Extrair keyImages (todas as imagens disponíveis da Epic)
+        const keyImages = gameInfo.keyImages || data.keyImages || [];
+
+        // Extrair imagem de capa (preferir OfferImageWide ou DieselStoreFrontWide)
+        const offerImage = keyImages.find((img: any) =>
+          img.type === 'OfferImageWide' || img.type === 'DieselStoreFrontWide'
+        );
+        const coverImage = offerImage?.url || gameInfo.coverUrl || gameInfo.image || data.image ||
+                          (keyImages[0]?.url) || '';
+
+        // Extrair screenshots (usar keyImages filtradas por tipo de screenshot)
+        let screenshots = keyImages.filter((img: any) =>
+          img.type === 'Screenshot' ||
+          img.type === 'OfferImageWide' ||
+          img.type === 'DieselStoreFrontWide' ||
+          img.type === 'Thumbnail'
+        );
+
+        // Se não houver screenshots específicos, usar todas as keyImages
+        if (screenshots.length === 0 && keyImages.length > 0) {
+          screenshots = keyImages;
+        }
+
+        // Se ainda não houver screenshots mas houver imagem de capa, adicionar a capa
+        if (screenshots.length === 0 && coverImage) {
+          screenshots = [{ url: coverImage, type: 'Cover' }];
+        }
+
+        // Filtrar apenas imagens válidas
+        screenshots = screenshots.filter((s: any) => s?.url || typeof s === 'string');
+
+        // Extrair gêneros
+        const genres = gameInfo.genres || data.genres || gameInfo.tags || data.tags || [];
+
+        // Extrair descrição
+        const description = gameInfo.description || data.description || gameInfo.about || data.about || '';
+
+        // Extrair desenvolvedor e publisher
+        const developer = gameInfo.developer || data.developer || 'Epic Games';
+        const publisher = gameInfo.publisher || data.publisher || 'Epic Games';
+
         const mapped: GameDetails = {
           appId: data.appId || data.id || 0,
-          name: data.title || data.name || data.game?.title || '',
+          name: gameInfo.title || gameInfo.name || data.title || data.name || '',
           type: 'game',
           required_age: 0,
-          is_free: (typeof data.price !== 'undefined' ? data.price === 0 : false),
-          detailed_description: data.longDescription || data.description || data.detailedDescription || '',
-          about_the_game: data.description || '',
-          short_description: data.shortDescription || data.description || '',
-          developers: data.developer ? [data.developer] : (data.developers || []),
-          publishers: data.publisher ? [data.publisher] : (data.publishers || []),
+          is_free: data.isFree || (data.priceFinal === 0) || (data.priceFinalCents === 0) || false,
+          detailed_description: description || 'Descrição não disponível',
+          about_the_game: description || 'Informações não disponíveis',
+          short_description: description || 'Descrição não disponível',
+          developers: [developer],
+          publishers: [publisher],
           platforms: {
-            windows: (data.platforms && data.platforms.includes && data.platforms.includes('PC')) || true,
+            windows: true,
             mac: false,
             linux: false,
           },
-          categories: (data.genres || data.categories || []).map((g: any, idx: number) => ({ id: idx, description: typeof g === 'string' ? g : (g.name || g.path || g) })),
-          genres: (data.genres || data.categories || []).map((g: any, idx: number) => ({ id: String(idx), description: typeof g === 'string' ? g : (g.name || g.path || g) })),
-          screenshots: (data.screenshots || data.keyImages || []).map((s: any, idx: number) => ({ id: idx, path_full: s.url || s.path_full || s, path_thumbnail: s.thumbnail || s.url || s.path_full || s })),
+          categories: genres.map((g: any, idx: number) => ({
+            id: idx,
+            description: typeof g === 'string' ? g : (g.name || g.path || g)
+          })),
+          genres: genres.map((g: any, idx: number) => ({
+            id: String(idx),
+            description: typeof g === 'string' ? g : (g.name || g.path || g)
+          })),
+          screenshots: screenshots.map((s: any, idx: number) => {
+            // Suportar diferentes formatos: string, objeto com url, objeto com path_full
+            const fullPath = typeof s === 'string' ? s : (s.url || s.path_full || '');
+            const thumbPath = typeof s === 'string' ? s : (s.thumbnail || s.url || s.path_full || '');
+
+            return {
+              id: idx,
+              path_full: fullPath,
+              path_thumbnail: thumbPath
+            };
+          }),
           movies: [],
           recommendations: { total: 0 },
           achievements: { total: 0 },
           release_date: {
             coming_soon: false,
-            date: data.releaseDate || data.effectiveDate || ''
+            date: gameInfo.releaseDate || gameInfo.effectiveDate || data.releaseDate || data.effectiveDate || ''
           },
           support_info: { url: '', email: '' },
-          background: (data.screenshots && data.screenshots[0]) || (data.keyImages && data.keyImages[0] && data.keyImages[0].url) || '',
-          background_raw: (data.screenshots && data.screenshots[0]) || '',
+          background: coverImage,
+          background_raw: coverImage,
           pc_requirements: {
-            minimum: data.systemRequirements?.minimum ? (
-              `${data.systemRequirements.minimum.os ? `OS: ${data.systemRequirements.minimum.os}. ` : ''}${data.systemRequirements.minimum.processor ? `CPU: ${data.systemRequirements.minimum.processor}. ` : ''}${data.systemRequirements.minimum.memory ? `RAM: ${data.systemRequirements.minimum.memory}. ` : ''}${data.systemRequirements.minimum.graphics ? `GPU: ${data.systemRequirements.minimum.graphics}. ` : ''}${data.systemRequirements.minimum.storage ? `Storage: ${data.systemRequirements.minimum.storage}.` : ''}`
-            ) : (data.pc_requirements?.minimum || 'Requisitos não disponíveis')
+            minimum: 'Requisitos não disponíveis para jogos da Epic Games Store'
           },
           mac_requirements: { minimum: 'Requisitos não disponíveis' },
           linux_requirements: { minimum: 'Requisitos não disponíveis' },
-          header_image: (data.screenshots && data.screenshots[0]) || data.header_image || '',
-          capsule_image: (data.screenshots && data.screenshots[0]) || '',
-          capsule_imagev5: (data.screenshots && data.screenshots[0]) || ''
+          header_image: coverImage,
+          capsule_image: coverImage,
+          capsule_imagev5: coverImage
         } as GameDetails;
 
         setGameDetails(mapped);
@@ -216,8 +269,14 @@ export const GameDetailsModal: React.FC<GameDetailsProps> = ({
       }
     };
 
+    // Se useLocalDataOnly for true (jogos da Epic), usar dados locais
+    if (useLocalDataOnly && gameData) {
+      tryUseProvidedData(gameData);
+      setLoading(false);
+      if (appId) checkWishlistStatus();
+    }
     // Default behavior: fetch details by appId (Steam flow)
-    if (appId) {
+    else if (appId) {
       fetchGameDetails();
       checkWishlistStatus();
     }
@@ -465,23 +524,88 @@ export const GameDetailsModal: React.FC<GameDetailsProps> = ({
   }
 
   const openStorePage = () => {
-    // Prefer explicit storeUrl provided via gameData or from fetched details
-    // @ts-ignore
-    const gd: any = (typeof ({} as any) !== 'undefined' && ({} as any)) // noop to keep TS happy
     let url = '';
-    // Prefer gameDetails.storeUrl or gameData.storeUrl (passed by parent)
-    // @ts-ignore - gameData is available in component props
+
     try {
-      // @ts-ignore
-      const propStoreUrl = (exports as any)?.gameData?.storeUrl || undefined;
-      // Use available values in order of preference
-      if (propStoreUrl) url = propStoreUrl;
-      else if ((gameDetails as any)?.storeUrl) url = (gameDetails as any).storeUrl;
-      else if ((gameDetails as any)?.purchaseUrl) url = (gameDetails as any).purchaseUrl;
-      else if (store === 'steam' && appId) url = `https://store.steampowered.com/app/${appId}`;
+      // Prefer gameData.url or gameData.storeUrl if available
+      if (gameData?.url) {
+        url = gameData.url;
+      } else if (gameData?.storeUrl) {
+        url = gameData.storeUrl;
+      } else if ((gameDetails as any)?.storeUrl) {
+        url = (gameDetails as any).storeUrl;
+      } else if ((gameDetails as any)?.purchaseUrl) {
+        url = (gameDetails as any).purchaseUrl;
+      }
+      // Construir URL específica da loja
+      else if (store === 'epic') {
+        // Para Epic Games, montar URL usando slugs disponíveis
+        const epicData: any = gameData || {};
+
+        console.log('🔍 Tentando construir URL da Epic Games:', {
+          productSlug: epicData.productSlug,
+          urlSlug: epicData.urlSlug,
+          catalogNs: epicData.catalogNs,
+          offerMappings: epicData.offerMappings,
+          gameTitle: gameTitle
+        });
+
+        // Tentar múltiplas estratégias de construção de URL
+        let slug = '';
+
+        // 1. Tentar productSlug
+        if (epicData.productSlug) {
+          slug = epicData.productSlug;
+          console.log('✅ Usando productSlug:', slug);
+        }
+        // 2. Tentar urlSlug
+        else if (epicData.urlSlug) {
+          slug = epicData.urlSlug;
+          console.log('✅ Usando urlSlug:', slug);
+        }
+        // 3. Tentar catalogNs.mappings
+        else if (epicData.catalogNs?.mappings?.[0]?.pageSlug) {
+          slug = epicData.catalogNs.mappings[0].pageSlug;
+          console.log('✅ Usando catalogNs.mappings[0].pageSlug:', slug);
+        }
+        // 4. Tentar offerMappings
+        else if (epicData.offerMappings?.[0]?.pageSlug) {
+          slug = epicData.offerMappings[0].pageSlug;
+          console.log('✅ Usando offerMappings[0].pageSlug:', slug);
+        }
+        // 5. Tentar construir slug do título
+        else if (gameTitle) {
+          // Converter título para slug (kebab-case)
+          slug = gameTitle
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '');
+          console.log('⚠️ Usando slug gerado do título:', slug);
+        }
+
+        if (slug) {
+          url = `https://store.epicgames.com/pt-BR/p/${slug}`;
+          console.log('🔗 URL construída:', url);
+        } else {
+          // Fallback final: busca pelo título
+          const title = gameDetails?.name || gameTitle || '';
+          const encodedTitle = encodeURIComponent(title);
+          url = `https://store.epicgames.com/pt-BR/browse?q=${encodedTitle}`;
+          console.log('🔗 Usando fallback de busca:', url);
+        }
+      } else if (store === 'steam' && appId) {
+        url = `https://store.steampowered.com/app/${appId}`;
+      }
     } catch (e) {
-      // fallback: try constructed url
-      if (store === 'steam' && appId) url = `https://store.steampowered.com/app/${appId}`;
+      console.error('❌ Erro ao construir URL:', e);
+      // Fallback: tentar construir URL baseado na loja
+      if (store === 'steam' && appId) {
+        url = `https://store.steampowered.com/app/${appId}`;
+      } else if (store === 'epic') {
+        const title = gameDetails?.name || gameTitle || '';
+        const encodedTitle = encodeURIComponent(title);
+        url = `https://store.epicgames.com/pt-BR/browse?q=${encodedTitle}`;
+      }
     }
 
     if (url) {
@@ -784,59 +908,61 @@ export const GameDetailsModal: React.FC<GameDetailsProps> = ({
                     </View>
                   </View>
 
-                  <View style={{ flexDirection: 'row', gap: 12 }}>
-                    <TouchableOpacity
-                      onPress={() => {
-                        if (userId) {
-                          // authenticated flow: open server lists modal
-                          setShowAddToListModal(true)
-                        } else {
-                          // anonymous: local wishlist behavior
-                          if (isInWishlist) {
-                            handleRemoveFromWishlist()
+                  {/* Botão Vigiar - Apenas para jogos que não são grátis da Epic */}
+                  {store !== 'epic' && (
+                    <View style={{ flexDirection: 'row', gap: 12 }}>
+                      <TouchableOpacity
+                        onPress={() => {
+                          if (userId) {
+                            // authenticated flow: open server lists modal
+                            setShowAddToListModal(true)
                           } else {
-                            setShowWishlistModal(true)
+                            // anonymous: local wishlist behavior
+                            if (isInWishlist) {
+                              handleRemoveFromWishlist()
+                            } else {
+                              setShowWishlistModal(true)
+                            }
                           }
-                        }
-                      }}
+                        }}
 
-                      style={{
-                        backgroundColor: isInWishlist ? '#EF4444' : '#3B82F6',
-                        paddingHorizontal: 16,
-                        paddingVertical: 8,
-                        borderRadius: 20,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                      }}
-                      // We'll replace the handler in the next patch to avoid large hunks
-                    >
-                      <Ionicons 
-                        name={isInWishlist ? "eye" : "eye-outline"} 
-                        size={16} 
-                        color="white" 
-                        style={{ marginRight: 6 }}
-                      />
-                      <Text style={{ color: 'white', fontWeight: '600' }}>
-                        {isInWishlist ? t('tab.watching') : t('gameDetails.watch')}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
+                        style={{
+                          backgroundColor: isInWishlist ? '#EF4444' : '#3B82F6',
+                          paddingHorizontal: 16,
+                          paddingVertical: 8,
+                          borderRadius: 20,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                        }}
+                      >
+                        <Ionicons
+                          name={isInWishlist ? "eye" : "eye-outline"}
+                          size={16}
+                          color="white"
+                          style={{ marginRight: 6 }}
+                        />
+                        <Text style={{ color: 'white', fontWeight: '600' }}>
+                          {isInWishlist ? t('tab.watching') : t('gameDetails.watch')}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
                 </View>
               </View>
 
               {/* Botão Acesse a loja oficial */}
-              <TouchableOpacity 
-                onPress={openStorePage} 
-                style={{ 
-                  backgroundColor: '#3B82F6', 
-                  paddingVertical: 15, 
-                  borderRadius: 12, 
+              <TouchableOpacity
+                onPress={openStorePage}
+                style={{
+                  backgroundColor: '#3B82F6',
+                  paddingVertical: 15,
+                  borderRadius: 12,
                   alignItems: 'center',
                   marginBottom: 20
                 }}
               >
                 <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 16 }}>
-                  {t('gameDetails.accessStore')}
+                  {store === 'epic' ? 'Abrir na Epic Games Store' : t('gameDetails.accessStore')}
                 </Text>
               </TouchableOpacity>
 
@@ -931,8 +1057,8 @@ export const GameDetailsModal: React.FC<GameDetailsProps> = ({
                 </View>
               )}
 
-              {/* System Requirements */}
-              {renderSystemRequirements(gameDetails.pc_requirements)}
+              {/* System Requirements - Apenas para jogos que não são da Epic */}
+              {store !== 'epic' && renderSystemRequirements(gameDetails.pc_requirements)}
 
               {/* Genres */}
               {len(gameDetails?.genres) > 0 && (

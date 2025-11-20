@@ -25,9 +25,11 @@ class InterstitialAdService {
 
   constructor() {
     // Log do tipo de anúncio sendo usado
-    console.log(`🎬 Interstitial Ads initialized - REAL ADS`);
-    console.log(`📱 Ad Unit ID: ${INTERSTITIAL_AD_UNIT_ID}`);
-    
+    if (__DEV__) {
+      console.log(`🎬 Interstitial Ads initialized - REAL ADS`);
+      console.log(`📱 Ad Unit ID: ${INTERSTITIAL_AD_UNIT_ID}`);
+    }
+
     this.initializeAd();
     this.loadState();
     this.checkPremiumStatus();
@@ -66,14 +68,14 @@ class InterstitialAdService {
 
       // Evento quando o anúncio é carregado
       this.interstitialAd.addAdEventListener(AdEventType.LOADED, () => {
-        console.log('✅ Interstitial ad loaded successfully');
+        if (__DEV__) console.log('✅ Interstitial ad loaded successfully');
         this.isAdLoaded = true;
         this.isAdLoading = false;
       });
 
       // Evento quando o anúncio é fechado
       this.interstitialAd.addAdEventListener(AdEventType.CLOSED, () => {
-        console.log('🔄 Interstitial ad closed, preloading next ad');
+        if (__DEV__) console.log('🔄 Interstitial ad closed, preloading next ad');
         this.isAdLoaded = false;
         this.lastAdTime = Date.now();
         this.actionCount = 0;
@@ -84,11 +86,22 @@ class InterstitialAdService {
 
       // Evento quando há erro ao carregar
       this.interstitialAd.addAdEventListener(AdEventType.ERROR, (error) => {
-        console.error('❌ Interstitial ad error:', error);
+        // "no-fill" é normal - significa que não há anúncios disponíveis no momento
+        const errorMessage = error?.message || String(error);
+        const isNoFill = errorMessage.includes('no-fill') || errorMessage.includes('No fill');
+
+        if (isNoFill) {
+          // No-fill é esperado, apenas log em dev e retry mais tarde
+          if (__DEV__) console.log('📭 No interstitial ads available (no-fill) - will retry later');
+        } else {
+          // Outros erros são mais importantes
+          if (__DEV__) console.error('❌ Interstitial ad error:', error);
+        }
+
         this.isAdLoaded = false;
         this.isAdLoading = false;
-        // Tentar novamente depois de 30 segundos
-        setTimeout(() => this.loadAd(), 30000);
+        // Tentar novamente depois de 60 segundos (aumentado para reduzir tentativas)
+        setTimeout(() => this.loadAd(), 60000);
       });
 
       // Pré-carregar primeiro anúncio
@@ -109,9 +122,9 @@ class InterstitialAdService {
     try {
       this.isAdLoading = true;
       this.interstitialAd.load();
-      console.log('📥 Loading interstitial ad...');
+      if (__DEV__) console.log('📥 Loading interstitial ad...');
     } catch (error) {
-      console.error('Error loading interstitial ad:', error);
+      if (__DEV__) console.error('Error loading interstitial ad:', error);
       this.isAdLoading = false;
     }
   }
@@ -131,7 +144,7 @@ class InterstitialAdService {
         this.actionCount = parseInt(actionCountStr, 10);
       }
 
-      console.log(`📊 Ad state loaded: Last ad ${((Date.now() - this.lastAdTime) / 60000).toFixed(1)}min ago, ${this.actionCount} actions`);
+      if (__DEV__) console.log(`📊 Ad state loaded: Last ad ${((Date.now() - this.lastAdTime) / 60000).toFixed(1)}min ago, ${this.actionCount} actions`);
     } catch (error) {
       console.error('Error loading ad state:', error);
     }
@@ -156,7 +169,7 @@ class InterstitialAdService {
   public trackAction() {
     this.actionCount++;
     this.saveState();
-    console.log(`📍 Action tracked: ${this.actionCount} actions since last ad`);
+    // Removido log para evitar spam no console
   }
 
   /**

@@ -2,7 +2,6 @@ import { View, Text, TouchableOpacity } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { tokens } from '../theme/tokens'
 import { useCurrency } from '../contexts/CurrencyContext'
-import { StoreBadge } from './StoreBadge'
 import { DiscountPill } from './DiscountPill'
 import { GameCover } from './GameCover'
 import { Ionicons } from '@expo/vector-icons'
@@ -18,9 +17,9 @@ export type Deal = {
   store?: { name: string }
 }
 
-export function DealCard({ deal, onPress }: { deal: Deal; onPress?: () => void }) {
+export function DealCard({ deal, onPress, variant = 'column' }: { deal: Deal; onPress?: () => void; variant?: 'column' | 'grid' }) {
   return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.9} style={{ backgroundColor: tokens.colors.card, borderRadius: tokens.radius, overflow: 'hidden', margin: 8, ...tokens.shadow.card }}>
+    <TouchableOpacity onPress={onPress} activeOpacity={0.9} style={{ backgroundColor: tokens.colors.card, borderRadius: tokens.radius, overflow: 'hidden', margin: variant === 'grid' ? 0 : 8, ...tokens.shadow.card }}>
       {/* Barra superior com a loja */}
       <LinearGradient
         colors={deal.store?.name?.toLowerCase().includes('epic') ? ['#000000', '#1a1a1a'] : ['#60a5fa', '#3b82f6']} // Gradiente preto para jogos da Epic Games, azul para Steam

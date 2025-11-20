@@ -185,8 +185,7 @@ const translations: Record<Language, Record<string, string>> = {
     'about.title': 'Sobre o Looton',
     'about.version': 'Versão',
     'about.description': 'O melhor aplicativo para encontrar ofertas de jogos.',
-    'about.tagline': 'Desenvolvido com',
-    'about.taglineEnd': 'para gamers.',
+    'about.tagline': 'Desenvolvido com amor para gamers',
     
     // Watchlist Empty State
     'watchlist.emptyTitle': 'Nenhum jogo na lista de observação',
@@ -402,8 +401,7 @@ const translations: Record<Language, Record<string, string>> = {
     'about.title': 'About Looton',
     'about.version': 'Version',
     'about.description': 'The best app to find game deals.',
-    'about.tagline': 'Developed with',
-    'about.taglineEnd': 'for gamers.',
+    'about.tagline': 'Developed with love for gamers',
     
     // Watchlist Empty State
     'watchlist.emptyTitle': 'No games on watchlist',
@@ -619,8 +617,7 @@ const translations: Record<Language, Record<string, string>> = {
     'about.title': 'Acerca de Looton',
     'about.version': 'Versión',
     'about.description': 'La mejor aplicación para encontrar ofertas de juegos.',
-    'about.tagline': 'Desarrollado con',
-    'about.taglineEnd': 'para gamers.',
+    'about.tagline': 'Desarrollado con amor para gamers',
     
     // Watchlist Empty State
     'watchlist.emptyTitle': 'Ningún juego en la lista de observación',
