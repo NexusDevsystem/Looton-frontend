@@ -71,10 +71,7 @@
             "buildToolsVersion": "34.0.0",
             "newArchEnabled": false,
             "enableProguardInReleaseBuilds": false,
-            "enableShrinkResourcesInReleaseBuilds": false,
-            "manifestQueries": {
-              "package": []
-            }
+            "enableShrinkResourcesInReleaseBuilds": false
           },
           "ios": {
             "newArchEnabled": false
