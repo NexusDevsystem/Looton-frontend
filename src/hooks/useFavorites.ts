@@ -8,6 +8,12 @@ export function useFavorites(userId: string) {
   const [error, setError] = useState<string | null>(null)
 
   const loadFavorites = async () => {
+    if (!userId) {
+      setLoading(false)
+      setFavorites([])
+      return
+    }
+    
     try {
       setLoading(true)
       setError(null)

@@ -1,78 +1,70 @@
-import AsyncStorage from '@react-native-async-storage/async-storage'
-// simple UUIDv4 generator (no external dependency)
-function uuidv4() {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    const r = Math.random() * 16 | 0
-    const v = c === 'x' ? r : (r & 0x3 | 0x8)
-    return v.toString(16)
-  })
+// AuthService removido - autenticação não é mais necessária
+// Este arquivo é mantido apenas para evitar erros de importação
+// As funções retornam valores padrão
+
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Application from 'expo-application';
+import Constants from 'expo-constants';
+
+const DEVICE_ID_KEY = '@looton:device_id';
+
+interface AuthServiceType {
+  isAuthenticated: () => Promise<boolean>;
+  loadToken: () => Promise<string | null>;
+  ensureDeviceId: () => Promise<string>;
 }
 
-// Keys used by the app session (per spec)
-const KEY_TOKEN = '@session/token'
-const KEY_REFRESH = '@session/refresh'
-const KEY_USER = '@session/user'
-const KEY_DEVICE = '@session/deviceId'
+export const isAuthenticated = async (): Promise<boolean> => {
+  // Sem autenticação - sempre retorna falso
+  return false;
+};
 
-export async function saveToken(token: string) {
-  await AsyncStorage.setItem(KEY_TOKEN, token)
-}
+export const loadToken = async (): Promise<string | null> => {
+  // Sem tokens de autenticação - sempre retorna null
+  return null;
+};
 
-export async function loadToken(): Promise<string | null> {
-  return AsyncStorage.getItem(KEY_TOKEN)
-}
-
-export async function clearToken() {
-  await AsyncStorage.removeItem(KEY_TOKEN)
-}
-
-export async function saveRefresh(refresh: string) {
-  await AsyncStorage.setItem(KEY_REFRESH, refresh)
-}
-
-export async function loadRefresh(): Promise<string | null> {
-  return AsyncStorage.getItem(KEY_REFRESH)
-}
-
-export async function clearRefresh() {
-  await AsyncStorage.removeItem(KEY_REFRESH)
-}
-
-export async function saveUser(user: string) {
-  // user can be the user id or serialized JSON depending on usage
-  await AsyncStorage.setItem(KEY_USER, user)
-}
-
-export async function loadUser(): Promise<string | null> {
-  return AsyncStorage.getItem(KEY_USER)
-}
-
-export async function clearUser() {
-  await AsyncStorage.removeItem(KEY_USER)
-}
-
-export async function saveDeviceId(deviceId: string) {
-  await AsyncStorage.setItem(KEY_DEVICE, deviceId)
-}
-
-export async function loadDeviceId(): Promise<string | null> {
-  return AsyncStorage.getItem(KEY_DEVICE)
-}
-
-export async function ensureDeviceId(): Promise<string> {
-  let id = await loadDeviceId()
-  if (!id) {
-    id = uuidv4()
-    await saveDeviceId(id)
+export const ensureDeviceId = async (): Promise<string> => {
+  try {
+    // Verificar se já existe um deviceId salvo
+    let deviceId = await AsyncStorage.getItem(DEVICE_ID_KEY);
+    
+    if (deviceId) {
+      return deviceId;
+    }
+    
+    // Gerar um ID único baseado em informações do dispositivo
+    const androidId = await Application.getAndroidId();
+    const installationId = Constants.sessionId || Constants.installationId;
+    
+    // Usar androidId se disponível, senão usar installationId com timestamp
+    if (androidId) {
+      deviceId = `android_${androidId}`;
+    } else if (installationId) {
+      deviceId = `device_${installationId}`;
+    } else {
+      // Fallback: gerar ID único baseado em timestamp + random
+      const timestamp = Date.now();
+      const random = Math.random().toString(36).substring(2, 11);
+      deviceId = `anon_${timestamp}_${random}`;
+    }
+    
+    // Salvar para uso futuro
+    await AsyncStorage.setItem(DEVICE_ID_KEY, deviceId);
+    console.log('✅ Device ID gerado e salvo:', deviceId);
+    
+    return deviceId;
+  } catch (error) {
+    console.error('❌ Erro ao obter device ID:', error);
+    // Fallback em caso de erro
+    return `fallback_${Date.now()}`;
   }
-  return id as string
-}
+};
 
-export async function clearAll() {
-  await Promise.all([
-    AsyncStorage.removeItem(KEY_TOKEN),
-    AsyncStorage.removeItem(KEY_REFRESH),
-    AsyncStorage.removeItem(KEY_USER),
-    AsyncStorage.removeItem(KEY_DEVICE)
-  ])
-}
+export const AuthService: AuthServiceType = {
+  isAuthenticated,
+  loadToken,
+  ensureDeviceId
+};
+
+export default AuthService;

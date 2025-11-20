@@ -1,428 +1,197 @@
-import { View, Text, ScrollView, TouchableOpacity, SafeAreaView, TextInput, ActivityIndicator, Alert } from 'react-native'
+﻿import { View, Text, ScrollView, TouchableOpacity, SafeAreaView, ActivityIndicator, Alert, RefreshControl } from 'react-native'
 import { StatusBar } from 'expo-status-bar'
 import { useState, useEffect } from 'react'
 import { Ionicons } from '@expo/vector-icons'
-import { LinearGradient } from 'expo-linear-gradient'
 import { GameCover } from '../src/components/GameCover'
-import { useFavorites } from '../src/hooks/useFavorites'
-import { WishlistService } from '../src/services/WishlistService'
-import { useLists } from '../src/hooks/useLists'
-import { tokens } from '../src/theme/tokens'
+import { WishlistService, WishlistItem } from '../src/services/WishlistService'
+import { useLanguage } from '../src/contexts/LanguageContext'
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000'
+export default function WatchingScreen() {
+  const { t } = useLanguage();
+  const [watchingList, setWatchingList] = useState<WishlistItem[]>([])
+  const [loading, setLoading] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
 
-export default function FavoritesAndLists() {
-  const [activeTab, setActiveTab] = useState<'watching'>('watching')
-  const [filterStore, setFilterStore] = useState<'all' | 'steam' | 'epic'>('all')
-  const [filterChanged, setFilterChanged] = useState<'all' | 'down' | 'up'>('all')
-  const [newListName, setNewListName] = useState('')
-  const [showCreateList, setShowCreateList] = useState(false)
-  const [expandedList, setExpandedList] = useState<string | null>(null)
+  const loadWatchingList = async () => {
+    try {
+      setLoading(true)
+      const wishlist = await WishlistService.getWishlist()
+      setWatchingList(wishlist)
+    } catch (error) {
+      console.error('Erro ao carregar lista de observação:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
 
-  // Mock user ID - em um app real viria do contexto de autenticação
-  // For now keep empty to indicate not logged in; the app expects users to be authenticated
-  const userId = ''
+  const removeFromWatching = async (appId: number) => {
+    try {
+      await WishlistService.removeFromWishlist(appId)
+      await loadWatchingList()
+    } catch (error) {
+      console.error('Erro ao remover da lista:', error)
+    }
+  }
 
-  const { 
-    favorites, 
-    loading: favoritesLoading, 
-    removeFavorite, 
-    refresh: refreshFavorites
-  } = useFavorites(userId)
+  const handleRemoveFromWatching = async (item: WishlistItem) => {
+    Alert.alert(
+      t('wishlist.remove'),
+      `${t('wishlist.remove')} "${item.title}"?`,
+      [
+        { text: t('button.cancel'), style: 'cancel' },
+        { 
+          text: t('wishlist.remove'), 
+          style: 'destructive',
+          onPress: () => removeFromWatching(item.appId)
+        }
+      ]
+    )
+  }
 
-  const { 
-    lists, 
-    loading: listsLoading, 
-    createList, 
-    deleteList, 
-    refresh: refreshLists 
-  } = useLists(userId)
-
-  // Local wishlist for anonymous users
-  const [localWishlist, setLocalWishlist] = useState<any[]>([])
-  const [loadingLocalWishlist, setLoadingLocalWishlist] = useState(false)
-
-  // Show server favorites when user is authenticated, otherwise show local wishlist
-  const allFavorites = userId ? favorites : localWishlist
-  const isLoading = (userId ? favoritesLoading : loadingLocalWishlist) || listsLoading
+  const onRefresh = async () => {
+    setRefreshing(true)
+    await loadWatchingList()
+    setRefreshing(false)
+  }
 
   useEffect(() => {
-    const init = async () => {
-      refreshLists()
-      if (userId) {
-        refreshFavorites()
-      } else {
-        // load local wishlist and map to favorite-like objects
-        setLoadingLocalWishlist(true)
-        try {
-          const list = await WishlistService.getWishlist()
-          setLocalWishlist(list.map(item => ({
-            _id: `local-${item.appId}`,
-            _local: true,
-            desiredPrice: item.desiredPrice,
-            gameId: { _id: String(item.appId), title: item.title, coverUrl: item.coverUrl },
-            stores: item.store ? [item.store] : [],
-            pctThreshold: undefined,
-            notifyDown: true
-          })))
-        } catch (err) {
-          console.error('Erro ao carregar wishlist local', err)
-        } finally {
-          setLoadingLocalWishlist(false)
-        }
-      }
-    }
-
-    init()
-
-    // subscribe to wishlist changes so UI updates when items are added/removed elsewhere
-    const unsub = WishlistService.subscribe(async () => {
-      setLoadingLocalWishlist(true)
-      try {
-        const list = await WishlistService.getWishlist()
-        setLocalWishlist(list.map(item => ({
-          _id: `local-${item.appId}`,
-          _local: true,
-          desiredPrice: item.desiredPrice,
-          gameId: { _id: String(item.appId), title: item.title, coverUrl: item.coverUrl },
-          stores: item.store ? [item.store] : [],
-          pctThreshold: undefined,
-          notifyDown: true
-        })))
-      } catch (err) {
-        console.error('Erro ao recarregar wishlist local', err)
-      } finally {
-        setLoadingLocalWishlist(false)
-      }
-    })
-
-    return () => {
-      try { unsub() } catch (e) {}
-    }
+    loadWatchingList()
   }, [])
 
-  const handleRemoveFavorite = async (favoriteId: string) => {
-    // If this is a local wishlist item (anonymous mode) remove from AsyncStorage
-    if (favoriteId.startsWith('local-')) {
-      const appId = Number(favoriteId.replace('local-', ''))
-      Alert.alert(
-        'Remover do Desejo',
-        'Tem certeza que deseja remover este jogo dos seus desejos?',
-        [
-          { text: 'Cancelar', style: 'cancel' },
-          {
-            text: 'Remover',
-            style: 'destructive',
-            onPress: async () => {
-              try {
-                await WishlistService.removeFromWishlist(appId)
-                // refresh local list (subscription will also update but keep for immediate UX)
-                const list = await WishlistService.getWishlist()
-                setLocalWishlist(list.map(item => ({
-                  _id: `local-${item.appId}`,
-                  _local: true,
-                  desiredPrice: item.desiredPrice,
-                  gameId: { _id: String(item.appId), title: item.title, coverUrl: item.coverUrl },
-                  stores: item.store ? [item.store] : [],
-                  pctThreshold: undefined,
-                  notifyDown: true
-                })))
-              } catch (err) {
-                console.error('Erro ao remover da wishlist local', err)
-                Alert.alert('Erro', 'Não foi possível remover do desejo')
-              }
-            }
-          }
-        ]
-      )
-      return
-    }
-    // Remove favorito no servidor
-    Alert.alert(
-      'Remover dos Favoritos',
-      'Tem certeza que deseja remover este jogo dos seus favoritos?',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        { 
-          text: 'Remover', 
-          style: 'destructive',
-          onPress: () => removeFavorite(favoriteId)
-        }
-      ]
-    )
-  }
+  useEffect(() => {
+    const unsubscribe = WishlistService.subscribe(() => {
+      loadWatchingList()
+    })
+    return unsubscribe
+  }, [])
 
-  const handleCreateList = async () => {
-    if (newListName.trim()) {
-      await createList(newListName.trim())
-      setNewListName('')
-      setShowCreateList(false)
-    }
-  }
+  const filteredItems = watchingList;
 
-  const handleDeleteList = async (listId: string, listName: string) => {
-    Alert.alert(
-      'Excluir Lista',
-      `Tem certeza que deseja excluir a lista \"${listName}\"?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        { 
-          text: 'Excluir', 
-          style: 'destructive',
-          onPress: () => deleteList(listId)
-        }
-      ]
-    )
-  }
-
-  const getFilteredFavorites = () => {
-    const source = allFavorites || []
-
-    let filtered = source
-
-    if (filterStore !== 'all') {
-      filtered = filtered.filter((fav: any) => 
-        fav.stores?.includes(filterStore) || !fav.stores
-      )
-    }
-
-    return filtered
-  }
-
-  const renderTabButton = (tab: 'watching', title: string, icon: string) => (
-    <TouchableOpacity
-      style={{
-        flex: 1,
-        paddingVertical: 12,
-        paddingHorizontal: 16,
-        backgroundColor: activeTab === tab ? tokens.colors.primary : 'transparent',
-        borderRadius: 8,
-        marginHorizontal: 4,
-        alignItems: 'center',
-        flexDirection: 'row',
-        justifyContent: 'center'
-      }}
-      onPress={() => setActiveTab(tab)}
-    >
-      <Ionicons 
-        name={icon as any} 
-        size={20} 
-        color={activeTab === tab ? tokens.colors.bg : tokens.colors.textDim} 
-        style={{ marginRight: 8 }}
-      />
-      <Text style={{
-        color: activeTab === tab ? tokens.colors.bg : tokens.colors.textDim,
-        fontWeight: activeTab === tab ? 'bold' : 'normal'
-      }}>
-        {title}
-      </Text>
-    </TouchableOpacity>
-  )
-
-  const renderFilterChip = (filter: string, label: string, currentFilter: string, setFilter: (filter: any) => void) => (
-    <TouchableOpacity
-      style={{
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-  backgroundColor: currentFilter === filter ? tokens.colors.primary : tokens.colors.bgElev,
-        borderRadius: 16,
-        marginRight: 8
-      }}
-      onPress={() => setFilter(filter)}
-    >
-      <Text style={{
-  color: currentFilter === filter ? tokens.colors.bg : tokens.colors.text,
-        fontSize: 12,
-        fontWeight: currentFilter === filter ? 'bold' : 'normal'
-      }}>
-        {label}
-      </Text>
-    </TouchableOpacity>
-  )
-
-  const renderFavoriteItem = (favorite: any) => (
-    <View key={favorite._id} style={{
-      backgroundColor: tokens.colors.card,
-      borderRadius: 12,
-      padding: 16,
-      marginBottom: 12,
-      flexDirection: 'row',
-      alignItems: 'center'
-    }}>
-      <GameCover 
-        title={favorite.gameId?.title || 'Jogo'}
-        coverUrl={favorite.gameId?.coverUrl}
-        width={60}
-        aspect={4/3}
-        rounded={8}
-      />
-      <View style={{ flex: 1, marginLeft: 12 }}>
-        <Text style={{ color: tokens.colors.text, fontSize: 16, fontWeight: 'bold' }}>
-          {favorite.gameId?.title}
-        </Text>
-        <Text style={{ color: tokens.colors.textDim, fontSize: 12, marginTop: 4 }}>
-          Threshold: {favorite.pctThreshold || 10}% • 
-          {favorite.notifyDown ? ' Quedas' : ''}
-          {favorite.notifyUp ? ' Altas' : ''}
-        </Text>
-        {favorite.stores && (
-          <Text style={{ color: tokens.colors.primary, fontSize: 12, marginTop: 2 }}>
-            Lojas: {favorite.stores.join(', ')}
-          </Text>
-        )}
-      </View>
-      <TouchableOpacity
+  const renderWatchingItem = (item: WishlistItem) => {
+    // Calcular se o preço atual atingiu ou está abaixo do desejado
+    const isTargetReached = item.desiredPrice > 0 && item.currentPrice <= item.desiredPrice;
+    
+    return (
+      <View
+        key={item.appId}
         style={{
-          padding: 8,
-          backgroundColor: tokens.colors.danger,
-          borderRadius: 8
-        }}
-        onPress={() => handleRemoveFavorite(favorite._id)}
-      >
-        <Ionicons name="trash" size={16} color="#FFF" />
-      </TouchableOpacity>
-    </View>
-  )
-
-  const renderListItem = (list: any) => (
-    <View key={list._id} style={{
-      backgroundColor: tokens.colors.card,
-      borderRadius: 12,
-      padding: 16,
-      marginBottom: 12
-    }}>
-      <TouchableOpacity
-        style={{
+          backgroundColor: '#374151',
+          borderRadius: 12,
+          padding: 12,
+          marginBottom: 12,
           flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between'
         }}
-        onPress={() => setExpandedList(expandedList === list._id ? null : list._id)}
       >
-        <View style={{ flex: 1 }}>
-          <Text style={{ color: '#FFF', fontSize: 16, fontWeight: 'bold' }}>
-            {list.name}
-          </Text>
-          <Text style={{ color: '#888', fontSize: 12, marginTop: 2 }}>
-            {list.itemCount || 0} jogos
-          </Text>
-        </View>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <TouchableOpacity
-            style={{
-              padding: 8,
-              backgroundColor: tokens.colors.bgElev,
-              borderRadius: 8,
-              marginRight: 8
-            }}
-            onPress={() => handleDeleteList(list._id, list.name)}
-          >
-            <Ionicons name="trash" size={16} color="#ff4444" />
-          </TouchableOpacity>
-          <Ionicons 
-            name={expandedList === list._id ? "chevron-up" : "chevron-down"} 
-            size={20} 
-            color="#888" 
+        <View style={{ width: 80, marginRight: 12 }}>
+          <GameCover
+            imageUrls={[item.coverUrl]}
+            height={100}
+            style={{ borderRadius: 6 }}
           />
         </View>
-      </TouchableOpacity>
-      
-      {expandedList === list._id && (
-        <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: tokens.colors.border }}>
-          <Text style={{ color: tokens.colors.textDim, fontSize: 12 }}>
-            Itens da lista apareceriam aqui...
-          </Text>
-        </View>
-      )}
-    </View>
-  )
-
-  return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: tokens.colors.bg }}>
-      <StatusBar style="light" />
-      
-      {/* Header */}
-      <View style={{
-        paddingHorizontal: 20,
-        paddingVertical: 16,
-        borderBottomWidth: 1,
-        borderBottomColor: '#333'
-      }}>
-        <Text style={{
-          color: '#FFF',
-          fontSize: 24,
-          fontWeight: 'bold',
-          textAlign: 'center'
-        }}>
-          Desejos & Listas
-        </Text>
-      </View>
-
-      {/* Header Vigiando */}
-      <View style={{
-        paddingHorizontal: 20,
-        paddingVertical: 16,
-        backgroundColor: tokens.colors.bgElev,
-        alignItems: 'center'
-      }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <Ionicons name="heart" size={24} color="#E91E63" style={{ marginRight: 12 }} />
-          <Text style={{
-            color: tokens.colors.text,
-            fontSize: 18,
-            fontWeight: 'bold'
-          }}>
-            Jogos Vigiando
-          </Text>
-        </View>
-      </View>
-
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20 }}>
-        {/* Seção Vigiando */}
-        <View>
-          {/* Filtros */}
-          <View style={{ marginBottom: 20 }}>
-            <Text style={{ color: '#FFF', fontSize: 16, fontWeight: 'bold', marginBottom: 12 }}>
-              Filtros
+        
+        <View style={{ flex: 1 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+            <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '600', flex: 1, marginRight: 8 }}>
+              {item.title}
             </Text>
-            <View style={{ flexDirection: 'row', marginBottom: 8 }}>
-              {renderFilterChip('all', 'Todas as Lojas', filterStore, setFilterStore)}
-              {renderFilterChip('steam', 'Steam', filterStore, setFilterStore)}
-              {renderFilterChip('epic', 'Epic', filterStore, setFilterStore)}
-            </View>
-            <View style={{ flexDirection: 'row' }}>
-              {renderFilterChip('all', 'Todas', filterChanged, setFilterChanged)}
-              {renderFilterChip('down', 'Preço Caiu', filterChanged, setFilterChanged)}
-              {renderFilterChip('up', 'Preço Subiu', filterChanged, setFilterChanged)}
-            </View>
+            
+            <TouchableOpacity
+              onPress={() => handleRemoveFromWatching(item)}
+              style={{
+                padding: 4,
+              }}
+            >
+              <Ionicons name="trash-outline" size={18} color="#9CA3AF" />
+            </TouchableOpacity>
           </View>
-
-          {/* Lista de Favoritos */}
-          {isLoading ? (
-            <ActivityIndicator size="large" color={tokens.colors.primary} style={{ marginTop: 50 }} />
-          ) : (
+          
+          <Text style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 8 }}>
+            {item.store?.toUpperCase() || 'STEAM'}
+          </Text>
+          
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <View>
-              <Text style={{ color: '#FFF', fontSize: 16, fontWeight: 'bold', marginBottom: 12 }}>
-                Seus Favoritos ({getFilteredFavorites().length})
+              <Text style={{ color: '#10B981', fontSize: 16, fontWeight: '700' }}>
+                R$ {item.currentPrice.toFixed(2)}
               </Text>
-              {getFilteredFavorites().length === 0 ? (
-                <View style={{
-                  padding: 40,
-                  alignItems: 'center'
+              {item.desiredPrice > 0 ? (
+                <Text style={{ 
+                  color: isTargetReached ? '#10B981' : '#F59E0B', 
+                  fontSize: 12, 
+                  fontWeight: '500',
+                  textDecorationLine: isTargetReached ? 'line-through' : 'none'
                 }}>
-                  <Ionicons name="heart-outline" size={60} color={tokens.colors.border} />
-                  <Text style={{ color: tokens.colors.textDim, fontSize: 16, marginTop: 16, textAlign: 'center' }}>
-                    Nenhum jogo favoritado ainda.{'\n'}
-                    Adicione jogos aos favoritos para acompanhar mudanças de preço!
-                  </Text>
-                </View>
+                  Desejado: R$ {item.desiredPrice.toFixed(2)}
+                </Text>
               ) : (
-                getFilteredFavorites().map(renderFavoriteItem)
+                <Text style={{ color: '#3B82F6', fontSize: 12, fontWeight: '500' }}>
+                  Qualquer promoção
+                </Text>
+              )}
+              
+              {item.desiredPrice > 0 && isTargetReached && (
+                <Text style={{ color: '#10B981', fontSize: 10, fontWeight: '600', marginTop: 2 }}>
+                  OBJETIVO ATINGIDO!
+                </Text>
               )}
             </View>
-          )}
+          </View>
         </View>
-      </ScrollView>
+      </View>
+    );
+  }
+
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#1F2937' }}>
+      <StatusBar style="light" />
+      
+      <View
+        style={{ flex: 1, backgroundColor: '#1F2937' }}
+      >
+        <View style={{ padding: 20, paddingBottom: 0 }}>
+          <Text style={{ color: '#FFFFFF', fontSize: 28, fontWeight: '700', marginBottom: 16 }}>
+            {t('favorites.title')}
+          </Text>
+        </View>
+
+        <ScrollView
+          style={{ flex: 1, paddingHorizontal: 20 }}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor="#3B82F6"
+            />
+          }
+        >
+          {loading ? (
+            <View style={{ padding: 40, alignItems: 'center' }}>
+              <ActivityIndicator size="large" color="#3B82F6" />
+              <Text style={{ color: '#9CA3AF', marginTop: 16 }}>
+                {t('home.loading')}
+              </Text>
+            </View>
+          ) : filteredItems.length === 0 ? (
+            <View style={{ padding: 40, alignItems: 'center' }}>
+              <Ionicons name="eye-off-outline" size={64} color="#4B5563" />
+              <Text style={{ color: '#9CA3AF', fontSize: 18, marginTop: 16, textAlign: 'center' }}>
+                {watchingList.length === 0 
+                  ? t('favorites.empty')
+                  : t('search.noResults')
+                }
+              </Text>
+              <Text style={{ color: '#6B7280', fontSize: 14, marginTop: 8, textAlign: 'center' }}>
+                {t('favorites.emptyMessage')}
+              </Text>
+            </View>
+          ) : (
+            <View style={{ paddingBottom: 20 }}>
+              {filteredItems.map(renderWatchingItem)}
+            </View>
+          )}
+        </ScrollView>
+      </View>
     </SafeAreaView>
   )
 }

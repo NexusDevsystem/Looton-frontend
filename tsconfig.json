@@ -3,5 +3,12 @@
   "compilerOptions": {
     "strict": false,
     "skipLibCheck": true
-  }
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
 }

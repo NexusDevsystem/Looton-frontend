@@ -1,6 +1,6 @@
-import 'react-native-gesture-handler';
-import 'react-native-reanimated';   // ← no topo, antes de qualquer outro import
-import { registerRootComponent } from 'expo'
-import App from './App'
+// Enable native screens for better native-stack performance
+import { enableScreens } from 'react-native-screens';
+enableScreens();
 
-registerRootComponent(App)
+// Expo Router entry
+import 'expo-router/entry';

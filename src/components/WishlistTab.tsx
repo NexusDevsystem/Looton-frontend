@@ -10,11 +10,11 @@ import {
   RefreshControl,
   Dimensions,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { WishlistService, WishlistItem } from '../services/WishlistService';
 import { GameCover } from './GameCover';
 import { useCurrency } from '../contexts/CurrencyContext';
+import { useLanguage } from '../contexts/LanguageContext';
 
 const { width } = Dimensions.get('window');
 
@@ -29,6 +29,7 @@ export const WishlistTab: React.FC<WishlistTabProps> = ({ visible, onClose }) =>
   const [editingItem, setEditingItem] = useState<WishlistItem | null>(null);
   const [newDesiredPrice, setNewDesiredPrice] = useState('');
   const { formatPrice, convertPrice } = useCurrency();
+  const { t } = useLanguage();
 
   useEffect(() => {
     if (visible) {
@@ -50,12 +51,12 @@ export const WishlistTab: React.FC<WishlistTabProps> = ({ visible, onClose }) =>
 
   const handleRemoveItem = (item: WishlistItem) => {
     Alert.alert(
-      'Remover da Lista',
-      `Deseja remover "${item.title}" da sua lista de desejos?`,
+      t('wishlist.remove'),
+      `${t('wishlist.remove')} "${item.title}"?`,
       [
-        { text: 'Cancelar', style: 'cancel' },
+        { text: t('button.cancel'), style: 'cancel' },
         {
-          text: 'Remover',
+          text: t('wishlist.remove'),
           style: 'destructive',
           onPress: async () => {
             await WishlistService.removeFromWishlist(item.appId);
@@ -77,7 +78,7 @@ export const WishlistTab: React.FC<WishlistTabProps> = ({ visible, onClose }) =>
     const price = parseFloat(newDesiredPrice.replace(',', '.'));
     
     if (isNaN(price) || price <= 0) {
-      Alert.alert('Erro', 'Por favor, insira um preço válido');
+      Alert.alert(t('toast.error'), t('wishlist.updatePrice'));
       return;
     }
 
@@ -85,9 +86,9 @@ export const WishlistTab: React.FC<WishlistTabProps> = ({ visible, onClose }) =>
       await WishlistService.updateDesiredPrice(editingItem.appId, price);
       setEditingItem(null);
       loadWishlist();
-      Alert.alert('Sucesso', 'Preço desejado atualizado!');
+      Alert.alert(t('toast.success'), t('toast.saved'));
     } catch (error) {
-      Alert.alert('Erro', 'Não foi possível atualizar o preço');
+      Alert.alert(t('toast.error'), t('toast.error'));
     }
   };
 
@@ -139,10 +140,10 @@ export const WishlistTab: React.FC<WishlistTabProps> = ({ visible, onClose }) =>
           <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 }}>
             <Ionicons name="heart-outline" size={64} color="#6B7280" />
             <Text style={{ color: '#9CA3AF', fontSize: 18, textAlign: 'center', marginTop: 16 }}>
-              Sua lista de desejos está vazia
+              {t('wishlist.empty')}
             </Text>
             <Text style={{ color: '#6B7280', fontSize: 14, textAlign: 'center', marginTop: 8 }}>
-              Adicione jogos à sua lista para receber notificações quando atingirem o preço desejado
+              {t('wishlist.emptyDesc')}
             </Text>
           </View>
         ) : (
@@ -173,7 +174,6 @@ export const WishlistTab: React.FC<WishlistTabProps> = ({ visible, onClose }) =>
 
                 return (
                   <View
-                    key={item.appId}
                     style={{
                       backgroundColor: '#1F2937',
                       borderRadius: 16,
@@ -186,11 +186,8 @@ export const WishlistTab: React.FC<WishlistTabProps> = ({ visible, onClose }) =>
                     <View style={{ flexDirection: 'row', padding: 16 }}>
                       {/* Game Image */}
                       <GameCover
-                        title={item.title}
-                        coverUrl={item.coverUrl}
-                        width={80}
-                        aspect={16/9}
-                        rounded={8}
+                        imageUrls={[item.coverUrl]}
+                        height={45}
                       />
 
                       {/* Game Info */}
@@ -322,7 +319,7 @@ export const WishlistTab: React.FC<WishlistTabProps> = ({ visible, onClose }) =>
                 marginBottom: 16,
                 textAlign: 'center',
               }}>
-                Editar Preço Desejado
+                {t('wishlist.updatePrice')}
               </Text>
               
               <Text style={{ color: '#D1D5DB', marginBottom: 16, textAlign: 'center' }}>
@@ -335,7 +332,7 @@ export const WishlistTab: React.FC<WishlistTabProps> = ({ visible, onClose }) =>
                 padding: 16,
                 marginBottom: 20,
               }}>
-                <Text style={{ color: '#9CA3AF', marginBottom: 8 }}>Preço atual:</Text>
+                <Text style={{ color: '#9CA3AF', marginBottom: 8 }}>{t('wishlist.currentPrice')}:</Text>
                 <Text style={{ color: '#F9FAFB', fontSize: 18, fontWeight: 'bold' }}>
                   {editingItem && formatPrice(editingItem.currentPrice)}
                 </Text>
@@ -368,7 +365,7 @@ export const WishlistTab: React.FC<WishlistTabProps> = ({ visible, onClose }) =>
                     alignItems: 'center',
                   }}
                 >
-                  <Text style={{ color: 'white', fontWeight: '600' }}>Cancelar</Text>
+                  <Text style={{ color: 'white', fontWeight: '600' }}>{t('button.cancel')}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -381,7 +378,7 @@ export const WishlistTab: React.FC<WishlistTabProps> = ({ visible, onClose }) =>
                     alignItems: 'center',
                   }}
                 >
-                  <Text style={{ color: 'white', fontWeight: '600' }}>Salvar</Text>
+                  <Text style={{ color: 'white', fontWeight: '600' }}>{t('button.save')}</Text>
                 </TouchableOpacity>
               </View>
             </View>

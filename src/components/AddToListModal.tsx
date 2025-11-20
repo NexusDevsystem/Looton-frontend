@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+﻿import React, { useState } from 'react'
 import {
   Modal,
   View,
@@ -33,7 +33,7 @@ export function AddToListModal({ visible, onClose, gameId, gameTitle, userId }: 
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const [desiredPrice, setDesiredPrice] = useState('')
   const [pctThreshold, setPctThreshold] = useState<string>('')
-  const [storesSelected, setStoresSelected] = useState<{ steam: boolean; epic: boolean }>({ steam: true, epic: false })
+  const [storesSelected, setStoresSelected] = useState<{ steam: boolean }>({ steam: true })
 
   const handleCreateList = async () => {
     if (!newListName.trim()) {
@@ -62,17 +62,16 @@ export function AddToListModal({ visible, onClose, gameId, gameTitle, userId }: 
             const pct = pctThreshold ? Number(pctThreshold) : undefined
             const stores: string[] = []
             if (storesSelected.steam) stores.push('steam')
-            if (storesSelected.epic) stores.push('epic')
             await FavoritesService.addFavorite(userId, gameId, { desiredPriceCents: desiredCents, pctThreshold: pct, listId: newList._id, stores })
             setToastMessage('Favorito criado com sucesso')
           } catch (err) {
-            console.warn('Falha ao criar favorito após criar lista', err)
+            console.warn('Falha ao criar favorito apÃ³s criar lista', err)
             setToastMessage('Falha ao criar favorito')
           } finally {
             setFavLoading(false)
           }
         })()
-      Alert.alert('Sucesso', `Jogo adicionado à lista "${newList.name}"`)
+      Alert.alert('Sucesso', `Jogo adicionado Ã  lista "${newList.name}"`)
       setNewListName('')
       setShowCreateForm(false)
       onClose()
@@ -98,23 +97,22 @@ export function AddToListModal({ visible, onClose, gameId, gameTitle, userId }: 
           const pct = pctThreshold ? Number(pctThreshold) : undefined
           const stores: string[] = []
           if (storesSelected.steam) stores.push('steam')
-          if (storesSelected.epic) stores.push('epic')
           await FavoritesService.addFavorite(userId, gameId, { desiredPriceCents: desiredCents, pctThreshold: pct, listId: list._id, stores })
           setToastMessage('Favorito criado com sucesso')
         } catch (err) {
-          console.warn('Falha ao criar favorito ao adicionar à lista', err)
+          console.warn('Falha ao criar favorito ao adicionar Ã  lista', err)
           setToastMessage('Falha ao criar favorito')
         } finally {
           setFavLoading(false)
         }
       })()
 
-      Alert.alert('Sucesso', `Jogo adicionado à lista "${list.name}"`)
+      Alert.alert('Sucesso', `Jogo adicionado Ã  lista "${list.name}"`)
       onClose()
     } catch (error) {
       Alert.alert(
         'Erro',
-        error instanceof Error ? error.message : 'Erro ao adicionar à lista'
+        error instanceof Error ? error.message : 'Erro ao adicionar Ã  lista'
       )
     } finally {
       setLoading(false)
@@ -145,7 +143,7 @@ export function AddToListModal({ visible, onClose, gameId, gameTitle, userId }: 
               color: '#333',
               flex: 1
             }}>
-              Adicionar à Lista
+              Adicionar Ã  Lista
             </Text>
             <TouchableOpacity onPress={onClose}>
               <Ionicons name="close" size={24} color="#666" />
@@ -169,7 +167,7 @@ export function AddToListModal({ visible, onClose, gameId, gameTitle, userId }: 
             {/* Create New List Section */}
             <View style={{ padding: 16 }}>
               <View style={{ marginBottom: 12 }}>
-                <Text style={{ fontSize: 14, color: '#333', marginBottom: 6 }}>Preço desejado (opcional)</Text>
+                <Text style={{ fontSize: 14, color: '#333', marginBottom: 6 }}>PreÃ§o desejado (opcional)</Text>
                 <TextInput
                   value={desiredPrice}
                   onChangeText={setDesiredPrice}
@@ -190,9 +188,7 @@ export function AddToListModal({ visible, onClose, gameId, gameTitle, userId }: 
                   <TouchableOpacity onPress={() => setStoresSelected(s => ({ ...s, steam: !s.steam }))} style={{ padding: 8, backgroundColor: storesSelected.steam ? '#3B82F6' : '#F0F0F0', borderRadius: 8, marginRight: 8 }}>
                     <Text style={{ color: storesSelected.steam ? '#032617' : '#333' }}>Steam</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity onPress={() => setStoresSelected(s => ({ ...s, epic: !s.epic }))} style={{ padding: 8, backgroundColor: storesSelected.epic ? '#3B82F6' : '#F0F0F0', borderRadius: 8 }}>
-                    <Text style={{ color: storesSelected.epic ? '#032617' : '#333' }}>Epic</Text>
-                  </TouchableOpacity>
+
                 </View>
               </View>
               <TouchableOpacity
@@ -305,7 +301,7 @@ export function AddToListModal({ visible, onClose, gameId, gameTitle, userId }: 
                   fontStyle: 'italic',
                   marginTop: 32
                 }}>
-                  Você ainda não tem listas.{'\n'}
+                  VocÃª ainda nÃ£o tem listas.{'\n'}
                   Crie sua primeira lista acima!
                 </Text>
               ) : (

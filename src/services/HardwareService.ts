@@ -17,13 +17,55 @@ export type PcOffer = {
 
 export async function fetchPcDeals(params?: { limit?: number; offset?: number; store?: string[]; category?: string[]; full?: boolean; q?: string }) {
   const q = new URLSearchParams()
-  if (params?.limit) q.set('limit', String(params.limit))
+  if (params?.limit) q.set('limit', String(params.limit || 50)) // Valor padrão otimizado
   if (params?.offset) q.set('offset', String(params.offset))
   if (params?.store?.length) q.set('store', params.store.join(','))
   if (params?.category?.length) q.set('category', params.category.join(','))
   if (params?.full) q.set('full', '1')
-  if (params?.q) q.set('q', params.q)
-  const res = await fetch(`${API_URL}/pc-deals?${q.toString()}`)
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  return res.json() as Promise<{ slotDate: string; items: PcOffer[] }>
+  if (params?.q) {
+    // Normalizar a consulta de busca
+    const normalizedQuery = params.q
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '') // Remover acentos
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, ' ') // Normalizar espaços
+    if (normalizedQuery) {
+      q.set('q', normalizedQuery)
+    }
+  }
+  
+  const url = `${API_URL}/pc-deals?${q.toString()}`
+  console.log('HardwareService: Fetching from', url)
+  
+  try {
+    // Adicionar timeout e configurações de requisição para melhor performance
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // Aumentar para 30 segundos de timeout
+
+    const res = await fetch(url, { 
+      signal: controller.signal,
+      headers: {
+        'Accept': 'application/json',
+        'Cache-Control': 'no-cache'
+      }
+    })
+    
+    clearTimeout(timeoutId);
+    
+    console.log('HardwareService: Response status', res.status)
+    
+    if (!res.ok) {
+      const errorText = await res.text()
+      console.error('HardwareService: Error response', errorText)
+      throw new Error(`HTTP ${res.status}: ${errorText}`)
+    }
+    
+    const data = await res.json()
+    console.log('HardwareService: Success, items count:', data.items?.length || 0)
+    return data as { slotDate: string; items: PcOffer[] }
+  } catch (error) {
+    console.error('HardwareService: Fetch error', error)
+    throw error
+  }
 }

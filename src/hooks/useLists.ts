@@ -8,6 +8,12 @@ export function useLists(userId: string) {
   const [error, setError] = useState<string | null>(null)
 
   const loadLists = async () => {
+    if (!userId) {
+      setLoading(false)
+      setLists([])
+      return
+    }
+    
     try {
       setLoading(true)
       setError(null)

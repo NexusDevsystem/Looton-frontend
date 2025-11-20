@@ -1,4 +1,5 @@
-import { View, Text, Image, TouchableOpacity, Linking } from 'react-native'
+import React from 'react'
+import { View, Text, Image, TouchableOpacity, Linking, Alert } from 'react-native'
 import { tokens } from '../theme/tokens'
 import { useCurrency } from '../contexts/CurrencyContext'
 import type { PcOffer } from '../services/HardwareService'
@@ -7,14 +8,34 @@ export function PcDealCard({ item, variant = 'grid' }: { item: PcOffer; variant?
   const { formatPrice } = useCurrency() as any
   const pct = typeof item.discountPct === 'number'
     ? item.discountPct
-    : (item.priceBaseCents && item.priceBaseCents > 0 ? Math.max(0, Math.round((1 - item.priceFinalCents / item.priceBaseCents) * 100)) : undefined)
+    : (item.priceBaseCents && item.priceBaseCents > 0 ? Math.max(0, Math.round((1 - item.priceFinalCents / item.priceBaseCents) * 100)) : 0)
 
   const imgHeight = variant === 'grid' ? 120 : 160
-  const labelRight = (item.category || item.store || '').toString().toUpperCase()
+  const storeLabel = item.store && item.store.toLowerCase() !== 'terabyte' ? item.store : ''
+  const labelRight = (item.category || storeLabel || '').toString().toUpperCase()
 
   const priceBase = (c?: number) => (typeof c === 'number' ? formatPrice(c / 100) : '—')
   const priceFinal = (c: number) => formatPrice(c / 100)
   const installment = item.priceFinalCents ? priceFinal(Math.round(item.priceFinalCents / 12)) : '—'
+
+  // Função para abrir oferta no navegador
+  const handleOpenInBrowser = () => {
+    const displayStore = item.store && item.store.toLowerCase() !== 'terabyte' ? item.store : 'desconhecida'
+    Alert.alert(
+      'Abrir Oferta',
+      `Você será redirecionado para o site da loja ${displayStore} para ver mais detalhes sobre este produto.`,
+      [
+        {
+          text: 'Cancelar',
+          style: 'cancel'
+        },
+        {
+          text: 'Continuar',
+          onPress: () => Linking.openURL(item.url || '')
+        }
+      ]
+    )
+  }
 
   return (
     <View style={{ backgroundColor: tokens.colors.card, borderRadius: 12, overflow: 'hidden', ...tokens.shadow.card }}>
@@ -31,22 +52,44 @@ export function PcDealCard({ item, variant = 'grid' }: { item: PcOffer; variant?
             </View>
           )}
         </View>
-        {labelRight ? (
+        {item.category ? (
           <View style={{ position: 'absolute', top: 6, right: 6, paddingHorizontal: 8, paddingVertical: 4, backgroundColor: '#3F3F46', borderRadius: 6 }}>
-            <Text style={{ color: '#E5E7EB', fontSize: 12, fontWeight: '700' }}>{labelRight}</Text>
+            <Text style={{ color: '#E5E7EB', fontSize: 10, fontWeight: '700' }}>{item.category.toUpperCase()}</Text>
           </View>
         ) : null}
       </View>
       <View style={{ padding: 10 }}>
-        <Text style={{ color: tokens.colors.text, fontWeight: '800', fontSize: 14 }} numberOfLines={2}>{item.title}</Text>
+        {/* Indicador de loja mais proeminente */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+          <View style={{ 
+            paddingHorizontal: 6, 
+            paddingVertical: 2, 
+            backgroundColor: '#1D4ED8', // Azul padrão para todas as lojas
+            borderRadius: 4 
+          }}>
+            <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '700' }}>
+              {item.store.toUpperCase()}
+            </Text>
+          </View>
+        </View>
+        <Text style={{ color: tokens.colors.text, fontWeight: '800', fontSize: 14 }} numberOfLines={2}>{item.title || 'Produto sem título'}</Text>
         <View style={{ marginTop: 8 }}>
-          {item.priceBaseCents && item.priceBaseCents > item.priceFinalCents ? (
+          {item.priceBaseCents && item.priceBaseCents > 0 && item.priceFinalCents !== item.priceBaseCents ? (
             <Text style={{ color: tokens.colors.textDim, textDecorationLine: 'line-through', fontSize: 12 }}>De: {priceBase(item.priceBaseCents)}</Text>
           ) : null}
           <Text style={{ marginTop: 2, color: '#10B981', fontSize: 16, fontWeight: '900' }}>por: {priceFinal(item.priceFinalCents)} <Text style={{ color: '#10B981', fontWeight: '700' }}>à vista</Text></Text>
           <Text style={{ marginTop: 2, color: tokens.colors.textDim, fontSize: 12 }}>em até 12x de {installment} sem juros</Text>
         </View>
-        <TouchableOpacity onPress={() => Linking.openURL(item.url)} style={{ marginTop: 10, backgroundColor: '#3B82F6', paddingVertical: 8, borderRadius: 8, alignItems: 'center' }}>
+        <TouchableOpacity 
+          onPress={handleOpenInBrowser} 
+          style={{ 
+            marginTop: 10, 
+            backgroundColor: '#3B82F6', 
+            paddingVertical: 8, 
+            borderRadius: 8, 
+            alignItems: 'center' 
+          }}
+        >
           <Text style={{ color: '#fff', fontWeight: '800' }}>Ver oferta</Text>
         </TouchableOpacity>
       </View>

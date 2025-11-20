@@ -9,7 +9,10 @@ type Offer = { _id: string; url: string; priceBase: number; priceFinal: number; 
 type Hist = { _id: string; priceFinal: number; discountPct: number; seenAt: string }
 
 export default function GameDetail() {
-  const { id } = useLocalSearchParams<{ id: string }>()
+  // useLocalSearchParams from expo-router may be untyped in this workspace.
+  // Use a local type assertion instead of passing a type argument to the call.
+  const params = useLocalSearchParams() as { id?: string } | undefined
+  const id = params?.id
   const [offers, setOffers] = useState<Offer[]>([])
   const [hist, setHist] = useState<Hist[]>([])
 
