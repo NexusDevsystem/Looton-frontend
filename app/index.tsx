@@ -951,14 +951,23 @@ function HomeContent() {
       return aIsSuperDeal ? -1 : 1;
     });
 
-    // Remover itens da Epic Games do feed principal (já que estão no banner)
-    result = result.filter((deal) => {
+    // Remover itens da Epic Games do feed principal APENAS se houver outros jogos
+    // (já que estão no banner, mas mantemos se forem a única fonte)
+    const nonEpicCount = result.filter(deal => {
       const storeName = deal.store?.name || (deal as any).store || '';
-      if (storeName.toLowerCase().includes('epic')) {
-        return false; // Não incluir itens da Epic no feed principal
-      }
-      return true;
-    });
+      return !storeName.toLowerCase().includes('epic');
+    }).length;
+
+    // Só remover Epic Games se houver pelo menos 3 jogos de outras lojas
+    if (nonEpicCount >= 3) {
+      result = result.filter((deal) => {
+        const storeName = deal.store?.name || (deal as any).store || '';
+        if (storeName.toLowerCase().includes('epic')) {
+          return false; // Não incluir itens da Epic no feed principal
+        }
+        return true;
+      });
+    }
 
     if (__DEV__) console.log(`📊 result após remover Epic: ${result.length}`);
 
