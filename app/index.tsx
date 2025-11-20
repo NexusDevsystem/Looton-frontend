@@ -624,18 +624,20 @@ function HomeContent() {
         ...(sports || [])
       ]
 
-      // Converter para GameItem format
-      const converted = allCategoryGames.map(deal => ({
-        id: deal._id || deal.appId?.toString() || '',
-        title: deal.game?.title || deal.title || '',
-        coverUrl: deal.game?.coverUrl || deal.image || '',
-        genres: deal.steamGenres || deal.game?.genres || [],
-        tags: deal.game?.tags || deal.tags || [],
-        priceFinalCents: deal.priceFinalCents || Math.round((deal.priceFinal || 0) * 100),
-        discountPct: deal.discountPct || 0,
-        store: deal.store?.name || 'Steam',
-        url: deal.url || ''
-      }))
+      // Converter para GameItem format e filtrar jogos sem título
+      const converted = allCategoryGames
+        .map(deal => ({
+          id: deal._id || deal.appId?.toString() || '',
+          title: deal.game?.title || deal.title || '',
+          coverUrl: deal.game?.coverUrl || deal.image || '',
+          genres: deal.steamGenres || deal.game?.genres || [],
+          tags: deal.game?.tags || deal.tags || [],
+          priceFinalCents: deal.priceFinalCents || Math.round((deal.priceFinal || 0) * 100),
+          discountPct: deal.discountPct || 0,
+          store: deal.store?.name || 'Steam',
+          url: deal.url || ''
+        }))
+        .filter(game => game.title && game.title.trim() !== '') // Filtrar jogos sem título
 
       setCategoryGames(converted)
 
