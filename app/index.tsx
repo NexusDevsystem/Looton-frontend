@@ -35,76 +35,23 @@ import { interstitialAdService } from '../src/services/InterstitialAdService';
 import { useFilters } from '../src/hooks/useFilters';
 import { fetchEpicGames } from '../src/api/epic-client';
 
-// Lista de jogos que devem ser filtrados/removidos (não disponíveis na Steam mais)
-const GAMES_TO_FILTER = [
-  'DOOM',
-  'DOOM Eternal', 
-  'Doom',
-  'Doom Eternal',
-  // Adicionando mais jogos conhecidos que foram removidos ou não estão mais disponíveis
-  'Paladins', // Removido da Steam em 2022
-  'Nexomon', // Removido da Steam
-  'Subnautica Below Zero Demo', // Versões de demonstração removidas
-  'VRChat Demo', // Versões de demonstração removidas
-  // Correção específica: Assassin's Creed Black Flag - Golden Edition não existe, apenas Assassin's Creed IV Black Flag
-  'Assassin\'s Creed Black Flag - Golden Edition',
-  'Assassin\'s Creed Black Flag Golden Edition',
-  'Assassin\'s Creed IV Black Flag - Gold Edition', // Outra variação possível
-  'Assassin\'s Creed IV Black Flag Gold Edition',  // Outra variação possível
-  // Termos relacionados a conteúdo erótico/adulto
-  'Milk',
-  'Milky',
-  'Lactation',
-  'Lactating',
-  'Breast',
-  'Breasts',
-  'Boob',
-  'Boobs',
-  'Tits',
-  'Titties',
-  'Ass',
-  'Asses',
-  'Butt',
-  'Butts',
-  'Thick',
-  'Thick Girl',
-  'Thick Girls',
-  'Curvy',
-  'Curves',
-  'Busty',
-  'Bust',
-  'Hot',
-  'Hot Girl',
-  'Hot Girls',
-  'Naughty',
-  'Naughty Girl',
-  'Naughty Girls',
-  'Seductive',
-  'Seduce',
-  'Seduction',
-  'Erotic',
-  'Erotic Game',
-  'Erotic Life',
-  'Erotic Sim',
-  'Erotic Simulation',
-  'Lust',
-  'Lustful',
-  'Naughty Nurse',
-  'Sexy Nurse',
-  'Hot Nurse',
-  'Adult Only',
-  'Adult Game',
-  'Adult Content',
-  'Mature Content',
-  'Mature Game',
-  // Jogo específico a ser bloqueado
-  'Shoot! & Ahhhhh~',
-].map(title => title.toLowerCase()); // Converter para minúsculas para comparação case-insensitive
+// REMOVIDO: Lista de filtros de jogos - Aceitar TUDO
 import { SteamGenresPreferencesModal } from '../src/components/SteamGenresPreferencesModal';
 import { SteamGenre } from '../src/services/SteamGenresService';
 
 import { showToast } from '../src/utils/SimpleToast';
 import { useGameFeed, GameItem } from '../src/hooks/useGameFeed';
+
+// Novos imports - Refatoração
+import { PriceText } from '../src/components/home/PriceText';
+import { HomeHeader } from '../src/components/home/HomeHeader';
+import { GameCard } from '../src/components/home/GameCard';
+import { BottomNav } from '../src/components/navigation/BottomNav';
+import { getPriceIndicator } from '../src/utils/priceUtils';
+import { renderStoreIcon } from '../src/utils/storeUtils';
+import { isRecentlyReleased, convertGameItemToDeal, getDayOfYear, shuffleArray } from '../src/utils/gameUtils';
+import { useLayoutPreference } from '../src/hooks/useLayoutPreference';
+import { usePremiumStatus } from '../src/hooks/usePremiumStatus';
 
 export interface Deal {
   _id: string
@@ -137,116 +84,6 @@ import { api } from '../src/api/client';
 const { width } = Dimensions.get('window');
 const isTablet = width >= 768;
 
-// Small component to render a price using CurrencyContext so it updates reactively
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const PriceText: React.FC<{
-  value?: number | null;
-  style?: any;
-  deal?: any;
-  showEarlyAccess?: boolean
-}> = ({ value, style, deal, showEarlyAccess = true }) => {
-  try {
-    const { formatPrice, currency } = useCurrency();
-    const { t } = useLanguage();
-
-  // Verificar se é um jogo de Acesso Antecipado - busca mais ampla
-    const isEarlyAccess = showEarlyAccess && deal && (
-      deal.isEarlyAccess === true ||
-  // Verificar no título do jogo
-      (deal.game?.title && String(deal.game.title).toLowerCase().includes('early access')) ||
-      (deal.game?.title && String(deal.game.title).toLowerCase().includes('acesso antecipado')) ||
-      // Verificar nas tags
-      (deal.game?.tags && Array.isArray(deal.game.tags) &&
-       deal.game.tags.some((tag: string) =>
-         String(tag).toLowerCase().includes('early access') ||
-         String(tag).toLowerCase().includes('acesso antecipado'))) ||
-  // Verificar nos gêneros Steam
-      (deal.steamGenres && Array.isArray(deal.steamGenres) &&
-       deal.steamGenres.some((genre: Record<string, unknown>) => 
-         (genre.name && String(genre.name).toLowerCase().includes('early access')) || 
-         (genre.name && String(genre.name).toLowerCase().includes('acesso antecipado')) ||
-         (genre.description && String(genre.description).toLowerCase().includes('early access')) ||
-         (genre.description && String(genre.description).toLowerCase().includes('acesso antecipado')))) ||
-  // Verificar nos gêneros do jogo
-      (deal.game?.genres && Array.isArray(deal.game.genres) && 
-       deal.game.genres.some((genre: string | any) => 
-         (typeof genre === 'string' && (String(genre).toLowerCase().includes('early access') || String(genre).toLowerCase().includes('acesso antecipado'))) ||
-         (typeof genre === 'object' && genre.name && (String(genre.name).toLowerCase().includes('early access') || String(genre.name).toLowerCase().includes('acesso antecipado')))))
-    );
-
-    let display;
-    if (isEarlyAccess) {
-  // Se é early access, sempre mostrar "Acesso Antecipado"
-      display = t('price.earlyAccess');
-    } else {
-  // Caso contrário, mostrar o preço normal ou "Grátis"
-      display = value === null || value === undefined || isNaN(value) || value === 0 ? t('price.free') : formatPrice(value);
-    }
-
-    // Normalize BRL rendering to avoid edge-cases like "RS2,00" and enforce single space after R$ 
-    if (display !== t('price.free') && display !== t('price.earlyAccess') && currency === 'BRL') {
-      // Fix cases where $ became S (uppercase side-effect), and ensure single space after symbol
-      display = String(display)
-        .replace(/^RS/, 'R$')
-        .replace(/^R\$\s*/, 'R$ ')
-    }
-
-    return <Text style={[style, { textTransform: 'none' }]}>{display}</Text>
-  } catch (e) {
-    // fallback: use Intl for pt-BR
-    const { t: tFallback } = useLanguage();
-    try {
-  // Verificar se é acesso antecipado
-      const isEarlyAccess = showEarlyAccess && deal && (
-        (deal.game?.tags && Array.isArray(deal.game.tags) && 
-         deal.game.tags.some((tag: string) => 
-           tag.toLowerCase().includes('early access') || 
-           tag.toLowerCase().includes('acesso antecipado'))) ||
-        (deal.steamGenres && Array.isArray(deal.steamGenres) && 
-         deal.steamGenres.some((genre: any) => 
-           genre.name?.toLowerCase().includes('early access') || 
-           genre.name?.toLowerCase().includes('acesso antecipado'))) ||
-        (deal.game?.genres && Array.isArray(deal.game.genres) && 
-         deal.game.genres.some((genre: string) => 
-           genre.toLowerCase().includes('early access') || 
-           genre.toLowerCase().includes('acesso antecipado')))
-      );
-      
-      if (isEarlyAccess) return <Text style={[style, { textTransform: 'none' }]}>{tFallback('price.earlyAccess')}</Text>;
-      if (value === null || value === undefined || isNaN(value) || value === 0) return <Text style={[style, { textTransform: 'none' }]}>{tFallback('price.free')}</Text>;
-      const display = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value));
-      const normalized = String(display).replace(/^R\$\s*/, 'R$ ');
-      return <Text style={[style, { textTransform: 'none' }]}>{normalized}</Text>
-    } catch (e2) {
-  // Verificar se é acesso antecipado
-      const isEarlyAccess = showEarlyAccess && deal && (
-        (deal.game?.tags && Array.isArray(deal.game.tags) && 
-         deal.game.tags.some((tag: string) => 
-           tag.toLowerCase().includes('early access') || 
-           tag.toLowerCase().includes('acesso antecipado'))) ||
-        (deal.steamGenres && Array.isArray(deal.steamGenres) && 
-         deal.steamGenres.some((genre: any) => 
-           genre.name?.toLowerCase().includes('early access') || 
-           genre.name?.toLowerCase().includes('acesso antecipado'))) ||
-        (deal.game?.genres && Array.isArray(deal.game.genres) && 
-         deal.game.genres.some((genre: string) => 
-           genre.toLowerCase().includes('early access') || 
-           genre.toLowerCase().includes('acesso antecipado')))
-      );
-      
-      if (isEarlyAccess) return <Text style={[style, { textTransform: 'none' }]}>{tFallback('price.earlyAccess')}</Text>;
-      if (value === null || value === undefined || isNaN(value) || value === 0) return <Text style={[style, { textTransform: 'none' }]}>{tFallback('price.free')}</Text>;
-      try {
-        const display = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value));
-        const normalized = String(display).replace(/^R\$\s*/, 'R$ ');
-        return <Text style={[style, { textTransform: 'none' }]}>{normalized}</Text>
-      } catch (e3) {
-        return <Text style={[style, { textTransform: 'none' }]}>{`${Number(value).toFixed(2)} BRL`}</Text>
-      }
-    }
-  }
-}
-
 function HomeContent() {
   const { language, setLanguage, t } = useLanguage();
   const { paddingBottom: bottomNavPadding, isGestureNavigation } = useBottomInset();
@@ -260,7 +97,7 @@ function HomeContent() {
   const [selectedGameId, setSelectedGameId] = useState<number | string | null>(null)
   const [showWishlist, setShowWishlist] = useState(false)
   const [wishlistCount, setWishlistCount] = useState(0)
-  
+
   // Filtro de loja
   // Removido estado de seleção de loja - exibindo todos os jogos juntos
   const [selectedGameDetails, setSelectedGameDetails] = useState<any>(null)
@@ -268,7 +105,7 @@ function HomeContent() {
   const [wishlistGames, setWishlistGames] = useState<any[]>([])
   const [showDetails, setShowDetails] = useState(false)
   const [filteredDeals, setFilteredDeals] = useState<Deal[]>([])
-  
+
 
   const [searchResults, setSearchResults] = useState<Deal[]>([])
   const [originalSearchResults, setOriginalSearchResults] = useState<Deal[]>([])
@@ -276,7 +113,7 @@ function HomeContent() {
   const [refreshing, setRefreshing] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
   const [showAddToListModal, setShowAddToListModal] = useState(false)
-  const [selectedGameForList, setSelectedGameForList] = useState<{id: string, title: string} | null>(null)
+  const [selectedGameForList, setSelectedGameForList] = useState<{ id: string, title: string } | null>(null)
   const [userPreferredSteamGenres, setUserPreferredSteamGenres] = useState<string[]>([])
   const [showPreferencesModal, setShowPreferencesModal] = useState(false)
   const [availableSteamGenres, setAvailableSteamGenres] = useState<SteamGenre[]>([])
@@ -286,30 +123,65 @@ function HomeContent() {
   // Estados das notificações (backend gerencia o envio, app apenas exibe histórico)
   const [receivedNotifications, setReceivedNotifications] = useState<any[]>([]);
   const [showNotificationsHistory, setShowNotificationsHistory] = useState(false);
-  const [isPremium, setIsPremium] = useState(false);
-  
+
+  // Hooks customizados
+  const { isPremium } = usePremiumStatus();
+
   // Estado para o modal de idioma
   const [showLanguageModal, setShowLanguageModal] = useState(false);
-  
+
   // Estados dos novos serviços
   const [showSmartNotification, setShowSmartNotification] = useState(false)
   const [currentNotification, setCurrentNotification] = useState<any>(null)
   const [priceAnalysis, setPriceAnalysis] = useState<Map<number, any>>(new Map())
-  
+
   const [showPrivacyModal, setShowPrivacyModal] = useState(false)
   const [showHelpModal, setShowHelpModal] = useState(false)
   const [showProModal, setShowProModal] = useState(false)
 
-  
+
+  // Filtro de busca: 'all' | 'games' | 'dlcs'
+  const [searchFilter, setSearchFilter] = useState<'all' | 'games' | 'dlcs'>('games')
+  const [showTermsModal, setShowTermsModal] = useState(false)
+
+  // Estado para ordenação
+  const [sortBy, setSortBy] = useState<'best_price' | 'biggest_discount'>('best_price')
+
   // Estado para controle de embaralhamento aleatório
   const [shuffledGameItems, setShuffledGameItems] = useState<GameItem[]>([]);
   const [isShuffled, setIsShuffled] = useState(false);
-  
-  // Estado para controle do layout dos cards (coluna ou grade)
-  const [layoutType, setLayoutType] = useState<'column' | 'grid'>('column');
+
+  // Hook customizado para layout
+  const { layoutType, setLayoutType, toggleLayout } = useLayoutPreference();
 
   // Estado para o carrossel de jogos grátis da Epic Games
   const [epicCarouselIndex, setEpicCarouselIndex] = useState(0);
+
+  // Hook de filtros
+  const {
+    selectedGenres,
+    selectedTags,
+    availableGenres,
+    availableTags,
+    toggleGenre,
+    toggleTag,
+    clearFilters,
+    hasActiveFilters,
+    fetchFilteredDeals
+  } = useFilters()
+
+  // Estados para controle de atualização
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  // Hook do novo feed
+  const {
+    data: gameItems,
+    loading: feedLoading,
+    error: feedError,
+    hasNextPage,
+    refresh: refreshFeed,
+    loadMore
+  } = useGameFeed(selectedGenres, sortBy, refreshKey)
 
   // Memoizar lista de jogos grátis da Epic Games
   const uniqueFreeEpicGames = useMemo(() => {
@@ -366,21 +238,7 @@ function HomeContent() {
     }
   }, [uniqueFreeEpicGames.length]);
 
-  // Carregar preferência de layout salva
-  useEffect(() => {
-    const loadLayoutPreference = async () => {
-      try {
-        const savedLayout = await AsyncStorage.getItem('@layout_preference');
-        if (savedLayout === 'grid' || savedLayout === 'column') {
-          setLayoutType(savedLayout);
-        }
-      } catch (error) {
-  console.error('Erro ao carregar preferência de layout:', error);
-      }
-    };
-    
-    loadLayoutPreference();
-  }, []);
+  // Removido: useEffect loadLayoutPreference - agora gerenciado pelo hook useLayoutPreference
 
   // Registrar push token automaticamente quando o app abre
   useEffect(() => {
@@ -388,7 +246,7 @@ function HomeContent() {
       try {
         const { getCurrentPushToken, sendPushTokenToBackend } = await import('../src/notifications');
         const pushToken = await getCurrentPushToken('41306841-8939-4568-a1a1-af93af0428d1');
-        
+
         if (pushToken) {
           console.log('Push token obtido:', pushToken.substring(0, 30) + '...');
           await sendPushTokenToBackend(pushToken);
@@ -400,60 +258,31 @@ function HomeContent() {
         console.error('Erro ao registrar push token:', error);
       }
     };
-    
+
     registerPushToken();
   }, []);
 
-  // Verificar status premium do usuário
-  useEffect(() => {
-    const checkPremium = async () => {
-      try {
-        const premium = await SubscriptionService.isPremium();
-        setIsPremium(premium);
-        if (premium) {
-          console.log('Usu�rio premium detectado - recursos premium ativados');
-          // Atualizar o servi�o de anúncios intersticiais
-          await interstitialAdService.updatePremiumStatus();
-        }
-      } catch (error) {
-        console.error('Erro ao verificar status premium:', error);
-        setIsPremium(false);
-      }
-    };
-    
-    checkPremium();
-  }, []);
-  
-  // Salvar preferência de layout quando mudar
-  useEffect(() => {
-    const saveLayoutPreference = async () => {
-      try {
-        await AsyncStorage.setItem('@layout_preference', layoutType);
-      } catch (error) {
-  console.error('Erro ao salvar preferência de layout:', error);
-      }
-    };
-    
-    saveLayoutPreference();
-  }, [layoutType]);
-  
+  // Removido: useEffect checkPremium - agora gerenciado pelo hook usePremiumStatus
+
+  // Removido: useEffect saveLayoutPreference - agora gerenciado pelo hook useLayoutPreference
+
   // Verificar se deve mostrar onboarding de preferências no primeiro acesso
   // (Notificações agora são gerenciadas 100% pelo backend)
-  
+
   // Listener para registrar notificações no histórico SEM bloquear exibi��o nativa
   useEffect(() => {
     const Notifications = require('expo-notifications');
     const subscription = Notifications.addNotificationReceivedListener((notification: any) => {
       const { title, body, data } = notification.request.content;
-      
+
       // Registrar todas as notificações remotas, exceto notificações reagendadas localmente
       if (data?.isLocalReschedule) {
         return; // N�o registrar notificações reagendadas localmente (evitar duplicatas)
       }
-      
+
       console.log('?? Notificação recebida (registrando no histórico):', title);
-      
-  // Adicionar ao histórico - tanto remotas quanto locais, exceto reagendadas
+
+      // Adicionar ao histórico - tanto remotas quanto locais, exceto reagendadas
       setReceivedNotifications(prev => [{
         id: notification.request.identifier,
         title: title,
@@ -462,8 +291,8 @@ function HomeContent() {
         timestamp: new Date().toISOString(),
       }, ...prev]);
     });
-    
-  // Carregar notificações do AsyncStorage (histórico persistente)
+
+    // Carregar notificações do AsyncStorage (histórico persistente)
     const loadNotificationsHistory = async () => {
       try {
         const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
@@ -505,7 +334,7 @@ function HomeContent() {
       responseSubscription.remove();
     };
   }, []);
-  
+
   // Salvar notificações no AsyncStorage quando houver mudan�as
   useEffect(() => {
     const saveNotificationsHistory = async () => {
@@ -516,22 +345,22 @@ function HomeContent() {
         console.error('Erro ao salvar histórico de notificações:', error);
       }
     };
-    
+
     if (receivedNotifications.length > 0) {
       saveNotificationsHistory();
     }
   }, [receivedNotifications]);
-  
+
   // Listener para evento de abrir detalhes do jogo (vindo do modal de notificação)
   useEffect(() => {
     const handleOpenGameDetails = async (data: { appId: string }) => {
       console.log('Abrindo detalhes do jogo via EventBus:', data.appId);
-      
+
       // Buscar dados do jogo
       try {
         const response = await fetch(`https://looton.onrender.com/api/game-details/${data.appId}`);
         const gameData = await response.json();
-        
+
         if (gameData) {
           setSelectedGameDetails(gameData);
           setGameDetailsModalVisible(true);
@@ -547,23 +376,18 @@ function HomeContent() {
       EventBus.off('openGameDetails', handleOpenGameDetails);
     };
   }, []);
-  
+
   // Verificação de jogos vigiados agora é feita pelo backend a cada 6h (00:00, 06:00, 12:00, 18:00)
-  
+
   // Background fetch removido - backend cuida de tudo automaticamente
-  
+
   // Notificações de oferta do dia são enviadas automaticamente pelo backend �s 12h e 18h
   // N�o hé mais necessidade de toggle local
-  
-  // Filtro de busca: 'all' | 'games' | 'dlcs'
-  const [searchFilter, setSearchFilter] = useState<'all' | 'games' | 'dlcs'>('games')
-  const [showTermsModal, setShowTermsModal] = useState(false)
-  
-  // Estado para ordenação
-  const [sortBy, setSortBy] = useState<'best_price' | 'biggest_discount'>('best_price')
-  
 
-  
+
+
+
+
   const fadeAnim = useRef(new Animated.Value(0)).current
   const slideAnim = useRef(new Animated.Value(100)).current
   // Em React Native o retorno de setTimeout costuma ser um number em alguns ambientes
@@ -571,102 +395,20 @@ function HomeContent() {
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
   const searchInputRef = useRef<TextInput | null>(null)
 
-  
-  // Hook de filtros
-  const {
-    selectedGenres,
-    selectedTags,
-    availableGenres,
-    availableTags,
-    toggleGenre,
-    toggleTag,
-    clearFilters,
-    hasActiveFilters,
-    fetchFilteredDeals
-  } = useFilters()
-  
-  // Estados para controle de atualização
-  const [refreshKey, setRefreshKey] = useState(0);
 
-  // Hook do novo feed
-  const { 
-    data: gameItems, 
-    loading: feedLoading, 
-    error: feedError, 
-    hasNextPage, 
-    refresh: refreshFeed, 
-    loadMore 
-  } = useGameFeed(selectedGenres, sortBy, refreshKey)
 
-  // Estados para jogos categorizados (mesclados no feed principal)
-  const [categoryGames, setCategoryGames] = useState<GameItem[]>([])
-  const [loadingCategories, setLoadingCategories] = useState(false)
 
-  // Carregar jogos por categoria para mesclar no feed
-  const loadCategoryGames = useCallback(async () => {
-    if (__DEV__) console.log('🎮 Carregando jogos categorizados (Corrida, FPS, Sobrevivência, Esporte)...')
-    setLoadingCategories(true)
-    try {
-      // Carregar todas as categorias em paralelo
-      // Backend já filtra para retornar APENAS jogos em promoção e pagos
-      const [racing, fps, survival, sports] = await Promise.all([
-        api<any[]>('/deals?category=racing&limit=20'),
-        api<any[]>('/deals?category=fps&limit=20'),
-        api<any[]>('/deals?category=survival&limit=20'),
-        api<any[]>('/deals?category=sports&limit=20')
-      ])
-
-      // Combinar todos os jogos categorizados
-      const allCategoryGames = [
-        ...(racing || []),
-        ...(fps || []),
-        ...(survival || []),
-        ...(sports || [])
-      ]
-
-      // Converter para GameItem format e filtrar jogos sem título
-      const converted = allCategoryGames
-        .map(deal => ({
-          id: deal._id || deal.appId?.toString() || '',
-          title: deal.game?.title || deal.title || '',
-          coverUrl: deal.game?.coverUrl || deal.image || '',
-          genres: deal.steamGenres || deal.game?.genres || [],
-          tags: deal.game?.tags || deal.tags || [],
-          priceFinalCents: deal.priceFinalCents || Math.round((deal.priceFinal || 0) * 100),
-          discountPct: deal.discountPct || 0,
-          store: deal.store?.name || 'Steam',
-          url: deal.url || ''
-        }))
-        .filter(game => game.title && game.title.trim() !== '') // Filtrar jogos sem título
-
-      setCategoryGames(converted)
-
-      if (__DEV__) console.log('✅ Jogos categorizados carregados:', {
-        racing: racing?.length || 0,
-        fps: fps?.length || 0,
-        survival: survival?.length || 0,
-        sports: sports?.length || 0,
-        total: converted.length
-      })
-    } catch (e) {
-      console.error('❌ Erro ao carregar jogos categorizados:', e)
-    } finally {
-      setLoadingCategories(false)
-    }
-  }, [])
-
-  // Carregar jogos categorizados ao montar
-  useEffect(() => {
-    loadCategoryGames()
-  }, [loadCategoryGames])
+  // REMOVIDO: Jogos categorizados (mock) do backend
+  // const [categoryGames, setCategoryGames] = useState<GameItem[]>([])
+  // const [loadingCategories, setLoadingCategories] = useState(false)
 
 
   // Memoizar gameItems para evitar loops
   const memoizedGameItems = useMemo(() => {
-  // Se estiver embaralhado, usar os dados embaralhados, senão os originais
+    // Se estiver embaralhado, usar os dados embaralhados, senão os originais
     return isShuffled && shuffledGameItems.length > 0 ? shuffledGameItems : gameItems;
   }, [gameItems, shuffledGameItems, isShuffled]);
-  
+
   // Efeito para resetar o embaralhamento quando os gameItems originais mudarem
   // (por exemplo, quando os filtros mudam ou quando refreshFeed é chamado)
   useEffect(() => {
@@ -676,64 +418,18 @@ function HomeContent() {
     }
   }, [gameItems]);
 
-  // Fun��o para filtrar jogos indesejados (não disponíveis na Steam mais)
-  const shouldFilterGame = useCallback((title: string) => {
-    if (!title) return false;
-    const lowerTitle = title.toLowerCase();
-    // Filtrar DLCs e pacotes de extensão
-    if (lowerTitle.includes('pacote de extensão') || lowerTitle.includes('pacote de extensao')) {
-      return true;
-    }
-    return GAMES_TO_FILTER.some(filterTitle => lowerTitle.includes(filterTitle));
-  }, [])
-  
-  // FunÃ§Ã£o para verificar se o appId do jogo é vÃ¡lido (nÃ£o removido da Steam)
-  const isValidSteamApp = useCallback((appId: number | string | null | undefined) => {
-    if (!appId) return true; // Se nÃ£o tem appId, nÃ£o podemos verificar, entÃ£o assumimos como vÃ¡lido
-    
-    // Para jogos da Epic Games, o appId pode ser um UUID em vez de um nÃºmero
-    // Assumir como vÃ¡lido se for string nÃ£o numérica (provavelmente UUID da Epic)
-    if (typeof appId === 'string' && isNaN(Number(appId)) && !appId.includes(':')) {
-      return true;
-    }
-    
-    let numericAppId: number;
-    
-    // Converter appId para nÃºmero, lidando com diferentes formatos
-    if (typeof appId === 'string' && appId.includes(':')) {
-      // Se o appId estÃ¡ no formato "app:123456", extrair o nÃºmero
-      const parts = appId.split(':');
-      numericAppId = parseInt(parts[1], 10);
-    } else if (typeof appId === 'string') {
-      numericAppId = parseInt(appId, 10);
-    } else {
-      numericAppId = appId;
-    }
-    
-    // Verificar se o appId é um número v�lido
-    if (isNaN(numericAppId) || numericAppId <= 0) {
-      return false; // appId inv�lido
-    }
-    
-    // Alguns appIds conhecidos que foram removidos ou são inv�lidos
-    const invalidAppIds = [
-      1234567890, // Exemplo de appId claramente invÃ¡lido
-      // Adicione aqui mais appIds conhecidos como invÃ¡lidos, se necessÃ¡rio
-    ];
-    
-    return !invalidAppIds.includes(numericAppId);
-  }, [])
-  
+  // REMOVIDO: Funções de filtro - Aceitar TUDO
+
   // Fun��o para verificar se um jogo é rec�m-lan�ado (nos �ltimos 60 dias)
   const isRecentlyReleased = useCallback((releaseDate: string | undefined) => {
     if (!releaseDate) return false;
-    
+
     try {
       const release = new Date(releaseDate);
       const today = new Date();
       const diffTime = Math.abs(today.getTime() - release.getTime());
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      
+
       // Considerar como rec�m-lan�ado se lan�ado nos �ltimos 60 dias
       return diffDays <= 60;
     } catch (error) {
@@ -742,94 +438,21 @@ function HomeContent() {
     }
   }, []);
 
-  // Fun��o para verificar se um jogo tem informações suficientes para ser exibido
-  const hasSufficientInfo = useCallback((deal: any) => {
-    // Verificar se tem título
-    if (!deal.game?.title || deal.game.title.trim() === '') {
-      console.log('Filtrando jogo sem título:', deal);
-      return false;
-    }
-    
-    // Verificar se tem URL v�lida (deve conter steam ou epic, dependendo da loja)
-    if (!deal.url) {
-      console.log('Filtrando jogo sem URL:', deal.game?.title);
-      return false;
-    }
-    
-    // Para jogos da Steam ou Epic, verificar se tem URL v�lida
-    const isSteamUrl = deal.url.includes('store.steampowered.com') || deal.url.includes('steamcommunity.com');
-    const isEpicUrl = deal.url.includes('epicgames.com') || deal.url.includes('store.epicgames.com');
-    
-    if (!isSteamUrl && !isEpicUrl) {
-      console.log('Filtrando jogo com URL inv�lida:', deal.game?.title, deal.url);
-      return false;
-    }
-    
-    // Verificar se tem appId vÃ¡lido (pode ser nÃºmero ou string no formato "app:123456")
-    if (deal.appId) {
-      let appIdIsValid = true;
-      
-      if (typeof deal.appId === 'string') {
-        if (deal.appId.includes(':')) {
-          // Verificar se o appId estÃ¡ no formato "app:123456" e o nÃºmero é vÃ¡lido
-          const parts = deal.appId.split(':');
-          const appIdNumber = parseInt(parts[1], 10);
-          appIdIsValid = !isNaN(appIdNumber) && appIdNumber > 0;
-        } else {
-          // Verificar se a string é um nÃºmero vÃ¡lido
-          const appIdNumber = parseInt(deal.appId, 10);
-          appIdIsValid = !isNaN(appIdNumber) && appIdNumber > 0;
-        }
-      } else if (typeof deal.appId === 'number') {
-        // Verificar se o nÃºmero é vÃ¡lido
-        appIdIsValid = !isNaN(deal.appId) && deal.appId > 0;
-      } else {
-        appIdIsValid = false;
-      }
-      
-      if (!appIdIsValid) {
-        console.log('Filtrando jogo com appId invÃ¡lido:', deal.game?.title, deal.appId);
-        return false;
-      }
-    }
-    
-    return true;
-  }, [])
-  
-  // FunÃ§Ã£o para converter GameItem para Deal (compatibilidade) e filtrar itens invÃ¡lidos
+
+  // FunÃ§Ã£o para converter GameItem para Deal (compatibilidade) SEM FILTROS
   const convertGameItemToDeal = useCallback((item: GameItem): Deal | null => {
-    // Criar um objeto temporÃ¡rio para verificar informaÃ§Ãµes suficientes
-    const tempDeal = {
-      game: { title: item.title },
-      url: item.url,
-      appId: item.id
-    };
-    
-    // Verificar se tem informaÃ§Ãµes suficientes
-    if (!hasSufficientInfo(tempDeal)) {
-      return null; // Filtrar este jogo por informaÃ§Ãµes insuficientes
-    }
-    
-    // Verificar se o jogo deve ser filtrado
-    if (shouldFilterGame(item.title)) {
-      return null; // Filtrar este jogo
-    }
-    
-    // Verificar se o appId é vÃ¡lido
-    if (item.id && !isValidSteamApp(item.id)) {
-      return null; // Filtrar este jogo se o appId for invÃ¡lido
-    }
-    
+    // REMOVIDO: Todos os filtros - Aceitar TUDO
+
     // Calcular preÃ§o base a partir do preÃ§o final e desconto percentual
     let discountPct = item.discountPct || 0;
     const priceFinal = item.priceFinalCents / 100;
     let priceBase: number;
-    
+
     // Verificar e corrigir descontos invÃ¡lidos
     if (discountPct < 0 || discountPct > 200) {
       // Desconto invÃ¡lido detectado, recalculando
       console.warn(`Desconto invÃ¡lido detectado: ${discountPct}% para ${item.title}, recalculando...`);
-      
+
       // Se preÃ§o final for 0, é jogo grÃ¡tis (100% de desconto)
       if (priceFinal === 0) {
         discountPct = 100;
@@ -853,7 +476,7 @@ function HomeContent() {
         discountPct = 0;
       }
     }
-    
+
     // Verificar se o preÃ§o final é 0 (gratuito), o que indica 100% de desconto
     if (priceFinal === 0) {
       // Jogo grÃ¡tis - desconto deve ser 100%
@@ -871,13 +494,13 @@ function HomeContent() {
       // Se nÃ£o houver desconto (ou desconto negativo), usar o preÃ§o final como preÃ§o base
       priceBase = priceFinal;
     }
-    
+
     // Garantir que o desconto esteja dentro de limites razoÃ¡veis
     const finalDiscountPct = Math.max(0, Math.min(100, discountPct));
-    
+
     // Arredondar para 2 casas decimais para evitar problemas de precisÃ£o
     priceBase = Math.round(priceBase * 100) / 100;
-    
+
     return {
       _id: item.id,
       appId: (item as any).appId, // appId numérico para o modal de detalhes
@@ -896,7 +519,7 @@ function HomeContent() {
         name: item.store
       }
     };
-  }, [shouldFilterGame, isValidSteamApp, hasSufficientInfo])
+  }, [])
 
   // Memoizar transformação de dados para o FlatList (evita recálculo em cada render)
   const processedFlatListData = useMemo(() => {
@@ -904,24 +527,14 @@ function HomeContent() {
       console.log(`\n🎮 ========== INÍCIO PROCESSING ==========`);
       console.log(`📊 memoizedGameItems: ${memoizedGameItems.length}`);
       console.log(`📊 deals: ${deals.length}`);
-      console.log(`📊 categoryGames: ${categoryGames.length}`);
       console.log(`📊 hasActiveFilters: ${hasActiveFilters}`);
     }
 
-    // Usar deals como fallback quando não há itens no feed ou quando o feed falha
-    let baseItems = (hasActiveFilters && memoizedGameItems.length > 0)
-      ? memoizedGameItems
-      : (deals.length > 0 ? deals.map(d => ({
-          ...d,
-          id: d._id || (d as any).id || '',
-          priceFinalCents: (d as any).priceFinalCents || 0,
-          discountPct: d.discountPct || 0
-        } as GameItem)) : memoizedGameItems);
+    // Usar memoizedGameItems que já vem do useGameFeed (busca do backend)
+    // deals é usado apenas para jogos grátis Epic (banner)
+    let allGames = [...memoizedGameItems];
 
-    if (__DEV__) console.log(`📊 baseItems selecionados: ${baseItems.length}`);
-
-    // Adicionar jogos categorizados (já vêm filtrados: apenas em promoção + pagos)
-    let allGames = [...categoryGames, ...baseItems];
+    if (__DEV__) console.log(`📊 allGames do useGameFeed: ${allGames.length}`);
 
     // Remover duplicatas (baseado no ID)
     const seenIds = new Set<string>();
@@ -953,25 +566,25 @@ function HomeContent() {
       return aIsSuperDeal ? -1 : 1;
     });
 
-    // Remover itens da Epic Games do feed principal APENAS se houver outros jogos
-    // (já que estão no banner, mas mantemos se forem a única fonte)
-    const nonEpicCount = result.filter(deal => {
+    // Remover APENAS jogos GRÁTIS da Epic Games (que aparecem no banner)
+    // Manter deals PAGOS da Epic (ITAD) no feed
+    result = result.filter((deal) => {
       const storeName = deal.store?.name || (deal as any).store || '';
-      return !storeName.toLowerCase().includes('epic');
-    }).length;
+      const isEpic = storeName.toLowerCase().includes('epic');
 
-    // Só remover Epic Games se houver pelo menos 3 jogos de outras lojas
-    if (nonEpicCount >= 3) {
-      result = result.filter((deal) => {
-        const storeName = deal.store?.name || (deal as any).store || '';
-        if (storeName.toLowerCase().includes('epic')) {
-          return false; // Não incluir itens da Epic no feed principal
-        }
-        return true;
-      });
-    }
+      if (!isEpic) {
+        return true; // Manter todos os jogos que não são da Epic (Steam, etc)
+      }
 
-    if (__DEV__) console.log(`📊 result após remover Epic: ${result.length}`);
+      // Para jogos da Epic, remover apenas os grátis (que estão no banner)
+      const priceFinal = deal.priceFinal || (deal as any).priceFinalCents || 0;
+      const isFree = priceFinal === 0;
+
+      // Manter deals pagos da Epic (ITAD), remover apenas grátis (banner)
+      return !isFree;
+    });
+
+    if (__DEV__) console.log(`📊 result após remover Epic grátis (mantendo Epic pagos): ${result.length}`);
 
     // Remove known test card(s) by filtering titles or known test IDs
     const bannedIds = new Set(['info_test_version', 'test_card']);
@@ -996,23 +609,23 @@ function HomeContent() {
     }
 
     return result;
-  }, [hasActiveFilters, memoizedGameItems, deals, categoryGames, convertGameItemToDeal]);
+  }, [hasActiveFilters, memoizedGameItems, deals, convertGameItemToDeal]);
 
   // Inicializar app diretamente sem onboarding
   useEffect(() => {
     const initializeApp = async () => {
       try {
-  if (__DEV__) console.log('Inicializando app...')
-        
+        if (__DEV__) console.log('Inicializando app...')
+
         // Carregar deals iniciais
         fetchDeals()
-        
+
         // Solicitar permissÃ£o de notificaÃ§Ã£o apenas uma vez
         const requestNotificationPermission = async () => {
           try {
             const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default
             const hasAskedBefore = await AsyncStorage.getItem('@notification_permission_asked')
-            
+
             if (!hasAskedBefore) {
               // Aguardar um pouco antes de pedir
               setTimeout(async () => {
@@ -1029,9 +642,9 @@ function HomeContent() {
             console.log('Erro ao verificar permissÃ£o de notificaÃ§Ã£o:', e)
           }
         }
-        
+
         requestNotificationPermission()
-        
+
         // AnimaÃ§Ã£o de entrada do app
         Animated.parallel([
           Animated.timing(fadeAnim, {
@@ -1087,10 +700,10 @@ function HomeContent() {
   // FunÃ§Ã£o para filtrar resultados de busca por tipo usando classificaÃ§Ã£o real da Steam
   const applySearchFilter = useCallback((results: Deal[]) => {
     if (searchFilter === 'all') return results
-    
+
     return results.filter((item: any) => {
       const kind = item.kind || 'game' // Usar classificaÃ§Ã£o real da Steam API
-      
+
       if (searchFilter === 'dlcs') {
         // Mostrar apenas DLCs, pacotes e bundles classificados pela Steam
         return kind === 'dlc' || kind === 'package' || kind === 'bundle'
@@ -1108,7 +721,7 @@ function HomeContent() {
         setSearchResults([])
         setOriginalSearchResults([])
       } else {
-        const filtered = deals.filter((deal: any) => 
+        const filtered = deals.filter((deal: any) =>
           deal.game?.title?.toLowerCase().includes(searchQuery.toLowerCase())
         )
         setFilteredDeals(filtered)
@@ -1233,7 +846,7 @@ function HomeContent() {
           },
           store: {
             name: offer.store?.name || item.store?.name || item.store ||
-                  (item.id?.includes('epic_') ? 'Epic Games' : 'Steam')
+              (item.id?.includes('epic_') ? 'Epic Games' : 'Steam')
           }
         }
       })
@@ -1278,12 +891,12 @@ function HomeContent() {
   // Debounce da busca
   const handleSearchChange = (text: string) => {
     setSearchQuery(text)
-    
+
     // Limpar timeout anterior
     if (searchTimeout.current) {
       clearTimeout(searchTimeout.current)
     }
-    
+
     // Buscar apÃ³s 500ms de inatividade
     searchTimeout.current = setTimeout(() => {
       if (activeTab === 'search') {
@@ -1296,7 +909,7 @@ function HomeContent() {
   useEffect(() => {
     if (activeTab === 'search') {
       // focus input when entering search tab
-      try { searchInputRef.current?.focus?.() } catch (e) {}
+      try { searchInputRef.current?.focus?.() } catch (e) { }
       if (searchQuery.trim().length >= 2) {
         // call immediately without waiting for debounce
         searchSteamGames(searchQuery)
@@ -1349,14 +962,13 @@ function HomeContent() {
 
       // Buscar deals do backend E jogos grátis da Epic em paralelo
       const [response, epicGames] = await Promise.all([
-        api<any>(`/deals?limit=1000`), // Máximo permitido pelo backend
+        api<any>(`/deals?limit=1000`), // Buscar TODOS os jogos em promoção do backend
         fetchEpicGames() // Buscar jogos grátis da Epic separadamente
       ]);
 
       // A resposta do endpoint /deals está no formato original
       const curated = Array.isArray(response) ? response : [];
 
-      // Combinar deals do backend com jogos da Epic
       // Converter epicGames para o formato Deal
       const epicDealsFormatted = epicGames.map((game: any) => ({
         _id: game.id || `epic-${game.title}`,
@@ -1379,7 +991,7 @@ function HomeContent() {
         promotionEndDate: game.promotionEndDate
       }));
 
-      // Combinar ambos
+      // Combinar jogos da Epic com deals do backend
       const allDeals = [...epicDealsFormatted, ...curated];
 
       if (allDeals.length === 0) {
@@ -1434,17 +1046,9 @@ function HomeContent() {
         isEpicFree: item.isEpicFree || false
       }));
 
-      // Filtrar jogos indesejados, appIds inválidos, jogos com informações insuficientes E DLCs
-      const sourceDeals: any[] = rawDeals.filter(deal => {
-        if (!hasSufficientInfo(deal)) return false; // Filtrar por informações insuficientes
-        if (shouldFilterGame(deal.game?.title)) return false; // Filtrar por título
-        // Filtrar por appId inválido
-        if (deal.appId && !isValidSteamApp(deal.appId)) return false;
-        // Filtrar DLCs/pacotes
-        if (isDLC(deal.game?.title || '')) return false;
-        return true;
-      })
-      
+      // REMOVIDO: Todos os filtros - Aceitar TUDO do backend
+      const sourceDeals: any[] = rawDeals;
+
       // RemoÃ§Ã£o otimizada de duplicatas
       const seen = new Set()
       const uniqueDeals = sourceDeals.filter((deal: any) => {
@@ -1457,16 +1061,16 @@ function HomeContent() {
       uniqueDeals.sort((a: Deal, b: Deal) => {
         const aIsSuperDeal = a.discountPct >= 70;
         const bIsSuperDeal = b.discountPct >= 70;
-        
+
         // Se ambos forem super ofertas ou ambos nÃ£o forem, ordenar por desconto
         if (aIsSuperDeal === bIsSuperDeal) {
           return b.discountPct - a.discountPct;
         }
-        
+
         // Super ofertas vÃªm primeiro
         return aIsSuperDeal ? -1 : 1;
       })
-      
+
       // Sistema DESATIVADO: Agora mostramos TODOS os jogos disponíveis
       // Mantém ordenação por desconto para ter os melhores deals no topo
       const sortedDeals = [...uniqueDeals].sort((a: Deal, b: Deal) => {
@@ -1477,12 +1081,12 @@ function HomeContent() {
 
       // Mostrar TODOS os deals disponíveis (sem limite de janela)
       setDeals(sortedDeals);
-      
+
       // Salvar que atualizamos hoje
       await setLastUpdatedDay(currentDayOfYear);
-      
+
       // Notificação de oferta do dia agora é enviada pelo backend Ã s 12h e 18h
-      
+
     } catch (err: any) {
       let errorMessage = 'Erro ao carregar ofertas'
       if (err?.name === 'AbortError') {
@@ -1492,7 +1096,7 @@ function HomeContent() {
       } else if (err?.message) {
         errorMessage = `Erro: ${err.message}`
       }
-      
+
       setError(errorMessage)
       setDeals([])
     } finally {
@@ -1606,7 +1210,7 @@ function HomeContent() {
     setSelectedGameId(null)
     setSelectedDeal(null)
     loadWishlistCount() // Recarregar contador apÃ³s possÃ­veis mudanÃ§as na wishlist
-    
+
     // Tentar mostrar anÃºncio ao fechar detalhes
     interstitialAdService.tryShowAd();
   }
@@ -1686,7 +1290,7 @@ function HomeContent() {
   }
 
   const getBestDeal = () => {
-    return deals.reduce((best: any, current: any) => 
+    return deals.reduce((best: any, current: any) =>
       current.discountPct > best.discountPct ? current : best, deals[0])
   }
 
@@ -1703,7 +1307,7 @@ function HomeContent() {
     const discount = deal.discountPct || 0
     const finalPrice = deal.priceFinal || 0
     const originalPrice = deal.priceBase || finalPrice
-    
+
     // AnÃ¡lise baseada no desconto e preÃ§o
     if (discount >= 70) {
       return { label: t('price.veryLow'), color: '#10B981', bgColor: 'rgba(16, 185, 129, 0.15)' }
@@ -1720,12 +1324,12 @@ function HomeContent() {
       // PreÃ§o baixo naturalmente
       return { label: t('price.good'), color: '#059669', bgColor: 'rgba(5, 150, 105, 0.15)' }
     }
-    
+
     // Se nÃ£o tem desconto e preÃ§o médio
     if (discount === 0) {
       return { label: t('price.normal'), color: '#6B7280', bgColor: 'rgba(107, 114, 128, 0.15)' }
     }
-    
+
     return null
   }
 
@@ -1749,7 +1353,7 @@ function HomeContent() {
           name: 'Steam'
         }
       };
-      
+
       // NotificaÃ§Ãµes agora sÃ£o enviadas pelo backend
       // Para testar, use os endpoints de debug do backend:
       // GET /debug/test-daily-offer
@@ -1834,9 +1438,9 @@ function HomeContent() {
     if (analysis.priceStatus === 'high') return null // NÃ£o mostrar preÃ§os altos
 
     return (
-      <View style={{ 
-        flexDirection: 'row', 
-        alignItems: 'center', 
+      <View style={{
+        flexDirection: 'row',
+        alignItems: 'center',
         marginTop: 4,
         backgroundColor: analysis.priceStatus === 'lowest' ? 'rgba(16,185,129,0.1)' : 'rgba(0,0,0,0.3)',
         paddingHorizontal: 6,
@@ -1846,18 +1450,18 @@ function HomeContent() {
         borderColor: analysis.priceStatus === 'lowest' ? '#10B981' : 'transparent'
       }}>
         <Ionicons name={getStatusIcon()} size={12} color={getStatusColor()} />
-        <Text style={{ 
-          color: getStatusColor(), 
-          fontSize: 10, 
+        <Text style={{
+          color: getStatusColor(),
+          fontSize: 10,
           fontWeight: '600',
           marginLeft: 4
         }}>
           {getStatusText()}
         </Text>
         {analysis.savingsFromAverage > 0 && (
-          <Text style={{ 
-            color: '#10B981', 
-            fontSize: 9, 
+          <Text style={{
+            color: '#10B981',
+            fontSize: 9,
             marginLeft: 4,
             opacity: 0.8
           }}>
@@ -1879,9 +1483,9 @@ function HomeContent() {
           />
           <View>
             <Text style={{ fontSize: 32, fontWeight: '800', color: '#FFFFFF' }}>{t('header.title')}</Text>
-            <Text style={{ 
-              color: '#9CA3AF', 
-              fontSize: 14, 
+            <Text style={{
+              color: '#9CA3AF',
+              fontSize: 14,
               fontWeight: '400',
               marginTop: -2
             }}>
@@ -1889,7 +1493,7 @@ function HomeContent() {
             </Text>
           </View>
         </View>
-        
+
         <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
           {/* Toggle de Layout */}
           <TouchableOpacity
@@ -1898,10 +1502,10 @@ function HomeContent() {
               padding: 8,
             }}
           >
-            <Ionicons 
-              name={layoutType === 'grid' ? 'list' : 'grid'} 
-              size={24} 
-              color="#FFFFFF" 
+            <Ionicons
+              name={layoutType === 'grid' ? 'list' : 'grid'}
+              size={24}
+              color="#FFFFFF"
             />
           </TouchableOpacity>
 
@@ -1948,136 +1552,37 @@ function HomeContent() {
   }
 
   // FunÃ§Ã£o auxiliar para renderizar o Ã­cone da loja como logo circular
-  const renderStoreIcon = (storeName: string | undefined) => {
-    if (!storeName) {
-      return (
-        <View style={{ 
-          width: isTablet ? 28 : 24, 
-          height: isTablet ? 28 : 24, 
-          borderRadius: 14, 
-          backgroundColor: '#4B5563',
-          justifyContent: 'center',
-          alignItems: 'center'
-        }}>
-          <Ionicons name="storefront-outline" size={isTablet ? 16 : 14} color="#FFFFFF" />
-        </View>
-      );
-    }
-
-    switch (storeName) {
-      case 'Steam':
-        return (
-          <Image 
-            source={require('../assets/images/steam.png')} 
-            style={{ width: isTablet ? 28 : 24, height: isTablet ? 28 : 24 }} 
-            resizeMode="contain"
-          />
-        );
-      case 'Epic Games':
-        return (
-          <Image 
-            source={require('../assets/images/epicgames.png')} 
-            style={{ width: isTablet ? 28 : 24, height: isTablet ? 28 : 24 }} 
-            resizeMode="contain"
-          />
-        );
-      case 'Origin':
-        return (
-          <View style={{ 
-            width: isTablet ? 28 : 24, 
-            height: isTablet ? 28 : 24, 
-            borderRadius: 14, 
-            backgroundColor: '#F56C26',
-            justifyContent: 'center',
-            alignItems: 'center'
-          }}>
-            <Ionicons name="logo-game-controller" size={isTablet ? 16 : 14} color="#FFFFFF" />
-          </View>
-        );
-      case 'Uplay':
-        return (
-          <View style={{ 
-            width: isTablet ? 28 : 24, 
-            height: isTablet ? 28 : 24, 
-            borderRadius: 14, 
-            backgroundColor: '#000000',
-            justifyContent: 'center',
-            alignItems: 'center'
-          }}>
-            <Ionicons name="key" size={isTablet ? 16 : 14} color="#FFFFFF" />
-          </View>
-        );
-      case 'Humble Bundle':
-        return (
-          <View style={{ 
-            width: isTablet ? 28 : 24, 
-            height: isTablet ? 28 : 24, 
-            borderRadius: 14, 
-            backgroundColor: '#ab6441',
-            justifyContent: 'center',
-            alignItems: 'center'
-          }}>
-            <Ionicons name="cube" size={isTablet ? 16 : 14} color="#FFFFFF" />
-          </View>
-        );
-      case 'Green Man Gaming':
-        return (
-          <View style={{ 
-            width: isTablet ? 28 : 24, 
-            height: isTablet ? 28 : 24, 
-            borderRadius: 14, 
-            backgroundColor: '#8BBC3E',
-            justifyContent: 'center',
-            alignItems: 'center'
-          }}>
-            <Ionicons name="leaf" size={isTablet ? 16 : 14} color="#FFFFFF" />
-          </View>
-        );
-      default:
-        return (
-          <View style={{ 
-            width: isTablet ? 28 : 24, 
-            height: isTablet ? 28 : 24, 
-            borderRadius: 14, 
-            backgroundColor: '#4B5563',
-            justifyContent: 'center',
-            alignItems: 'center'
-          }}>
-            <Ionicons name="storefront-outline" size={isTablet ? 16 : 14} color="#FFFFFF" />
-          </View>
-        );
-    }
-  };
+  // Removido: renderStoreIcon inline - agora usando função importada de storeUtils
 
   const renderGameCard = ({ item: deal, index, isGridLayout }: { item: Deal & { isBestDeal?: boolean, highlightColor?: string }, index?: number, isGridLayout?: boolean }) => {
     const isHighlighted = deal.discountPct >= 50;
     const isSuperDeal = deal.discountPct >= 70;
     const isRecentlyReleasedFlag = deal.releaseDate ? isRecentlyReleased(deal.releaseDate) : false;
     const highlightColor = deal.highlightColor || (isSuperDeal ? '#FFD700' : isHighlighted ? '#ff8800' : '#FFD700');
-    
+
     // Verificar se é Early Access - busca mais ampla
     const isEarlyAccess = deal.isEarlyAccess === true ||
       // Verificar no tÃ­tulo do jogo
       (deal.game?.title && String(deal.game.title).toLowerCase().includes('early access')) ||
       (deal.game?.title && String(deal.game.title).toLowerCase().includes('acesso antecipado')) ||
       // Verificar nas tags
-      (deal.game?.tags && Array.isArray(deal.game.tags) && 
-       deal.game.tags.some((tag: string) => 
-         String(tag).toLowerCase().includes('early access') || 
-         String(tag).toLowerCase().includes('acesso antecipado'))) ||
+      (deal.game?.tags && Array.isArray(deal.game.tags) &&
+        deal.game.tags.some((tag: string) =>
+          String(tag).toLowerCase().includes('early access') ||
+          String(tag).toLowerCase().includes('acesso antecipado'))) ||
       // Verificar nos gÃªneros Steam
-      (deal.steamGenres && Array.isArray(deal.steamGenres) && 
-       deal.steamGenres.some((genre: any) => 
-         (genre.name && String(genre.name).toLowerCase().includes('early access')) || 
-         (genre.name && String(genre.name).toLowerCase().includes('acesso antecipado')) ||
-         (genre.description && String(genre.description).toLowerCase().includes('early access')) ||
-         (genre.description && String(genre.description).toLowerCase().includes('acesso antecipado')))) ||
+      (deal.steamGenres && Array.isArray(deal.steamGenres) &&
+        deal.steamGenres.some((genre: any) =>
+          (genre.name && String(genre.name).toLowerCase().includes('early access')) ||
+          (genre.name && String(genre.name).toLowerCase().includes('acesso antecipado')) ||
+          (genre.description && String(genre.description).toLowerCase().includes('early access')) ||
+          (genre.description && String(genre.description).toLowerCase().includes('acesso antecipado')))) ||
       // Verificar nos gÃªneros do jogo
-      (deal.game?.genres && Array.isArray(deal.game.genres) && 
-       deal.game.genres.some((genre: string | any) => 
-         (typeof genre === 'string' && (String(genre).toLowerCase().includes('early access') || String(genre).toLowerCase().includes('acesso antecipado'))) ||
-         (typeof genre === 'object' && genre.name && (String(genre.name).toLowerCase().includes('early access') || String(genre.name).toLowerCase().includes('acesso antecipado')))));
-    
+      (deal.game?.genres && Array.isArray(deal.game.genres) &&
+        deal.game.genres.some((genre: string | any) =>
+          (typeof genre === 'string' && (String(genre).toLowerCase().includes('early access') || String(genre).toLowerCase().includes('acesso antecipado'))) ||
+          (typeof genre === 'object' && genre.name && (String(genre.name).toLowerCase().includes('early access') || String(genre.name).toLowerCase().includes('acesso antecipado')))));
+
     // Ajustar dimensÃµes para modo grid (como hardware)
     const imageHeight = isGridLayout ? 120 : 200;
     const titleFontSize = isGridLayout ? (isTablet ? 16 : 14) : (isTablet ? 20 : 18);
@@ -2086,265 +1591,274 @@ function HomeContent() {
     const padding = isGridLayout ? (isTablet ? 12 : 10) : (isTablet ? 20 : 16);
     const headerPadding = isGridLayout ? 8 : 10;
     const headerFontSize = isGridLayout ? (isTablet ? 14 : 12) : (isTablet ? 18 : 16);
-    
+
+    const storeName = deal.store?.name;
+    if (storeName?.toLowerCase().includes('ea') || storeName?.toLowerCase().includes('epic')) {
+      console.log(`[Frontend Debug] Deal: ${deal.game?.title}, Store: ${storeName}`);
+    }
+
     return (
       <View style={{ marginBottom: isGridLayout ? 12 : 16 }}>
-        <View 
+        <View
           style={{
             borderRadius: isGridLayout ? 12 : 16,
             overflow: 'hidden',
           }}
         >
           <TouchableOpacity
-          onPress={() => openGameDetails(deal)}
-          activeOpacity={0.95}
-          style={{
-            backgroundColor: '#374151',
-            borderRadius: isGridLayout ? 10 : 14, // Menor que 16 para acomodar a borda de 2px da View wrapper
-            overflow: 'hidden',
-            // Adicionar leve sombreamento
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.2,
-            shadowRadius: 4,
-            elevation: 4,
-            borderWidth: 0,
-            borderColor: 'transparent'
-          }}
-        >
-
-      {/* Destaque para jogos recém-lanÃ§ados */}
-      {isRecentlyReleasedFlag && !isGridLayout && (
-        <View style={{ position: 'absolute', top: 8, left: 8, zIndex: 20, alignItems: 'center' }}>
-          <View
-            accessible
-            accessibilityLabel="Novo LanÃ§amento!"
+            onPress={() => openGameDetails(deal)}
+            activeOpacity={0.95}
             style={{
-              backgroundColor: '#10B981', // Verde para novos lanÃ§amentos
-              padding: 4,
-              borderRadius: 16,
-              borderWidth: 1,
-              borderColor: '#059669',
-              shadowColor: '#10B981',
+              backgroundColor: '#374151',
+              borderRadius: isGridLayout ? 10 : 14, // Menor que 16 para acomodar a borda de 2px da View wrapper
+              overflow: 'hidden',
+              // Adicionar leve sombreamento
+              shadowColor: '#000',
               shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.6,
-              shadowRadius: 6,
-              elevation: 10,
-              alignItems: 'center',
-              justifyContent: 'center'
+              shadowOpacity: 0.2,
+              shadowRadius: 4,
+              elevation: 4,
+              borderWidth: 0,
+              borderColor: 'transparent'
             }}
           >
-            <Ionicons name="flame" size={16} color="#FFFFFF" />
-          </View>
-          <Text style={{ color: '#10B981', fontSize: 9, marginTop: 4, fontWeight: '600' }}>
-            LANÃ‡AMENTO!
-          </Text>
-        </View>
-      )}
-      {/* Barra superior com a loja */}
-      <LinearGradient
-        colors={deal.store?.name?.toLowerCase().includes('epic') ? ['#000000', '#1a1a1a'] : ['#60a5fa', '#3b82f6']} // Gradiente preto para jogos da Epic Games, azul para Steam
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={{ 
-          flexDirection: 'row', 
-          alignItems: 'center', 
-          justifyContent: 'center',
-          paddingHorizontal: isTablet ? 20 : 16,
-          paddingVertical: headerPadding,
-          borderTopLeftRadius: isGridLayout ? 10 : 14, // Mantém o arredondamento do card
-          borderTopRightRadius: isGridLayout ? 10 : 14
-        }}
-      >
-        {renderStoreIcon(deal.store?.name)}
-        <Text style={{ 
-          color: '#FFFFFF', 
-          fontSize: headerFontSize, 
-          fontWeight: 'bold', 
-          marginLeft: 10,
-          textShadowColor: 'rgba(0, 0, 0, 0.3)', // Adiciona sombra para melhor contraste
-          textShadowOffset: { width: 1, height: 1 },
-          textShadowRadius: 1
-        }}>
-          {deal.store?.name || 'Loja'}
-        </Text>
-      </LinearGradient>
-      
-      {/* Removido: botões de favorito e adicionar Ã  lista foram movidos para o botão 'Desejar' no modal */}
 
-      <GameCover 
-        imageUrls={(deal.imageUrls && deal.imageUrls.length > 0) ? deal.imageUrls : [deal.game?.coverUrl]} 
-        height={imageHeight}
-        style={{ width: '100%', height: imageHeight, borderTopLeftRadius: 0, borderTopRightRadius: 0 }} 
-      />
-        
-        <View style={{ padding: padding }}>
-        <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: isGridLayout ? 6 : (isTablet ? 10 : 8), minHeight: isGridLayout ? 40 : undefined }}>
-          <Text 
-            style={{ 
-              color: '#FFFFFF', 
-              fontSize: titleFontSize, 
-              fontWeight: '700',
-              flex: 1,
-              marginRight: 8
-            }}
-            numberOfLines={2}
-            ellipsizeMode="tail"
-          >
-            {String(deal.game?.title || 'TÃ­tulo nÃ£o encontrado')}
-          </Text>
-          
-          {getPriceIndicator(deal) && !isGridLayout && (
-            <View style={{
-              backgroundColor: getPriceIndicator(deal)?.bgColor,
-              paddingHorizontal: 6,
-              paddingVertical: 3,
-              borderRadius: 8,
-              borderWidth: 1,
-              borderColor: getPriceIndicator(deal)?.color,
-            }}>
-              <Text style={{
-                color: getPriceIndicator(deal)?.color,
-                fontSize: 9,
-                fontWeight: '800',
-                letterSpacing: 0.5,
-              }}>
-                {getPriceIndicator(deal)?.label}
-              </Text>
-            </View>
-          )}
-        </View>
-        
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <View style={{ flex: 1, justifyContent: 'center', paddingRight: 8 }}>
-            {(deal.discountPct || 0) > 0 && (
-              <PriceText
-                value={deal.priceBase}
-                deal={deal}
-                style={{ color: '#EF4444', fontSize: oldPriceFontSize, textDecorationLine: 'line-through', marginBottom: 2, lineHeight: isGridLayout ? (isTablet ? 14 : 13) : (isTablet ? 18 : 16) }} // PreÃ§o base em vermelho
-              />
+            {/* Destaque para jogos recém-lanÃ§ados */}
+            {isRecentlyReleasedFlag && !isGridLayout && (
+              <View style={{ position: 'absolute', top: 8, left: 8, zIndex: 20, alignItems: 'center' }}>
+                <View
+                  accessible
+                  accessibilityLabel="Novo LanÃ§amento!"
+                  style={{
+                    backgroundColor: '#10B981', // Verde para novos lanÃ§amentos
+                    padding: 4,
+                    borderRadius: 16,
+                    borderWidth: 1,
+                    borderColor: '#059669',
+                    shadowColor: '#10B981',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.6,
+                    shadowRadius: 6,
+                    elevation: 10,
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                >
+                  <Ionicons name="flame" size={16} color="#FFFFFF" />
+                </View>
+                <Text style={{ color: '#10B981', fontSize: 9, marginTop: 4, fontWeight: '600' }}>
+                  LANÃ‡AMENTO!
+                </Text>
+              </View>
             )}
-            {/* Final price: highlight in green when discounted */}
-            <PriceText
-              value={deal.priceFinal}
-              deal={deal}
-              style={((deal.discountPct || 0) > 0 || (deal.priceBase && deal.priceFinal < deal.priceBase))
-                ? { color: '#10B981', backgroundColor: 'rgba(16,185,129,0.08)', paddingHorizontal: 3, paddingVertical: 1, borderRadius: 4, fontSize: priceFontSize, fontWeight: '900', lineHeight: isGridLayout ? (isTablet ? 22 : 20) : (isTablet ? 28 : 24), textShadowColor: 'rgba(16,185,129,0.06)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 1, alignSelf: 'flex-start' } // PreÃ§o final em destaque verde
-                : { color: (deal as any).isFree || deal.priceFinal === 0 ? '#3B82F6' : '#FFFFFF', fontSize: priceFontSize, fontWeight: '800', lineHeight: isGridLayout ? (isTablet ? 22 : 20) : (isTablet ? 28 : 24) }
+            {/* Barra superior com a loja */}
+            <LinearGradient
+              colors={
+                deal.store?.name?.toLowerCase().includes('epic')
+                  ? ['#000000', '#1a1a1a'] // Gradiente preto para Epic Games
+                  : ['#60a5fa', '#3b82f6'] // Gradiente azul para Steam
               }
-            />
-          </View>
-          
-          {(deal.discountPct || 0) > 0 && (
-            <View style={{ 
-              backgroundColor: '#DC2626', 
-              paddingHorizontal: isGridLayout ? 8 : 12, 
-              paddingVertical: isGridLayout ? 4 : 6, 
-              borderRadius: isGridLayout ? 16 : 20 
-            }}>
-              <Text style={{ 
-                color: '#FFFFFF', 
-                fontSize: isGridLayout ? (isTablet ? 11 : 10) : (isTablet ? 14 : 12), 
-                fontWeight: '700' 
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                paddingHorizontal: isTablet ? 20 : 16,
+                paddingVertical: headerPadding,
+                borderTopLeftRadius: isGridLayout ? 10 : 14, // Mantém o arredondamento do card
+                borderTopRightRadius: isGridLayout ? 10 : 14
+              }}
+            >
+              {renderStoreIcon(deal.store?.name)}
+              <Text style={{
+                color: '#FFFFFF',
+                fontSize: headerFontSize,
+                fontWeight: 'bold',
+                marginLeft: 10,
+                textShadowColor: 'rgba(0, 0, 0, 0.3)', // Adiciona sombra para melhor contraste
+                textShadowOffset: { width: 1, height: 1 },
+                textShadowRadius: 1
               }}>
-                -{Math.round(deal.discountPct || 0)}%
+                {deal.store?.name || 'Loja'}
               </Text>
+            </LinearGradient>
+
+            {/* Removido: botões de favorito e adicionar Ã  lista foram movidos para o botão 'Desejar' no modal */}
+
+            <GameCover
+              imageUrls={(deal.imageUrls && deal.imageUrls.length > 0) ? deal.imageUrls : [deal.game?.coverUrl]}
+              height={imageHeight}
+              style={{ width: '100%', height: imageHeight, borderTopLeftRadius: 0, borderTopRightRadius: 0 }}
+            />
+
+            <View style={{ padding: padding }}>
+              <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: isGridLayout ? 6 : (isTablet ? 10 : 8), minHeight: isGridLayout ? 40 : undefined }}>
+                <Text
+                  style={{
+                    color: '#FFFFFF',
+                    fontSize: titleFontSize,
+                    fontWeight: '700',
+                    flex: 1,
+                    marginRight: 8
+                  }}
+                  numberOfLines={2}
+                  ellipsizeMode="tail"
+                >
+                  {String(deal.game?.title || 'TÃ­tulo nÃ£o encontrado')}
+                </Text>
+
+                {getPriceIndicator(deal) && !isGridLayout && (
+                  <View style={{
+                    backgroundColor: getPriceIndicator(deal)?.bgColor,
+                    paddingHorizontal: 6,
+                    paddingVertical: 3,
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: getPriceIndicator(deal)?.color,
+                  }}>
+                    <Text style={{
+                      color: getPriceIndicator(deal)?.color,
+                      fontSize: 9,
+                      fontWeight: '800',
+                      letterSpacing: 0.5,
+                    }}>
+                      {getPriceIndicator(deal)?.label}
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <View style={{ flex: 1, justifyContent: 'center', paddingRight: 8 }}>
+                  {(deal.discountPct || 0) > 0 && (
+                    <PriceText
+                      value={deal.priceBase}
+                      deal={deal}
+                      style={{ color: '#EF4444', fontSize: oldPriceFontSize, textDecorationLine: 'line-through', marginBottom: 2, lineHeight: isGridLayout ? (isTablet ? 14 : 13) : (isTablet ? 18 : 16) }} // PreÃ§o base em vermelho
+                    />
+                  )}
+                  {/* Final price: highlight in green when discounted */}
+                  <PriceText
+                    value={deal.priceFinal}
+                    deal={deal}
+                    style={((deal.discountPct || 0) > 0 || (deal.priceBase && deal.priceFinal < deal.priceBase))
+                      ? { color: '#10B981', backgroundColor: 'rgba(16,185,129,0.08)', paddingHorizontal: 3, paddingVertical: 1, borderRadius: 4, fontSize: priceFontSize, fontWeight: '900', lineHeight: isGridLayout ? (isTablet ? 22 : 20) : (isTablet ? 28 : 24), textShadowColor: 'rgba(16,185,129,0.06)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 1, alignSelf: 'flex-start' } // PreÃ§o final em destaque verde
+                      : { color: (deal as any).isFree || deal.priceFinal === 0 ? '#3B82F6' : '#FFFFFF', fontSize: priceFontSize, fontWeight: '800', lineHeight: isGridLayout ? (isTablet ? 22 : 20) : (isTablet ? 28 : 24) }
+                    }
+                  />
+                </View>
+
+                {(deal.discountPct || 0) > 0 && (
+                  <View style={{
+                    backgroundColor: '#DC2626',
+                    paddingHorizontal: isGridLayout ? 8 : 12,
+                    paddingVertical: isGridLayout ? 4 : 6,
+                    borderRadius: isGridLayout ? 16 : 20
+                  }}>
+                    <Text style={{
+                      color: '#FFFFFF',
+                      fontSize: isGridLayout ? (isTablet ? 11 : 10) : (isTablet ? 14 : 12),
+                      fontWeight: '700'
+                    }}>
+                      -{Math.round(deal.discountPct || 0)}%
+                    </Text>
+                  </View>
+                )}
+              </View>
             </View>
-          )}
+          </TouchableOpacity>
         </View>
-      </View>
-        </TouchableOpacity>
-      </View>
       </View>
     )
   }
 
 
-const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ visible, onClose }) => {
-  // lazy hook usage
-  const ctx = (() => {
-    try { return useCurrency() as any } catch (e) { return null }
-  })()
+  const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ visible, onClose }) => {
+    // lazy hook usage
+    const ctx = (() => {
+      try { return useCurrency() as any } catch (e) { return null }
+    })()
 
-  const currency = ctx?.currency || 'BRL'
-  const setCurrency = ctx?.setCurrency || (async () => {})
+    const currency = ctx?.currency || 'BRL'
+    const setCurrency = ctx?.setCurrency || (async () => { })
 
-  const currencyList = [
-    { code: 'BRL', name: 'Real Brasileiro', symbol: 'R$' },
-    { code: 'USD', name: 'US Dollar', symbol: '$' },
-  { code: 'EUR', name: 'Euro', symbol: '�' },
-  { code: 'GBP', name: 'British Pound', symbol: '�' },
-  { code: 'JPY', name: 'Japanese Yen', symbol: '�' },
-    { code: 'AUD', name: 'Australian Dollar', symbol: '$' },
-    { code: 'CAD', name: 'Canadian Dollar', symbol: '$' },
-    { code: 'CHF', name: 'Swiss Franc', symbol: 'CHF' },
-  { code: 'CNY', name: 'Chinese Yuan', symbol: '�' },
-    { code: 'ARS', name: 'Argentine Peso', symbol: '$' },
-  { code: 'INR', name: 'Indian Rupee', symbol: '?' },
-    { code: 'MXN', name: 'Mexican Peso', symbol: '$' },
-  { code: 'RUB', name: 'Russian Ruble', symbol: '?' },
-  { code: 'KRW', name: 'South Korean Won', symbol: '?' },
-    { code: 'SEK', name: 'Swedish Krona', symbol: 'kr' }
-  ]
+    const currencyList = [
+      { code: 'BRL', name: 'Real Brasileiro', symbol: 'R$' },
+      { code: 'USD', name: 'US Dollar', symbol: '$' },
+      { code: 'EUR', name: 'Euro', symbol: '�' },
+      { code: 'GBP', name: 'British Pound', symbol: '�' },
+      { code: 'JPY', name: 'Japanese Yen', symbol: '�' },
+      { code: 'AUD', name: 'Australian Dollar', symbol: '$' },
+      { code: 'CAD', name: 'Canadian Dollar', symbol: '$' },
+      { code: 'CHF', name: 'Swiss Franc', symbol: 'CHF' },
+      { code: 'CNY', name: 'Chinese Yuan', symbol: '�' },
+      { code: 'ARS', name: 'Argentine Peso', symbol: '$' },
+      { code: 'INR', name: 'Indian Rupee', symbol: '?' },
+      { code: 'MXN', name: 'Mexican Peso', symbol: '$' },
+      { code: 'RUB', name: 'Russian Ruble', symbol: '?' },
+      { code: 'KRW', name: 'South Korean Won', symbol: '?' },
+      { code: 'SEK', name: 'Swedish Krona', symbol: 'kr' }
+    ]
 
-  const [query, setQuery] = useState('')
-  const filtered = currencyList.filter(c => c.code.toLowerCase().includes(query.toLowerCase()) || c.name.toLowerCase().includes(query.toLowerCase()))
+    const [query, setQuery] = useState('')
+    const filtered = currencyList.filter(c => c.code.toLowerCase().includes(query.toLowerCase()) || c.name.toLowerCase().includes(query.toLowerCase()))
 
-  return (
-    <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
-      <SafeAreaView style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center' }}>
-        <View style={{ width: '90%', maxWidth: 560, backgroundColor: '#32343a', borderRadius: 16, padding: 16 }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <Text style={{ color: '#E5E7EB', fontSize: 18, fontWeight: '700' }}>Selecionar Moeda</Text>
-            <TouchableOpacity onPress={onClose} style={{ padding: 8 }}>
-              <Ionicons name="close" size={22} color="#E5E7EB" />
-            </TouchableOpacity>
+    return (
+      <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center' }}>
+          <View style={{ width: '90%', maxWidth: 560, backgroundColor: '#32343a', borderRadius: 16, padding: 16 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <Text style={{ color: '#E5E7EB', fontSize: 18, fontWeight: '700' }}>Selecionar Moeda</Text>
+              <TouchableOpacity onPress={onClose} style={{ padding: 8 }}>
+                <Ionicons name="close" size={22} color="#E5E7EB" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ paddingBottom: 12 }}>
+              <TextInput
+                placeholder="Buscar moeda (cÃ³digo ou nome)"
+                placeholderTextColor="#9CA3AF"
+                value={query}
+                onChangeText={setQuery}
+                style={{ backgroundColor: '#26272b', color: '#E5E7EB', padding: 10, borderRadius: 10 }}
+              />
+            </View>
+
+            <View style={{ maxHeight: 360 }}>
+              <ScrollView contentContainerStyle={{ paddingVertical: 8 }} showsVerticalScrollIndicator>
+                {filtered.map((c) => (
+                  <TouchableOpacity
+                    key={c.code}
+                    onPress={async () => {
+                      await setCurrency(c.code)
+                      onClose()
+                    }}
+                    style={{ padding: 12, backgroundColor: c.code === currency ? '#3B82F6' : '#26272b', borderRadius: 10, marginBottom: 8 }}
+                  >
+                    <Text style={{ color: c.code === currency ? '#FFFFFF' : '#E5E7EB', fontSize: 15, fontWeight: '700' }}>{c.code} é {c.name}</Text>
+                    <Text style={{ color: c.code === currency ? '#FFFFFF' : '#9CA3AF', marginTop: 4 }}>{c.symbol}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
           </View>
-
-          <View style={{ paddingBottom: 12 }}>
-            <TextInput
-              placeholder="Buscar moeda (cÃ³digo ou nome)"
-              placeholderTextColor="#9CA3AF"
-              value={query}
-              onChangeText={setQuery}
-              style={{ backgroundColor: '#26272b', color: '#E5E7EB', padding: 10, borderRadius: 10 }}
-            />
-          </View>
-
-          <View style={{ maxHeight: 360 }}>
-            <ScrollView contentContainerStyle={{ paddingVertical: 8 }} showsVerticalScrollIndicator>
-              {filtered.map((c) => (
-                <TouchableOpacity
-                  key={c.code}
-                  onPress={async () => {
-                    await setCurrency(c.code)
-                    onClose()
-                  }}
-                  style={{ padding: 12, backgroundColor: c.code === currency ? '#3B82F6' : '#26272b', borderRadius: 10, marginBottom: 8 }}
-                >
-                  <Text style={{ color: c.code === currency ? '#FFFFFF' : '#E5E7EB', fontSize: 15, fontWeight: '700' }}>{c.code} é {c.name}</Text>
-                  <Text style={{ color: c.code === currency ? '#FFFFFF' : '#9CA3AF', marginTop: 4 }}>{c.symbol}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-        </View>
-      </SafeAreaView>
-    </Modal>
-  )
-}
+        </SafeAreaView>
+      </Modal>
+    )
+  }
 
 
 
 
 
   const renderBottomNav = () => (
-    <View style={{ 
-      backgroundColor: 'transparent', 
+    <View style={{
+      backgroundColor: 'transparent',
       paddingBottom: bottomNavPadding, // Usa o padding dinÃ¢mico baseado no tipo de navegaÃ§Ã£o
       paddingTop: 7
     }}>
-      <View style={{ 
+      <View style={{
         backgroundColor: 'rgba(55, 65, 81, 0.7)', // Cinza escuro com leve transparÃªncia
         flexDirection: 'row',
         paddingBottom: 10, // Padding consistente
@@ -2368,43 +1882,43 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
           }
         }),
       }}>
-      {[
-        { key: 'home', icon: 'game-controller', label: t('tab.games') },
-        { key: 'hardware', icon: 'desktop-outline', label: t('tab.hardware') },
-        { key: 'search', icon: 'search', label: t('tab.search') },
-        { key: 'favorites', icon: 'eye', label: t('tab.watching') },
-        { key: 'profile', icon: 'settings', label: t('tab.config') }
-      ].map((tab: { key: string; icon: string; label: string }) => (
-        <TouchableOpacity
-          key={tab.key}
-          onPress={() => {
-            // Rastrear aÃ§Ã£o e tentar mostrar anÃºncio intersticial
-            interstitialAdService.trackAction();
-            interstitialAdService.tryShowAd();
-            setActiveTab(tab.key as any);
-          }}
-          style={{
-            flex: 1,
-            alignItems: 'center',
-            justifyContent: 'center',
-            paddingVertical: 8
-          }}
-        >
-          <Ionicons 
-            name={activeTab === tab.key ? (tab.icon as any) : (tab.icon.endsWith('-outline') ? tab.icon : `${tab.icon}-outline` as any)} 
-            size={24} 
-            color={activeTab === tab.key ? '#3B82F6' : '#9CA3AF'} 
-          />
-          <Text style={{ 
-            color: activeTab === tab.key ? '#3B82F6' : '#9CA3AF',
-            fontSize: 12,
-            fontWeight: activeTab === tab.key ? '600' : '400',
-            marginTop: 4
-          }}>
-            {tab.label}
-          </Text>
-        </TouchableOpacity>
-      ))}
+        {[
+          { key: 'home', icon: 'game-controller', label: t('tab.games') },
+          { key: 'hardware', icon: 'desktop-outline', label: t('tab.hardware') },
+          { key: 'search', icon: 'search', label: t('tab.search') },
+          { key: 'favorites', icon: 'eye', label: t('tab.watching') },
+          { key: 'profile', icon: 'settings', label: t('tab.config') }
+        ].map((tab: { key: string; icon: string; label: string }) => (
+          <TouchableOpacity
+            key={tab.key}
+            onPress={() => {
+              // Rastrear aÃ§Ã£o e tentar mostrar anÃºncio intersticial
+              interstitialAdService.trackAction();
+              interstitialAdService.tryShowAd();
+              setActiveTab(tab.key as any);
+            }}
+            style={{
+              flex: 1,
+              alignItems: 'center',
+              justifyContent: 'center',
+              paddingVertical: 8
+            }}
+          >
+            <Ionicons
+              name={activeTab === tab.key ? (tab.icon as any) : (tab.icon.endsWith('-outline') ? tab.icon : `${tab.icon}-outline` as any)}
+              size={24}
+              color={activeTab === tab.key ? '#3B82F6' : '#9CA3AF'}
+            />
+            <Text style={{
+              color: activeTab === tab.key ? '#3B82F6' : '#9CA3AF',
+              fontSize: 12,
+              fontWeight: activeTab === tab.key ? '600' : '400',
+              marginTop: 4
+            }}>
+              {tab.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
       </View>
     </View>
   )
@@ -2417,7 +1931,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
       await AsyncStorage.removeItem('@notifications_history');
       setShowNotificationsHistory(false);
     };
-    
+
     const formatTimestamp = (timestamp: string) => {
       const date = new Date(timestamp);
       const now = new Date();
@@ -2425,36 +1939,36 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
       const diffMins = Math.floor(diffMs / 60000);
       const diffHours = Math.floor(diffMs / 3600000);
       const diffDays = Math.floor(diffMs / 86400000);
-      
+
       if (diffMins < 1) return 'Agora';
       if (diffMins < 60) return `${diffMins}min atrÃ¡s`;
       if (diffHours < 24) return `${diffHours}h atrÃ¡s`;
       if (diffDays === 1) return 'Ontem';
       return `${diffDays}d atrÃ¡s`;
     };
-    
+
     return (
-      <Modal 
-        visible={showNotificationsHistory} 
-        animationType="fade" 
-        transparent 
+      <Modal
+        visible={showNotificationsHistory}
+        animationType="fade"
+        transparent
         onRequestClose={() => setShowNotificationsHistory(false)}
       >
-        <TouchableOpacity 
-          activeOpacity={1} 
+        <TouchableOpacity
+          activeOpacity={1}
           onPress={() => setShowNotificationsHistory(false)}
-          style={{ 
-            flex: 1, 
+          style={{
+            flex: 1,
             backgroundColor: 'rgba(0,0,0,0.7)',
             justifyContent: 'center',
             alignItems: 'center',
             padding: 20
           }}
         >
-          <TouchableOpacity 
+          <TouchableOpacity
             activeOpacity={1}
             onPress={(e) => e.stopPropagation()}
-            style={{ 
+            style={{
               width: '100%',
               maxWidth: 500,
               maxHeight: '80%',
@@ -2469,10 +1983,10 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
             }}
           >
             {/* Header */}
-            <View style={{ 
-              flexDirection: 'row', 
-              justifyContent: 'space-between', 
-              alignItems: 'center', 
+            <View style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
               padding: 20,
               borderBottomWidth: 1,
               borderBottomColor: '#374151',
@@ -2488,7 +2002,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                 <Ionicons name="close-circle" size={28} color="#9CA3AF" />
               </TouchableOpacity>
             </View>
-            
+
             {/* Lista de NotificaÃ§Ãµes */}
             {receivedNotifications.length === 0 ? (
               <View style={{ padding: 40, alignItems: 'center' }}>
@@ -2502,7 +2016,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
               </View>
             ) : (
               <>
-                <ScrollView 
+                <ScrollView
                   style={{ maxHeight: 400 }}
                   showsVerticalScrollIndicator={true}
                   contentContainerStyle={{ paddingBottom: 8 }}
@@ -2555,10 +2069,10 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                     </View>
                   ))}
                 </ScrollView>
-                
+
                 {/* BotÃ£o Limpar Todas */}
-                <View style={{ 
-                  padding: 16, 
+                <View style={{
+                  padding: 16,
                   paddingTop: 12,
                   borderTopWidth: 1,
                   borderTopColor: '#374151'
@@ -2592,24 +2106,24 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
   const PrivacyModal = () => (
     <Modal visible={showPrivacyModal} animationType="fade" transparent onRequestClose={() => setShowPrivacyModal(false)}>
       <SafeAreaView style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center' }}>
-        <View style={{ 
-          width: '90%', 
-          maxWidth: 560, 
-          backgroundColor: '#374151', 
-          borderRadius: 16, 
+        <View style={{
+          width: '90%',
+          maxWidth: 560,
+          backgroundColor: '#374151',
+          borderRadius: 16,
           padding: 20,
           margin: 20
         }}>
-          <View style={{ 
-            flexDirection: 'row', 
-            justifyContent: 'space-between', 
-            alignItems: 'center', 
-            marginBottom: 16 
+          <View style={{
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: 16
           }}>
-            <Text style={{ 
-              color: '#FFFFFF', 
-              fontSize: 18, 
-              fontWeight: '700' 
+            <Text style={{
+              color: '#FFFFFF',
+              fontSize: 18,
+              fontWeight: '700'
             }}>
               Políticas de Privacidade
             </Text>
@@ -2631,21 +2145,21 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
               - Seus dados são armazenados de forma segura em nossos servidores
             </Text>
           </ScrollView>
-          
-          <View style={{ 
-            flexDirection: 'row', 
-            justifyContent: 'flex-end', 
-            marginTop: 20 
+
+          <View style={{
+            flexDirection: 'row',
+            justifyContent: 'flex-end',
+            marginTop: 20
           }}>
             <TouchableOpacity
               onPress={() => {
                 Linking.openURL('mailto:nexusdevsystem@gmail.com')
                 setShowPrivacyModal(false)
               }}
-              style={{ 
-                backgroundColor: '#3B82F6', 
-                paddingHorizontal: 16, 
-                paddingVertical: 10, 
+              style={{
+                backgroundColor: '#3B82F6',
+                paddingHorizontal: 16,
+                paddingVertical: 10,
                 borderRadius: 8,
                 marginLeft: 10
               }}
@@ -2654,7 +2168,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                 Contato
               </Text>
             </TouchableOpacity>
-            
+
           </View>
         </View>
       </SafeAreaView>
@@ -2665,66 +2179,66 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
   const HelpModal = () => (
     <Modal visible={showHelpModal} animationType="fade" transparent onRequestClose={() => setShowHelpModal(false)}>
       <SafeAreaView style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center' }}>
-        <View style={{ 
-          width: '90%', 
-          maxWidth: 560, 
-          backgroundColor: '#374151', 
-          borderRadius: 16, 
+        <View style={{
+          width: '90%',
+          maxWidth: 560,
+          backgroundColor: '#374151',
+          borderRadius: 16,
           padding: 20,
           margin: 20
         }}>
-          <View style={{ 
-            flexDirection: 'row', 
-            justifyContent: 'space-between', 
-            alignItems: 'center', 
-            marginBottom: 16 
+          <View style={{
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: 16
           }}>
-            <Text style={{ 
-              color: '#FFFFFF', 
-              fontSize: 18, 
-              fontWeight: '700' 
+            <Text style={{
+              color: '#FFFFFF',
+              fontSize: 18,
+              fontWeight: '700'
             }}>
               Central de Ajuda
             </Text>
-            <TouchableOpacity 
-              onPress={() => setShowHelpModal(false)} 
+            <TouchableOpacity
+              onPress={() => setShowHelpModal(false)}
               style={{ padding: 8 }}
             >
               <Ionicons name="close" size={24} color="#E5E7EB" />
             </TouchableOpacity>
           </View>
-          
+
           <View style={{ marginBottom: 20 }}>
             <Text style={{ color: '#E5E7EB', fontSize: 15, lineHeight: 22, marginBottom: 10 }}>
               Precisa de ajuda? Temos algumas opções para você:
             </Text>
-            
+
             <TouchableOpacity
               onPress={() => {
                 Linking.openURL('https://www.nexusdevsystem.com')
                 setShowHelpModal(false)
               }}
-              style={{ 
-                backgroundColor: '#1F2937', 
-                padding: 15, 
-                borderRadius: 12, 
-                marginBottom: 10 
+              style={{
+                backgroundColor: '#1F2937',
+                padding: 15,
+                borderRadius: 12,
+                marginBottom: 10
               }}
             >
               <Text style={{ color: '#3B82F6', fontSize: 15, fontWeight: '600' }}>
                 Visitar nosso site
               </Text>
             </TouchableOpacity>
-            
+
             <TouchableOpacity
               onPress={() => {
                 Linking.openURL('mailto:nexusdevsystem@gmail.com')
                 setShowHelpModal(false)
               }}
-              style={{ 
-                backgroundColor: '#1F2937', 
-                padding: 15, 
-                borderRadius: 12 
+              style={{
+                backgroundColor: '#1F2937',
+                padding: 15,
+                borderRadius: 12
               }}
             >
               <Text style={{ color: '#3B82F6', fontSize: 15, fontWeight: '600' }}>
@@ -2835,549 +2349,549 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
   return (
     <CurrencyProvider>
       <View style={{ flex: 1, backgroundColor: '#1F2937' }}>
-      <StatusBar style="light" />
-      
-      <Animated.View style={{ 
-        flex: 1,
-        opacity: fadeAnim,
-        transform: [{ translateY: slideAnim }]
-      }}>
-        {/* Banner AdMob - Aparece em todas as abas exceto Config (profile) */}
-        {activeTab !== 'profile' && (
-          <View style={{ paddingTop: 35, paddingBottom: 8 }}>
-            <AdBanner isPremium={isPremium} />
-          </View>
-        )}
-        
-        {activeTab === 'home' && (
-          <View style={{ flex: 1 }}>
-            <View style={{ paddingBottom: 0 }}>
-              {renderHeader()}
+        <StatusBar style="light" />
+
+        <Animated.View style={{
+          flex: 1,
+          opacity: fadeAnim,
+          transform: [{ translateY: slideAnim }]
+        }}>
+          {/* Banner AdMob - Aparece em todas as abas exceto Config (profile) */}
+          {activeTab !== 'profile' && (
+            <View style={{ paddingTop: 35, paddingBottom: 8 }}>
+              <AdBanner isPremium={isPremium} />
             </View>
-            
-            {(loading || feedLoading) && (
-              <View style={{ padding: 50, alignItems: 'center' }}>
-                <ActivityIndicator size="large" color="#3B82F6" />
-                <Text style={{ color: '#9CA3AF', marginTop: 20, fontSize: 16 }}>
-                  {t('home.loading')}
-                </Text>
-              </View>
-            )}
+          )}
 
-            {(error || feedError) && (
-              <View style={{ 
-                marginHorizontal: 20,
-                padding: 24, 
-                backgroundColor: '#374151', 
-                borderRadius: 16, 
-                marginBottom: 20,
-                borderWidth: 1,
-                borderColor: '#DC2626'
-              }}>
-                <Text style={{ color: '#F87171', fontSize: 16, fontWeight: '600', marginBottom: 8 }}>
-                  Erro ao carregar ofertas
-                </Text>
-                <Text style={{ color: '#9CA3AF', fontSize: 14, lineHeight: 20 }}>
-                  {error}
-                </Text>
-                <TouchableOpacity
-                  onPress={async () => await fetchDeals()}
-                  style={{
-                    backgroundColor: '#3B82F6',
-                    paddingHorizontal: 16,
-                    paddingVertical: 8,
-                    borderRadius: 12,
-                    marginTop: 12,
-                    alignSelf: 'flex-start'
-                  }}
-                >
-                  <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '600' }}>
-                    Tentar novamente
+          {activeTab === 'home' && (
+            <View style={{ flex: 1 }}>
+              <View style={{ paddingBottom: 0 }}>
+                {renderHeader()}
+              </View>
+
+              {(loading || feedLoading) && (
+                <View style={{ padding: 50, alignItems: 'center' }}>
+                  <ActivityIndicator size="large" color="#3B82F6" />
+                  <Text style={{ color: '#9CA3AF', marginTop: 20, fontSize: 16 }}>
+                    {t('home.loading')}
                   </Text>
-                </TouchableOpacity>
-              </View>
-            )}
+                </View>
+              )}
 
-            {!feedLoading && !feedError && (gameItems.length > 0 || deals.length > 0) && (
-              <>
-                <FlatList
-                key={layoutType} // Força nova renderização quando o layout muda
-                data={processedFlatListData}
-                renderItem={({ item, index }) => {
-                  // Renderizar o card com base no layout selecionado
-                  if (layoutType === 'grid') {
-                    // Calcular largura exata: (largura total - padding lateral - gap) / 2
-                    const screenWidth = width;
-                    const horizontalPadding = (isTablet ? 40 : 24) * 2;
-                    const gap = 8;
-                    const cardWidth = (screenWidth - horizontalPadding - gap) / 2;
-                    
-                    return (
-                      <View style={{ 
-                        width: cardWidth,
-                      }}>
-                        {renderGameCard({ item, index, isGridLayout: true })}
+              {(error || feedError) && (
+                <View style={{
+                  marginHorizontal: 20,
+                  padding: 24,
+                  backgroundColor: '#374151',
+                  borderRadius: 16,
+                  marginBottom: 20,
+                  borderWidth: 1,
+                  borderColor: '#DC2626'
+                }}>
+                  <Text style={{ color: '#F87171', fontSize: 16, fontWeight: '600', marginBottom: 8 }}>
+                    Erro ao carregar ofertas
+                  </Text>
+                  <Text style={{ color: '#9CA3AF', fontSize: 14, lineHeight: 20 }}>
+                    {error}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={async () => await fetchDeals()}
+                    style={{
+                      backgroundColor: '#3B82F6',
+                      paddingHorizontal: 16,
+                      paddingVertical: 8,
+                      borderRadius: 12,
+                      marginTop: 12,
+                      alignSelf: 'flex-start'
+                    }}
+                  >
+                    <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '600' }}>
+                      Tentar novamente
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {!feedLoading && !feedError && (gameItems.length > 0 || deals.length > 0) && (
+                <>
+                  <FlatList
+                    key={layoutType} // Força nova renderização quando o layout muda
+                    data={processedFlatListData}
+                    renderItem={({ item, index }) => {
+                      // Renderizar o card com base no layout selecionado
+                      if (layoutType === 'grid') {
+                        // Calcular largura exata: (largura total - padding lateral - gap) / 2
+                        const screenWidth = width;
+                        const horizontalPadding = (isTablet ? 40 : 24) * 2;
+                        const gap = 8;
+                        const cardWidth = (screenWidth - horizontalPadding - gap) / 2;
+
+                        return (
+                          <View style={{
+                            width: cardWidth,
+                          }}>
+                            {renderGameCard({ item, index, isGridLayout: true })}
+                          </View>
+                        );
+                      }
+                      return renderGameCard({ item, index, isGridLayout: false });
+                    }}
+                    keyExtractor={(item, index) => `${item._id || 'game'}-${index}`}
+                    showsVerticalScrollIndicator={false}
+                    removeClippedSubviews={true}
+                    initialNumToRender={8}
+                    windowSize={5}
+                    maxToRenderPerBatch={5}
+                    updateCellsBatchingPeriod={50}
+                    numColumns={layoutType === 'grid' ? 2 : 1}
+                    columnWrapperStyle={layoutType === 'grid' ? { gap: 8 } : null}
+                    getItemLayout={(data, index) => {
+                      if (layoutType === 'grid') {
+                        // Para layout em grade, calcular altura diferente
+                        return {
+                          length: 300, // Altura estimada de cada item no layout de grade
+                          offset: 300 * index,
+                          index,
+                        };
+                      } else {
+                        // Layout em coluna (original)
+                        return {
+                          length: 280, // Altura estimada de cada item
+                          offset: 280 * index,
+                          index,
+                        };
+                      }
+                    }}
+                    onEndReached={() => {
+                      // Carregar mais itens quando chegar ao final
+                      if (hasNextPage && !feedLoading) {
+                        loadMore()
+                      }
+                    }}
+                    onEndReachedThreshold={0.5}
+                    ListHeaderComponent={uniqueFreeEpicGames.length > 0 ? () => {
+                      // Banner do Jogo Grátis da Semana da Epic Games (Carrossel)
+                      const currentGame = uniqueFreeEpicGames[epicCarouselIndex];
+
+                      // Normalizar o item para o formato Deal
+                      const normalizedDeal: Deal | null = 'priceFinal' in (currentGame as any)
+                        ? (currentGame as Deal)
+                        : convertGameItemToDeal(currentGame as GameItem);
+
+                      if (!normalizedDeal) return null;
+
+                      const imageUrl = normalizedDeal.game?.coverUrl || (normalizedDeal as any).image || '';
+                      const gameTitle = normalizedDeal.game?.title || (normalizedDeal as any).title || '';
+                      const isUpcoming = (currentGame as any).isUpcoming === true;
+
+                      return (
+                        <View style={{ marginTop: 3, marginBottom: 10 }}>
+                          <TouchableOpacity
+                            onPress={() => {
+                              handleGamePress(normalizedDeal);
+                            }}
+                            style={{
+                              borderRadius: 16,
+                              overflow: 'hidden',
+                              height: 160,
+                            }}
+                          >
+                            <Image
+                              source={{ uri: imageUrl }}
+                              style={{
+                                width: '100%',
+                                height: '100%',
+                                resizeMode: 'cover',
+                              }}
+                            />
+                            <View style={{
+                              position: 'absolute',
+                              top: 10,
+                              left: 10,
+                            }}>
+                              <Text style={{
+                                color: '#FFFFFF',
+                                fontSize: 12,
+                                fontWeight: 'bold',
+                                backgroundColor: isUpcoming ? 'rgba(234, 179, 8, 0.9)' : 'rgba(0,0,0,0.7)',
+                                paddingHorizontal: 8,
+                                paddingVertical: 4,
+                                borderRadius: 6,
+                              }}>
+                                {isUpcoming ? 'Em breve na Epic Games' : 'Grátis na Epic Games'}
+                              </Text>
+                            </View>
+                            <View style={{
+                              position: 'absolute',
+                              bottom: 10,
+                              left: 10,
+                              right: 10,
+                            }}>
+                              <Text style={{
+                                color: '#FFFFFF',
+                                fontSize: 16,
+                                fontWeight: 'bold',
+                              }} numberOfLines={1}>
+                                {gameTitle}
+                              </Text>
+                            </View>
+                          </TouchableOpacity>
+                        </View>
+                      );
+                    } : undefined}
+                    ListFooterComponent={() => (
+                      <View style={{ height: 20 }}>
+                        {hasActiveFilters && feedLoading ? (
+                          <View style={{ padding: 20, alignItems: 'center' }}>
+                            <ActivityIndicator color="#3B82F6" />
+                            <Text style={{ color: '#9CA3AF', marginTop: 8 }}>
+                              Carregando mais...
+                            </Text>
+                          </View>
+                        ) : null}
                       </View>
-                    );
-                  }
-                  return renderGameCard({ item, index, isGridLayout: false });
+                    )}
+                    contentContainerStyle={{
+                      maxWidth: isTablet ? 800 : width,
+                      alignSelf: 'center',
+                      width: '100%',
+                      paddingHorizontal: isTablet ? 40 : 24,
+                      gap: layoutType === 'grid' ? 8 : 0 // Adicionar gap entre os itens no layout de grade
+                    }}
+                    refreshControl={
+                      <RefreshControl
+                        refreshing={false}
+                        onRefresh={onRefresh}
+                        enabled={true}
+                      />
+                    }
+                  />
+                </>
+              )}
+
+              {/* Renderizar FlatList vazia quando nÃ£o hÃ¡ dados */}
+              {!loading && !feedLoading && !error && !feedError && gameItems.length === 0 && deals.length === 0 && (
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 100 }}>
+                  <Text style={{ color: '#9CA3AF', fontSize: 16 }}>Nenhuma oferta disponÃ­vel no momento</Text>
+                </View>
+              )}
+            </View>
+          )}
+
+          {activeTab === 'search' && (
+            <View style={{ flex: 1, paddingTop: 10 }}>
+              <View style={{ paddingHorizontal: isTablet ? 40 : 20, marginBottom: 20, maxWidth: isTablet ? 800 : '100%', alignSelf: 'center', width: '100%' }}>
+                <Text style={{
+                  color: '#FFFFFF',
+                  fontSize: isTablet ? 32 : 28,
+                  fontWeight: '800',
+                  marginBottom: 20,
+                  textAlign: isTablet ? 'center' : 'left'
+                }}>
+                  {t('search.placeholder')}
+                </Text>
+
+                <View style={{
+                  flexDirection: 'row',
+                  backgroundColor: '#374151',
+                  borderRadius: 16,
+                  paddingHorizontal: 16,
+                  paddingVertical: 2,
+                  marginBottom: 20,
+                  alignItems: 'center'
+                }}>
+                  <Ionicons name="search-outline" size={20} color="#9CA3AF" style={{ marginRight: 12 }} />
+                  <TextInput
+                    placeholder={t('search.placeholder')}
+                    placeholderTextColor="#9CA3AF"
+                    value={searchQuery}
+                    onChangeText={handleSearchChange}
+                    style={{
+                      flex: 1,
+                      color: '#FFFFFF',
+                      fontSize: 16,
+                      paddingVertical: 8
+                    }}
+                  />
+                  {isSearching && (
+                    <ActivityIndicator size="small" color="#3B82F6" style={{ marginLeft: 8 }} />
+                  )}
+                  {searchQuery.length > 0 && (
+                    <TouchableOpacity
+                      style={{
+                        marginLeft: 8,
+                        padding: 8,
+                      }}
+                      onPress={clearSearch}
+                    >
+                      <Ionicons
+                        name="close-circle"
+                        size={24}
+                        color="#9CA3AF"
+                      />
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                {/* BotÃµes de Filtro Jogos/DLCs */}
+                <View style={{
+                  flexDirection: 'row',
+                  backgroundColor: '#374151',
+                  borderRadius: 12,
+                  padding: 4
+                }}>
+                  <TouchableOpacity
+                    onPress={() => setSearchFilter('games')}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 10,
+                      paddingHorizontal: 16,
+                      borderRadius: 8,
+                      backgroundColor: searchFilter === 'games' ? '#3B82F6' : 'transparent',
+                      alignItems: 'center'
+                    }}
+                  >
+                    <Text style={{
+                      color: searchFilter === 'games' ? '#FFFFFF' : '#9CA3AF',
+                      fontSize: 14,
+                      fontWeight: '600'
+                    }}>
+                      {t('gameDetails.tabs.games')}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={() => setSearchFilter('dlcs')}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 10,
+                      paddingHorizontal: 16,
+                      borderRadius: 8,
+                      backgroundColor: searchFilter === 'dlcs' ? '#3B82F6' : 'transparent',
+                      alignItems: 'center'
+                    }}
+                  >
+                    <Text style={{
+                      color: searchFilter === 'dlcs' ? '#FFFFFF' : '#9CA3AF',
+                      fontSize: 14,
+                      fontWeight: '600'
+                    }}>
+                      {t('gameDetails.tabs.dlcs')}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+
+              </View>
+
+              <FlatList
+                data={searchQuery.trim().length > 0 ? searchResults : []}
+                renderItem={({ item, index }) => {
+                  // Calcular largura exata: (largura total - padding lateral - gap) / 2
+                  const screenWidth = width;
+                  const horizontalPadding = (isTablet ? 40 : 24) * 2;
+                  const gap = 8;
+                  const cardWidth = (screenWidth - horizontalPadding - gap) / 2;
+
+                  return (
+                    <View style={{
+                      width: cardWidth,
+                    }}>
+                      {renderGameCard({ item, index, isGridLayout: true })}
+                    </View>
+                  );
                 }}
-                keyExtractor={(item, index) => `${item._id || 'game'}-${index}`}
+                keyExtractor={(item, index) => `search-${item._id || 'game'}-${index}`}
+                contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 120, gap: 8 }}
                 showsVerticalScrollIndicator={false}
                 removeClippedSubviews={true}
                 initialNumToRender={8}
                 windowSize={5}
                 maxToRenderPerBatch={5}
-                updateCellsBatchingPeriod={50}
-                numColumns={layoutType === 'grid' ? 2 : 1}
-                columnWrapperStyle={layoutType === 'grid' ? { gap: 8 } : null}
+                numColumns={2}
+                columnWrapperStyle={{ gap: 8 }}
                 getItemLayout={(data, index) => {
-                  if (layoutType === 'grid') {
-                    // Para layout em grade, calcular altura diferente
-                    return {
-                      length: 300, // Altura estimada de cada item no layout de grade
-                      offset: 300 * index,
-                      index,
-                    };
-                  } else {
-                    // Layout em coluna (original)
-                    return {
-                      length: 280, // Altura estimada de cada item
-                      offset: 280 * index,
-                      index,
-                    };
-                  }
+                  // Para layout em grade, calcular altura diferente
+                  return {
+                    length: 300, // Altura estimada de cada item no layout de grade
+                    offset: 300 * index,
+                    index,
+                  };
                 }}
-                onEndReached={() => {
-                  // Carregar mais itens quando chegar ao final
-                  if (hasNextPage && !feedLoading) {
-                    loadMore()
-                  }
-                }}
-                onEndReachedThreshold={0.5}
-                ListHeaderComponent={uniqueFreeEpicGames.length > 0 ? () => {
-                  // Banner do Jogo Grátis da Semana da Epic Games (Carrossel)
-                  const currentGame = uniqueFreeEpicGames[epicCarouselIndex];
+                ListEmptyComponent={() => (
+                  <View style={{ alignItems: 'center', marginTop: 50 }}>
+                    {isSearching ? (
+                      <>
+                        <ActivityIndicator size="large" color="#3B82F6" />
+                        <Text style={{ color: '#9CA3AF', fontSize: 18, marginTop: 16 }}>
+                          Procurando jogos...
+                        </Text>
+                      </>
+                    ) : (
+                      <>
+                        <Ionicons name="search-outline" size={64} color="#4B5563" />
+                        <Text style={{ color: '#9CA3AF', fontSize: 18, marginTop: 16 }}>
+                          {searchQuery ? 'Nenhum jogo encontrado' : 'Procure por jogos'}
+                        </Text>
+                        {!searchQuery && (
+                          <Text style={{ color: '#6B7280', fontSize: 14, marginTop: 8, textAlign: 'center' }}>
+                            Procure por jogos na Steam Store
+                          </Text>
+                        )}
+                      </>
+                    )}
+                  </View>
+                )}
+              />
+            </View>
+          )}
 
-                  // Normalizar o item para o formato Deal
-                  const normalizedDeal: Deal | null = 'priceFinal' in (currentGame as any)
-                    ? (currentGame as Deal)
-                    : convertGameItemToDeal(currentGame as GameItem);
+          {activeTab === 'favorites' && (
+            <View style={{ flex: 1, paddingTop: -10 }}>
+              <FavoritesAndLists />
+            </View>
+          )}
 
-                  if (!normalizedDeal) return null;
+          {activeTab === 'hardware' && (
+            // Embed hardware screen content to keep it as a regular tab
+            <View style={{ flex: 1, paddingTop: -18 }}>
+              {/* The inner component brings its own header and list */}
+              <HardwareInner />
+            </View>
+          )}
 
-                  const imageUrl = normalizedDeal.game?.coverUrl || (normalizedDeal as any).image || '';
-                  const gameTitle = normalizedDeal.game?.title || (normalizedDeal as any).title || '';
-                  const isUpcoming = (currentGame as any).isUpcoming === true;
+          {activeTab === 'profile' && (
+            <ScrollView style={{ flex: 1, paddingTop: 60 }}>
+              <View style={{ paddingHorizontal: isTablet ? 40 : 20, maxWidth: isTablet ? 600 : '100%', alignSelf: 'center', width: '100%' }}>
+                {/* Header do Perfil - REMOVIDO */}
 
-                  return (
-                    <View style={{ marginTop: 3, marginBottom: 10 }}>
+                {/* ConfiguraÃ§Ãµes */}
+                <View style={{
+                  backgroundColor: '#374151',
+                  borderRadius: 16,
+                  marginBottom: 20
+                }}>
+                  <Text style={{
+                    color: '#FFFFFF',
+                    fontSize: isTablet ? 20 : 18,
+                    fontWeight: '700',
+                    padding: isTablet ? 24 : 20,
+                    paddingBottom: 0,
+                    textAlign: isTablet ? 'center' : 'left'
+                  }}>
+                    {t('settings.title')}
+                  </Text>
+
+                  {[
+                    { icon: 'star-outline', title: t('settings.rateApp'), subtitle: t('settings.rateAppDesc'), key: 'rate' },
+                    { icon: 'language-outline', title: t('settings.language'), subtitle: t('settings.languageDesc'), key: 'language' },
+                    { icon: 'share-social-outline', title: t('settings.share'), subtitle: t('settings.shareDesc'), key: 'share' },
+                    { icon: 'bug-outline', title: t('settings.reportBug'), subtitle: t('settings.reportBugDesc'), key: 'bug' },
+                    { icon: 'shield-checkmark-outline', title: 'Políticas de privacidade', subtitle: t('settings.privacyDesc'), key: 'privacy' }
+                  ].map((item, index) => {
+                    return (
                       <TouchableOpacity
+                        key={index}
                         onPress={() => {
-                          handleGamePress(normalizedDeal);
+                          // Implementar ações para cada item
+                          if (item.key === 'rate') {
+                            // Abrir avaliação na Play Store
+                            Linking.openURL('https://play.google.com/store/apps/details?id=com.nexusdevsystem.looton&pcampaignid=web_share');
+                          } else if (item.key === 'language') {
+                            setShowLanguageModal(true);
+                          } else if (item.key === 'share') {
+                            // Compartilhar o aplicativo via opções do sistema
+                            const shareMessage = 'Confira o Looton - aplicativo para encontrar as melhores ofertas de jogos! https://play.google.com/store/apps/details?id=com.nexusdevsystem.looton&pcampaignid=web_share';
+                            Share.share({
+                              title: 'Confira esse app de ofertas de jogos',
+                              message: shareMessage,
+                            });
+                          } else if (item.key === 'bug') {
+                            // Abrir email para reportar bugs
+                            Linking.openURL('mailto:nexusdevsystem@gmail.com?subject=Bug Report - Looton App');
+                          } else if (item.key === 'privacy') {
+                            Linking.openURL('https://www.nexusdevsystem.com/privacy-policy');
+                          }
                         }}
                         style={{
-                          borderRadius: 16,
-                          overflow: 'hidden',
-                          height: 160,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          padding: isTablet ? 20 : 16,
+                          borderBottomWidth: index < 4 ? 1 : 0, // Não adicionar borda na última opção
+                          borderBottomColor: '#4B5563'
                         }}
                       >
-                        <Image
-                          source={{ uri: imageUrl }}
-                          style={{
-                            width: '100%',
-                            height: '100%',
-                            resizeMode: 'cover',
-                          }}
-                        />
                         <View style={{
-                          position: 'absolute',
-                          top: 10,
-                          left: 10,
+                          width: 36,
+                          height: 36,
+                          borderRadius: 18,
+                          backgroundColor: '#3B82F6', // Azul para todos os itens
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          marginRight: 16
                         }}>
+                          <Ionicons name={item.icon as any} size={18} color="#FFFFFF" />
+                        </View>
+                        <View style={{ flex: 1 }}>
                           <Text style={{
                             color: '#FFFFFF',
-                            fontSize: 12,
-                            fontWeight: 'bold',
-                            backgroundColor: isUpcoming ? 'rgba(234, 179, 8, 0.9)' : 'rgba(0,0,0,0.7)',
-                            paddingHorizontal: 8,
-                            paddingVertical: 4,
-                            borderRadius: 6,
+                            fontSize: isTablet ? 16 : 15,
+                            fontWeight: '600',
+                            marginBottom: 2
                           }}>
-                            {isUpcoming ? 'Em breve na Epic Games' : 'Grátis na Epic Games'}
+                            {item.title}
                           </Text>
-                        </View>
-                        <View style={{
-                          position: 'absolute',
-                          bottom: 10,
-                          left: 10,
-                          right: 10,
-                        }}>
                           <Text style={{
-                            color: '#FFFFFF',
-                            fontSize: 16,
-                            fontWeight: 'bold',
-                          }} numberOfLines={1}>
-                            {gameTitle}
+                            color: '#9CA3AF',
+                            fontSize: isTablet ? 14 : 13
+                          }}>
+                            {item.subtitle}
                           </Text>
                         </View>
+                        <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
                       </TouchableOpacity>
-                    </View>
-                  );
-                } : undefined}
-                ListFooterComponent={() => (
-                  <View style={{ height: 20 }}>
-                    {hasActiveFilters && feedLoading ? (
-                      <View style={{ padding: 20, alignItems: 'center' }}>
-                        <ActivityIndicator color="#3B82F6" />
-                        <Text style={{ color: '#9CA3AF', marginTop: 8 }}>
-                          Carregando mais...
-                        </Text>
-                      </View>
-                    ) : null}
-                  </View>
-                )}
-                contentContainerStyle={{ 
-                  maxWidth: isTablet ? 800 : width, 
-                  alignSelf: 'center', 
-                  width: '100%', 
-                  paddingHorizontal: isTablet ? 40 : 24,
-                  gap: layoutType === 'grid' ? 8 : 0 // Adicionar gap entre os itens no layout de grade
-                }}
-                refreshControl={
-                  <RefreshControl
-                    refreshing={false}
-                    onRefresh={onRefresh}
-                    enabled={true}
-                  />
-                }
-              />
-              </>
-            )}
-            
-            {/* Renderizar FlatList vazia quando nÃ£o hÃ¡ dados */}
-            {!loading && !feedLoading && !error && !feedError && gameItems.length === 0 && deals.length === 0 && (
-              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 100 }}>
-                <Text style={{ color: '#9CA3AF', fontSize: 16 }}>Nenhuma oferta disponÃ­vel no momento</Text>
-              </View>
-            )}
-          </View>
-        )}
-
-        {activeTab === 'search' && (
-          <View style={{ flex: 1, paddingTop: 10 }}>
-            <View style={{ paddingHorizontal: isTablet ? 40 : 20, marginBottom: 20, maxWidth: isTablet ? 800 : '100%', alignSelf: 'center', width: '100%' }}>
-              <Text style={{ 
-                color: '#FFFFFF', 
-                fontSize: isTablet ? 32 : 28, 
-                fontWeight: '800',
-                marginBottom: 20,
-                textAlign: isTablet ? 'center' : 'left'
-              }}>
-                {t('search.placeholder')}
-              </Text>
-              
-              <View style={{ 
-                flexDirection: 'row', 
-                backgroundColor: '#374151', 
-                borderRadius: 16, 
-                paddingHorizontal: 16,
-                paddingVertical: 2,
-                marginBottom: 20,
-                alignItems: 'center'
-              }}>
-                <Ionicons name="search-outline" size={20} color="#9CA3AF" style={{ marginRight: 12 }} />
-                <TextInput
-                  placeholder={t('search.placeholder')}
-                  placeholderTextColor="#9CA3AF"
-                  value={searchQuery}
-                  onChangeText={handleSearchChange}
-                  style={{
-                    flex: 1,
-                    color: '#FFFFFF',
-                    fontSize: 16,
-                    paddingVertical: 8
-                  }}
-                />
-                {isSearching && (
-                  <ActivityIndicator size="small" color="#3B82F6" style={{ marginLeft: 8 }} />
-                )}
-                {searchQuery.length > 0 && (
-                  <TouchableOpacity
-                    style={{
-                      marginLeft: 8,
-                      padding: 8,
-                    }}
-                    onPress={clearSearch}
-                  >
-                    <Ionicons 
-                      name="close-circle" 
-                      size={24} 
-                      color="#9CA3AF" 
-                    />
-                  </TouchableOpacity>
-                )}
-              </View>
-
-              {/* BotÃµes de Filtro Jogos/DLCs */}
-              <View style={{ 
-                flexDirection: 'row', 
-                backgroundColor: '#374151',
-                borderRadius: 12,
-                padding: 4
-              }}>
-                <TouchableOpacity
-                  onPress={() => setSearchFilter('games')}
-                  style={{
-                    flex: 1,
-                    paddingVertical: 10,
-                    paddingHorizontal: 16,
-                    borderRadius: 8,
-                    backgroundColor: searchFilter === 'games' ? '#3B82F6' : 'transparent',
-                    alignItems: 'center'
-                  }}
-                >
-                  <Text style={{ 
-                    color: searchFilter === 'games' ? '#FFFFFF' : '#9CA3AF',
-                    fontSize: 14,
-                    fontWeight: '600'
-                  }}>
-                    {t('gameDetails.tabs.games')}
-                  </Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity
-                  onPress={() => setSearchFilter('dlcs')}
-                  style={{
-                    flex: 1,
-                    paddingVertical: 10,
-                    paddingHorizontal: 16,
-                    borderRadius: 8,
-                    backgroundColor: searchFilter === 'dlcs' ? '#3B82F6' : 'transparent',
-                    alignItems: 'center'
-                  }}
-                >
-                  <Text style={{ 
-                    color: searchFilter === 'dlcs' ? '#FFFFFF' : '#9CA3AF',
-                    fontSize: 14,
-                    fontWeight: '600'
-                  }}>
-                    {t('gameDetails.tabs.dlcs')}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-
-            </View>
-
-            <FlatList
-              data={searchQuery.trim().length > 0 ? searchResults : []}
-              renderItem={({ item, index }) => {
-                // Calcular largura exata: (largura total - padding lateral - gap) / 2
-                const screenWidth = width;
-                const horizontalPadding = (isTablet ? 40 : 24) * 2;
-                const gap = 8;
-                const cardWidth = (screenWidth - horizontalPadding - gap) / 2;
-
-                return (
-                  <View style={{ 
-                    width: cardWidth,
-                  }}>
-                    {renderGameCard({ item, index, isGridLayout: true })}
-                  </View>
-                );
-              }}
-              keyExtractor={(item, index) => `search-${item._id || 'game'}-${index}`}
-              contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 120, gap: 8 }}
-              showsVerticalScrollIndicator={false}
-              removeClippedSubviews={true}
-              initialNumToRender={8}
-              windowSize={5}
-              maxToRenderPerBatch={5}
-              numColumns={2}
-              columnWrapperStyle={{ gap: 8 }}
-              getItemLayout={(data, index) => {
-                // Para layout em grade, calcular altura diferente
-                return {
-                  length: 300, // Altura estimada de cada item no layout de grade
-                  offset: 300 * index,
-                  index,
-                };
-              }}
-              ListEmptyComponent={() => (
-                <View style={{ alignItems: 'center', marginTop: 50 }}>
-                  {isSearching ? (
-                    <>
-                      <ActivityIndicator size="large" color="#3B82F6" />
-                      <Text style={{ color: '#9CA3AF', fontSize: 18, marginTop: 16 }}>
-                        Procurando jogos...
-                      </Text>
-                    </>
-                  ) : (
-                    <>
-                      <Ionicons name="search-outline" size={64} color="#4B5563" />
-                      <Text style={{ color: '#9CA3AF', fontSize: 18, marginTop: 16 }}>
-                        {searchQuery ? 'Nenhum jogo encontrado' : 'Procure por jogos'}
-                      </Text>
-                      {!searchQuery && (
-                        <Text style={{ color: '#6B7280', fontSize: 14, marginTop: 8, textAlign: 'center' }}>
-                          Procure por jogos na Steam Store
-                        </Text>
-                      )}
-                    </>
-                  )}
+                    );
+                  })}
                 </View>
-              )}
-            />
-          </View>
-        )}
 
-        {activeTab === 'favorites' && (
-          <View style={{ flex: 1, paddingTop: -10 }}>
-            <FavoritesAndLists />
-          </View>
-        )}
-
-        {activeTab === 'hardware' && (
-          // Embed hardware screen content to keep it as a regular tab
-          <View style={{ flex: 1, paddingTop: -18 }}>
-            {/* The inner component brings its own header and list */}
-            <HardwareInner />
-          </View>
-        )}
-
-        {activeTab === 'profile' && (
-          <ScrollView style={{ flex: 1, paddingTop: 60 }}>
-            <View style={{ paddingHorizontal: isTablet ? 40 : 20, maxWidth: isTablet ? 600 : '100%', alignSelf: 'center', width: '100%' }}>
-              {/* Header do Perfil - REMOVIDO */}
-
-              {/* ConfiguraÃ§Ãµes */}
-              <View style={{
-                backgroundColor: '#374151',
-                borderRadius: 16,
-                marginBottom: 20
-              }}>
-                <Text style={{ 
-                  color: '#FFFFFF', 
-                  fontSize: isTablet ? 20 : 18, 
-                  fontWeight: '700',
+                {/* Sobre o App */}
+                <View style={{
+                  backgroundColor: '#374151',
+                  borderRadius: 16,
                   padding: isTablet ? 24 : 20,
-                  paddingBottom: 0,
-                  textAlign: isTablet ? 'center' : 'left'
+                  marginBottom: 40
                 }}>
-                  {t('settings.title')}
-                </Text>
+                  <Text style={{
+                    color: '#FFFFFF',
+                    fontSize: isTablet ? 20 : 18,
+                    fontWeight: '700',
+                    marginBottom: 12,
+                    textAlign: isTablet ? 'center' : 'left'
+                  }}>
+                    {t('about.title')}
+                  </Text>
+                  <Text style={{
+                    color: '#9CA3AF',
+                    fontSize: isTablet ? 16 : 14,
+                    lineHeight: isTablet ? 24 : 20,
+                    textAlign: isTablet ? 'center' : 'left'
+                  }}>
+                    {t('about.version')} 1.8{'\n'}
+                    {t('about.description')}{'\n'}
+                    {t('about.tagline')}
+                  </Text>
+                </View>
 
-                {[
-                  { icon: 'star-outline', title: t('settings.rateApp'), subtitle: t('settings.rateAppDesc'), key: 'rate' },
-                  { icon: 'language-outline', title: t('settings.language'), subtitle: t('settings.languageDesc'), key: 'language' },
-                  { icon: 'share-social-outline', title: t('settings.share'), subtitle: t('settings.shareDesc'), key: 'share' },
-                  { icon: 'bug-outline', title: t('settings.reportBug'), subtitle: t('settings.reportBugDesc'), key: 'bug' },
-                  { icon: 'shield-checkmark-outline', title: 'Políticas de privacidade', subtitle: t('settings.privacyDesc'), key: 'privacy' }
-                ].map((item, index) => {
-                  return (
-                    <TouchableOpacity
-                      key={index}
-                      onPress={() => {
-                        // Implementar aÃ§Ãµes para cada item
-                        if (item.key === 'rate') {
-                          // Abrir avaliaÃ§Ã£o na Play Store
-                          Linking.openURL('https://play.google.com/store/apps/details?id=com.nexusdevsystem.looton&pcampaignid=web_share');
-                        } else if (item.key === 'language') {
-                          setShowLanguageModal(true);
-                        } else if (item.key === 'share') {
-                          // Compartilhar o aplicativo via opÃ§Ãµes do sistema
-                          const shareMessage = 'Confira o Looton - aplicativo para encontrar as melhores ofertas de jogos! https://play.google.com/store/apps/details?id=com.nexusdevsystem.looton&pcampaignid=web_share';
-                          Share.share({
-                            title: 'Confira esse app de ofertas de jogos',
-                            message: shareMessage,
-                          });
-                        } else if (item.key === 'bug') {
-                          // Abrir email para reportar bugs
-                          Linking.openURL('mailto:nexusdevsystem@gmail.com?subject=Bug Report - Looton App');
-                        } else if (item.key === 'privacy') {
-                          Linking.openURL('https://www.nexusdevsystem.com/privacy-policy');
-                        }
-                      }}
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        padding: isTablet ? 20 : 16,
-                        borderBottomWidth: index < 4 ? 1 : 0, // NÃ£o adicionar borda na última opÃ§Ã£o
-                        borderBottomColor: '#4B5563'
-                      }}
-                    >
-                      <View style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: 18,
-                        backgroundColor: '#3B82F6', // Azul para todos os itens
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                        marginRight: 16
-                      }}>
-                        <Ionicons name={item.icon as any} size={18} color="#FFFFFF" />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ 
-                          color: '#FFFFFF', 
-                          fontSize: isTablet ? 16 : 15, 
-                          fontWeight: '600',
-                          marginBottom: 2
-                        }}>
-                          {item.title}
-                        </Text>
-                        <Text style={{ 
-                          color: '#9CA3AF', 
-                          fontSize: isTablet ? 14 : 13
-                        }}>
-                          {item.subtitle}
-                        </Text>
-                      </View>
-                      <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
-                    </TouchableOpacity>
-                  );
-                })}
               </View>
+            </ScrollView>
+          )}
+        </Animated.View>
 
-              {/* Sobre o App */}
-              <View style={{
-                backgroundColor: '#374151',
-                borderRadius: 16,
-                padding: isTablet ? 24 : 20,
-                marginBottom: 40
-              }}>
-                <Text style={{ 
-                  color: '#FFFFFF', 
-                  fontSize: isTablet ? 20 : 18, 
-                  fontWeight: '700',
-                  marginBottom: 12,
-                  textAlign: isTablet ? 'center' : 'left'
-                }}>
-                  {t('about.title')}
-                </Text>
-                <Text style={{ 
-                  color: '#9CA3AF', 
-                  fontSize: isTablet ? 16 : 14,
-                  lineHeight: isTablet ? 24 : 20,
-                  textAlign: isTablet ? 'center' : 'left'
-                }}>
-                  {t('about.version')} 1.8{'\n'}
-                  {t('about.description')}{'\n'}
-                  {t('about.tagline')}
-                </Text>
-              </View>
+        {renderBottomNav()}
 
-            </View>
-          </ScrollView>
-        )}
-      </Animated.View>
+        {/* Modais */}
 
-      {renderBottomNav()}
-
-      {/* Modais */}
-
-      {selectedGameId && (
+        {selectedGameId && (
           <GameDetailsModal
             appId={typeof selectedGameId === 'number' ? selectedGameId : 0}
             visible={gameDetailsModalVisible}
@@ -3390,309 +2904,309 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
             gameData={selectedDeal} // Passar os dados completos do jogo
             useLocalDataOnly={selectedDeal?.store?.name?.toLowerCase().includes('epic') || selectedDeal?.url?.includes('epicgames.com')} // Usar dados locais para Epic
           />
-      )}
+        )}
 
-      <WishlistTab
-        visible={activeTab === 'wishlist'}
-        onClose={() => setActiveTab('home')}
-      />
-
-      <CurrencyModal
-        visible={showCurrencyModal}
-        onClose={() => setShowCurrencyModal(false)}
-      />
-
-      {/* Modal de adicionar Ã  lista */}
-      {selectedGameForList && (
-        <AddToListModal
-          visible={showAddToListModal}
-          onClose={() => {
-            setShowAddToListModal(false)
-            setSelectedGameForList(null)
-          }}
-          gameId={selectedGameForList.id}
-          gameTitle={selectedGameForList.title}
-          userId={''}
+        <WishlistTab
+          visible={activeTab === 'wishlist'}
+          onClose={() => setActiveTab('home')}
         />
-      )}
 
-      {/* Modal de Privacidade removido */}
+        <CurrencyModal
+          visible={showCurrencyModal}
+          onClose={() => setShowCurrencyModal(false)}
+        />
 
-      {/* Modal de Ajuda */}
-      <Modal visible={showHelpModal} animationType="fade" transparent onRequestClose={() => setShowHelpModal(false)}>
-        <SafeAreaView style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center' }}>
-          <View style={{ 
-            width: '90%', 
-            maxWidth: 560, 
-            backgroundColor: '#374151', 
-            borderRadius: 16, 
-            padding: 20,
-            margin: 20
-          }}>
-            <View style={{ 
-              flexDirection: 'row', 
-              justifyContent: 'space-between', 
-              alignItems: 'center', 
-              marginBottom: 16 
+        {/* Modal de adicionar Ã  lista */}
+        {selectedGameForList && (
+          <AddToListModal
+            visible={showAddToListModal}
+            onClose={() => {
+              setShowAddToListModal(false)
+              setSelectedGameForList(null)
+            }}
+            gameId={selectedGameForList.id}
+            gameTitle={selectedGameForList.title}
+            userId={''}
+          />
+        )}
+
+        {/* Modal de Privacidade removido */}
+
+        {/* Modal de Ajuda */}
+        <Modal visible={showHelpModal} animationType="fade" transparent onRequestClose={() => setShowHelpModal(false)}>
+          <SafeAreaView style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center' }}>
+            <View style={{
+              width: '90%',
+              maxWidth: 560,
+              backgroundColor: '#374151',
+              borderRadius: 16,
+              padding: 20,
+              margin: 20
             }}>
-              <Text style={{ 
-                color: '#FFFFFF', 
-                fontSize: 18, 
-                fontWeight: '700' 
+              <View style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: 16
               }}>
-                Central de Ajuda
-              </Text>
-              <TouchableOpacity 
-                onPress={() => setShowHelpModal(false)} 
-                style={{ padding: 8 }}
-              >
-                <Ionicons name="close" size={24} color="#E5E7EB" />
-              </TouchableOpacity>
-            </View>
-            
-            <View style={{ marginBottom: 20 }}>
-              <Text style={{ color: '#E5E7EB', fontSize: 15, lineHeight: 22, marginBottom: 10 }}>
-                Precisa de ajuda? Temos algumas opÃ§Ãµes para vocÃª:
-              </Text>
-              
-              <TouchableOpacity
-                onPress={() => {
-                  Linking.openURL('https://www.nexusdevsystem.com')
-                  setShowHelpModal(false)
-                }}
-                style={{ 
-                  backgroundColor: '#1F2937', 
-                  padding: 15, 
-                  borderRadius: 12, 
-                  marginBottom: 10 
-                }}
-              >
-                <Text style={{ color: '#3B82F6', fontSize: 15, fontWeight: '600' }}>
-                  ?? Visitar nosso site
+                <Text style={{
+                  color: '#FFFFFF',
+                  fontSize: 18,
+                  fontWeight: '700'
+                }}>
+                  Central de Ajuda
                 </Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                onPress={() => {
-                  Linking.openURL('mailto:nexusdevsystem@gmail.com')
-                  setShowHelpModal(false)
-                }}
-                style={{ 
-                  backgroundColor: '#1F2937', 
-                  padding: 15, 
-                  borderRadius: 12 
-                }}
-              >
-                <Text style={{ color: '#3B82F6', fontSize: 15, fontWeight: '600' }}>
-                  ?? Enviar email
-                </Text>
-              </TouchableOpacity>
-            </View>
-            
-            <View style={{ 
-              flexDirection: 'row', 
-              justifyContent: 'flex-end' 
-            }}>
-              <TouchableOpacity
-                onPress={() => setShowHelpModal(false)}
-                style={{ 
-                  backgroundColor: '#4B5563', 
-                  paddingHorizontal: 16, 
-                  paddingVertical: 10, 
-                  borderRadius: 8 
-                }}
-              >
-                <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '600' }}>
-                  Fechar
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </SafeAreaView>
-      </Modal>
-
-
-
-  {/* Modal de Prefer�ncias - Steam Genres */}
-      <SteamGenresPreferencesModal
-        visible={showPreferencesModal}
-        onClose={() => setShowPreferencesModal(false)}
-        currentPreferences={userPreferredSteamGenres}
-        onSave={async (selectedGenreIds: string[]) => {
-          try {
-            console.log('=== SALVANDO PREFER�NCIAS STEAM ===')
-            console.log('G�neros selecionados:', selectedGenreIds)
-            
-            // Atualizar estado local
-            setUserPreferredSteamGenres(selectedGenreIds)
-            
-            // Recarregar deals com novo boost
-            await fetchDeals()
-            
-            setShowPreferencesModal(false)
-            showToast('Prefer�ncias salvas! ?')
-            
-          } catch (error) {
-            console.error('Erro ao salvar preferÃªncias:', error)
-            showToast('Erro ao salvar preferÃªncias')
-          }
-        }}
-      />
-      
-      {/* Modal de DoaÃ§Ã£o - Apenas quando o usuÃ¡rio ativa manualmente */}
-      
-
-      
-      {/* Modal de HistÃ³rico de NotificaÃ§Ãµes */}
-      {showNotificationsHistory && <NotificationsHistoryModal />}
-      
-      {/* Modal de Idioma */}
-      <Modal visible={showLanguageModal} animationType="fade" transparent onRequestClose={() => setShowLanguageModal(false)}>
-        <SafeAreaView style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center' }}>
-          <View style={{ 
-            width: '90%', 
-            maxWidth: 500, 
-            backgroundColor: '#374151', 
-            borderRadius: 16, 
-            padding: 20,
-            margin: 20
-          }}>
-            <View style={{ 
-              flexDirection: 'row', 
-              justifyContent: 'space-between', 
-              alignItems: 'center', 
-              marginBottom: 16 
-            }}>
-              <Text style={{ 
-                color: '#FFFFFF', 
-                fontSize: 18, 
-                fontWeight: '700' 
-              }}>
-                {t('settings.language')}
-              </Text>
-              <TouchableOpacity 
-                onPress={() => setShowLanguageModal(false)} 
-                style={{ padding: 8 }}
-              >
-                <Ionicons name="close" size={24} color="#E5E7EB" />
-              </TouchableOpacity>
-            </View>
-            
-            <View style={{ marginBottom: 20 }}>
-              {[
-                { code: 'pt', name: 'Portugu�s', flag: '????' },
-                { code: 'en', name: 'English', flag: '????' },
-                { code: 'es', name: 'Espa�ol', flag: '????' }
-              ].map((lang, index) => (
                 <TouchableOpacity
-                  key={lang.code}
-                  onPress={async () => {
-                    await setLanguage(lang.code as 'pt' | 'en' | 'es');
-                    setShowLanguageModal(false);
+                  onPress={() => setShowHelpModal(false)}
+                  style={{ padding: 8 }}
+                >
+                  <Ionicons name="close" size={24} color="#E5E7EB" />
+                </TouchableOpacity>
+              </View>
+
+              <View style={{ marginBottom: 20 }}>
+                <Text style={{ color: '#E5E7EB', fontSize: 15, lineHeight: 22, marginBottom: 10 }}>
+                  Precisa de ajuda? Temos algumas opÃ§Ãµes para vocÃª:
+                </Text>
+
+                <TouchableOpacity
+                  onPress={() => {
+                    Linking.openURL('https://www.nexusdevsystem.com')
+                    setShowHelpModal(false)
                   }}
-                  style={{ 
-                    backgroundColor: language === lang.code ? '#3B82F6' : '#1F2937', 
-                    padding: 15, 
-                    borderRadius: 12, 
-                    marginBottom: 10,
-                    borderWidth: language === lang.code ? 2 : 0,
-                    borderColor: '#60A5FA'
+                  style={{
+                    backgroundColor: '#1F2937',
+                    padding: 15,
+                    borderRadius: 12,
+                    marginBottom: 10
                   }}
                 >
-                  <Text style={{ 
-                    color: language === lang.code ? '#FFFFFF' : '#9CA3AF', 
-                    fontSize: 15, 
-                    fontWeight: language === lang.code ? '700' : '600' 
-                  }}>
-                    {lang.flag} {lang.name}
+                  <Text style={{ color: '#3B82F6', fontSize: 15, fontWeight: '600' }}>
+                    ?? Visitar nosso site
                   </Text>
                 </TouchableOpacity>
-              ))}
-            </View>
-            
-            <View style={{ 
-              flexDirection: 'row', 
-              justifyContent: 'flex-end' 
-            }} />
-          </View>
-        </SafeAreaView>
-      </Modal>
-      
-      {/* Modal de Privacidade */}
-      <Modal visible={showPrivacyModal} animationType="fade" transparent onRequestClose={() => setShowPrivacyModal(false)}>
-        <SafeAreaView style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center' }}>
-          <View style={{ 
-            width: '90%', 
-            maxWidth: 560, 
-            backgroundColor: '#374151', 
-            borderRadius: 16, 
-            padding: 20,
-            margin: 20
-          }}>
-            <View style={{ 
-              flexDirection: 'row', 
-              justifyContent: 'space-between', 
-              alignItems: 'center', 
-              marginBottom: 16 
-            }}>
-              <Text style={{ 
-                color: '#FFFFFF', 
-                fontSize: 18, 
-                fontWeight: '700' 
+
+                <TouchableOpacity
+                  onPress={() => {
+                    Linking.openURL('mailto:nexusdevsystem@gmail.com')
+                    setShowHelpModal(false)
+                  }}
+                  style={{
+                    backgroundColor: '#1F2937',
+                    padding: 15,
+                    borderRadius: 12
+                  }}
+                >
+                  <Text style={{ color: '#3B82F6', fontSize: 15, fontWeight: '600' }}>
+                    ?? Enviar email
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={{
+                flexDirection: 'row',
+                justifyContent: 'flex-end'
               }}>
-                Políticas de Privacidade
-              </Text>
-              <TouchableOpacity
-                onPress={() => setShowPrivacyModal(false)}
-                style={{ padding: 8 }}
-              >
-                <Ionicons name="close" size={24} color="#E5E7EB" />
-              </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setShowHelpModal(false)}
+                  style={{
+                    backgroundColor: '#4B5563',
+                    paddingHorizontal: 16,
+                    paddingVertical: 10,
+                    borderRadius: 8
+                  }}
+                >
+                  <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '600' }}>
+                    Fechar
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
+          </SafeAreaView>
+        </Modal>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 300 }}>
-              <Text style={{ color: '#E5E7EB', fontSize: 15, lineHeight: 22 }}>
-                Nossa política de privacidade:{'\n\n'}
-                - Coletamos apenas dados necessários para funcionamento do app (como sua lista de observação e preferências){'\n\n'}
-                - Não compartilhamos seus dados com terceiros{'\n\n'}
-                - Você pode solicitar a remoção de seus dados a qualquer momento{'\n\n'}
-                - Utilizamos notificações push para informar sobre ofertas relevantes{'\n\n'}
-                - Seus dados são armazenados de forma segura em nossos servidores
-              </Text>
-            </ScrollView>
-            
-            <View style={{ 
-              flexDirection: 'row', 
-              justifyContent: 'flex-end', 
-              marginTop: 20 
+
+
+        {/* Modal de Prefer�ncias - Steam Genres */}
+        <SteamGenresPreferencesModal
+          visible={showPreferencesModal}
+          onClose={() => setShowPreferencesModal(false)}
+          currentPreferences={userPreferredSteamGenres}
+          onSave={async (selectedGenreIds: string[]) => {
+            try {
+              console.log('=== SALVANDO PREFER�NCIAS STEAM ===')
+              console.log('G�neros selecionados:', selectedGenreIds)
+
+              // Atualizar estado local
+              setUserPreferredSteamGenres(selectedGenreIds)
+
+              // Recarregar deals com novo boost
+              await fetchDeals()
+
+              setShowPreferencesModal(false)
+              showToast('Prefer�ncias salvas! ?')
+
+            } catch (error) {
+              console.error('Erro ao salvar preferÃªncias:', error)
+              showToast('Erro ao salvar preferÃªncias')
+            }
+          }}
+        />
+
+        {/* Modal de DoaÃ§Ã£o - Apenas quando o usuÃ¡rio ativa manualmente */}
+
+
+
+        {/* Modal de HistÃ³rico de NotificaÃ§Ãµes */}
+        {showNotificationsHistory && <NotificationsHistoryModal />}
+
+        {/* Modal de Idioma */}
+        <Modal visible={showLanguageModal} animationType="fade" transparent onRequestClose={() => setShowLanguageModal(false)}>
+          <SafeAreaView style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center' }}>
+            <View style={{
+              width: '90%',
+              maxWidth: 500,
+              backgroundColor: '#374151',
+              borderRadius: 16,
+              padding: 20,
+              margin: 20
             }}>
-              <TouchableOpacity
-                onPress={() => {
-                  Linking.openURL('mailto:nexusdevsystem@gmail.com')
-                  setShowPrivacyModal(false)
-                }}
-                style={{ 
-                  backgroundColor: '#3B82F6', 
-                  paddingHorizontal: 16, 
-                  paddingVertical: 10, 
-                  borderRadius: 8,
-                  marginLeft: 10
-                }}
-              >
-                <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '600' }}>
-                  Contato
+              <View style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: 16
+              }}>
+                <Text style={{
+                  color: '#FFFFFF',
+                  fontSize: 18,
+                  fontWeight: '700'
+                }}>
+                  {t('settings.language')}
                 </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </SafeAreaView>
-      </Modal>
+                <TouchableOpacity
+                  onPress={() => setShowLanguageModal(false)}
+                  style={{ padding: 8 }}
+                >
+                  <Ionicons name="close" size={24} color="#E5E7EB" />
+                </TouchableOpacity>
+              </View>
 
-      {/* Modal da VersÃ£o Pro - TEMPORARIAMENTE DESABILITADO */}
-      {/* <ProModal /> */}
-      
+              <View style={{ marginBottom: 20 }}>
+                {[
+                  { code: 'pt', name: 'Portugu�s', flag: '????' },
+                  { code: 'en', name: 'English', flag: '????' },
+                  { code: 'es', name: 'Espa�ol', flag: '????' }
+                ].map((lang, index) => (
+                  <TouchableOpacity
+                    key={lang.code}
+                    onPress={async () => {
+                      await setLanguage(lang.code as 'pt' | 'en' | 'es');
+                      setShowLanguageModal(false);
+                    }}
+                    style={{
+                      backgroundColor: language === lang.code ? '#3B82F6' : '#1F2937',
+                      padding: 15,
+                      borderRadius: 12,
+                      marginBottom: 10,
+                      borderWidth: language === lang.code ? 2 : 0,
+                      borderColor: '#60A5FA'
+                    }}
+                  >
+                    <Text style={{
+                      color: language === lang.code ? '#FFFFFF' : '#9CA3AF',
+                      fontSize: 15,
+                      fontWeight: language === lang.code ? '700' : '600'
+                    }}>
+                      {lang.flag} {lang.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <View style={{
+                flexDirection: 'row',
+                justifyContent: 'flex-end'
+              }} />
+            </View>
+          </SafeAreaView>
+        </Modal>
+
+        {/* Modal de Privacidade */}
+        <Modal visible={showPrivacyModal} animationType="fade" transparent onRequestClose={() => setShowPrivacyModal(false)}>
+          <SafeAreaView style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center' }}>
+            <View style={{
+              width: '90%',
+              maxWidth: 560,
+              backgroundColor: '#374151',
+              borderRadius: 16,
+              padding: 20,
+              margin: 20
+            }}>
+              <View style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: 16
+              }}>
+                <Text style={{
+                  color: '#FFFFFF',
+                  fontSize: 18,
+                  fontWeight: '700'
+                }}>
+                  Políticas de Privacidade
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setShowPrivacyModal(false)}
+                  style={{ padding: 8 }}
+                >
+                  <Ionicons name="close" size={24} color="#E5E7EB" />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 300 }}>
+                <Text style={{ color: '#E5E7EB', fontSize: 15, lineHeight: 22 }}>
+                  Nossa política de privacidade:{'\n\n'}
+                  - Coletamos apenas dados necessários para funcionamento do app (como sua lista de observação e preferências){'\n\n'}
+                  - Não compartilhamos seus dados com terceiros{'\n\n'}
+                  - Você pode solicitar a remoção de seus dados a qualquer momento{'\n\n'}
+                  - Utilizamos notificações push para informar sobre ofertas relevantes{'\n\n'}
+                  - Seus dados são armazenados de forma segura em nossos servidores
+                </Text>
+              </ScrollView>
+
+              <View style={{
+                flexDirection: 'row',
+                justifyContent: 'flex-end',
+                marginTop: 20
+              }}>
+                <TouchableOpacity
+                  onPress={() => {
+                    Linking.openURL('mailto:nexusdevsystem@gmail.com')
+                    setShowPrivacyModal(false)
+                  }}
+                  style={{
+                    backgroundColor: '#3B82F6',
+                    paddingHorizontal: 16,
+                    paddingVertical: 10,
+                    borderRadius: 8,
+                    marginLeft: 10
+                  }}
+                >
+                  <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '600' }}>
+                    Contato
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </SafeAreaView>
+        </Modal>
+
+        {/* Modal da VersÃ£o Pro - TEMPORARIAMENTE DESABILITADO */}
+        {/* <ProModal /> */}
+
       </View>
-    </CurrencyProvider>
+    </CurrencyProvider >
   )
 }
 
