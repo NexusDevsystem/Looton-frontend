@@ -119,68 +119,65 @@ export async function fetchEpicGames(): Promise<GameItem[]> {
     console.log(`📦 Total de elementos recebidos da Epic API: ${data.data.Catalog.searchStore.elements.length}`);
 
     const now = new Date();
-    console.log(`🕒 Data/hora atual: ${now.toISOString()}`);
+    if (__DEV__) console.log(`🕒 Data/hora atual: ${now.toISOString()}`);
 
-    const epicGames = data.data.Catalog.searchStore.elements
-      .filter(element => {
-        // Filtrar por categorias relevantes (excluir addons, bundles se necessário)
-        const categoryPaths = element.categories?.map(cat => cat.path) || [];
-        const isRelevantCategory = categoryPaths.some(path =>
-          path.includes('games') || path.includes('freegames')
-        );
+    // Processar todos os elementos e classificar como "grátis agora" ou "em breve"
+    const processedGames: Array<{element: EpicGameElement, isUpcoming: boolean, startDate?: Date, endDate?: Date}> = [];
 
-        // Excluir addons e bundles se desejado
-        const isAddon = categoryPaths.some(path =>
-          path.includes('addons') || path.includes('bundles')
-        );
+    data.data.Catalog.searchStore.elements.forEach(element => {
+      // Filtrar apenas addons e bundles (manter todos os outros jogos)
+      const categoryPaths = element.categories?.map(cat => cat.path) || [];
 
-        // CRITÉRIO 1: Verificar se o preço atual é 0 (realmente grátis)
-        const isFree = element.price.totalPrice.discountPrice === 0;
+      // Excluir apenas addons e bundles explícitos
+      const isAddon = categoryPaths.some(path =>
+        path.includes('addons') || path.includes('bundles')
+      );
 
-        // CRITÉRIO 2: Verificar se tem promoção ATIVA no momento (não futura)
-        let hasActivePromotion = false;
-        let promotionEndDate = null;
+      if (isAddon) return;
 
-        if (element.promotions?.promotionalOffers && element.promotions.promotionalOffers.length > 0) {
-          element.promotions.promotionalOffers.forEach(offer => {
-            offer.promotionalOffers.forEach(promo => {
-              const startDate = new Date(promo.startDate);
-              const endDate = new Date(promo.endDate);
+      // Verificar promoções ATIVAS (grátis agora)
+      if (element.promotions?.promotionalOffers && element.promotions.promotionalOffers.length > 0) {
+        element.promotions.promotionalOffers.forEach(offer => {
+          offer.promotionalOffers.forEach(promo => {
+            const startDate = new Date(promo.startDate);
+            const endDate = new Date(promo.endDate);
 
-              // Verificar se a promoção está ativa AGORA
-              if (now >= startDate && now < endDate) {
-                hasActivePromotion = true;
-                promotionEndDate = endDate;
-              }
-            });
+            // Promoção ativa agora
+            if (now >= startDate && now < endDate && element.price.totalPrice.discountPrice === 0) {
+              processedGames.push({ element, isUpcoming: false, startDate, endDate });
+              if (__DEV__) console.log(`✅ Grátis AGORA: "${element.title}" - até ${endDate.toISOString()}`);
+            }
           });
-        }
+        });
+      }
 
-        // Um jogo é válido se:
-        // 1. É da categoria relevante (games/freegames)
-        // 2. NÃO é addon ou bundle
-        // 3. Está GRÁTIS (preço = 0)
-        // 4. Tem promoção ATIVA no momento
-        const isValid = isRelevantCategory && !isAddon && isFree && hasActivePromotion;
+      // Verificar promoções FUTURAS (em breve)
+      if (element.promotions?.upcomingPromotionalOffers && element.promotions.upcomingPromotionalOffers.length > 0) {
+        element.promotions.upcomingPromotionalOffers.forEach(offer => {
+          offer.promotionalOffers.forEach(promo => {
+            const startDate = new Date(promo.startDate);
+            const endDate = new Date(promo.endDate);
 
-        // Log detalhado para debugging
-        if (!isValid) {
-          console.log(`🚫 Filtrando "${element.title}":`);
-          console.log(`   - Categoria relevante: ${isRelevantCategory}`);
-          console.log(`   - É addon/bundle: ${isAddon}`);
-          console.log(`   - Preço: ${element.price.totalPrice.discountPrice}`);
-          console.log(`   - É grátis (preço=0): ${isFree}`);
-          console.log(`   - Tem promoção ativa: ${hasActivePromotion}`);
-          if (promotionEndDate) {
-            console.log(`   - Promoção termina em: ${promotionEndDate.toISOString()}`);
-          }
-        } else {
-          console.log(`✅ Incluindo "${element.title}" - Grátis até ${promotionEndDate?.toISOString()}`);
-        }
+            // Promoção futura
+            if (now < startDate) {
+              processedGames.push({ element, isUpcoming: true, startDate, endDate });
+              if (__DEV__) console.log(`🔜 Em breve: "${element.title}" - a partir de ${startDate.toISOString()}`);
+            }
+          });
+        });
+      }
+    });
 
-        return isValid;
-      })
-      .map(element => {
+    // Remover duplicatas (mesmo jogo pode aparecer em múltiplas promoções)
+    const seenIds = new Set<string>();
+    const uniqueGames = processedGames.filter(game => {
+      if (seenIds.has(game.element.id)) return false;
+      seenIds.add(game.element.id);
+      return true;
+    });
+
+    const epicGames = uniqueGames
+      .map(({ element, isUpcoming, startDate, endDate }) => {
         // Encontrar a imagem principal
         const offerImage = element.keyImages.find(img =>
           img.type === 'OfferImageWide' || img.type === 'Thumbnail'
@@ -199,14 +196,6 @@ export async function fetchEpicGames(): Promise<GameItem[]> {
           return parts[parts.length - 1].replace(/-/g, ' ');
         }).filter(g => g && g !== 'games' && g !== 'freegames') || [];
 
-        // Log dos slugs disponíveis para debugging
-        console.log(`🔍 Slugs para "${element.title}":`, {
-          productSlug: element.productSlug,
-          urlSlug: element.urlSlug,
-          catalogNs: element.catalogNs,
-          offerMappings: element.offerMappings,
-        });
-
         const gameUrl = 'https://store.epicgames.com/pt-BR/free-games';
 
         return {
@@ -215,8 +204,8 @@ export async function fetchEpicGames(): Promise<GameItem[]> {
           coverUrl: offerImage?.url,
           genres: genres,
           tags: genres,
-          priceFinalCents: discountPrice,
-          discountPct: discountPct,
+          priceFinalCents: isUpcoming ? originalPrice : discountPrice, // Em breve mostra preço original
+          discountPct: isUpcoming ? 0 : discountPct,
           store: 'Epic Games',
           url: gameUrl,
           releaseDate: element.effectiveDate ? new Date(element.effectiveDate).toISOString() : undefined,
@@ -227,13 +216,13 @@ export async function fetchEpicGames(): Promise<GameItem[]> {
             coverUrl: offerImage?.url,
             genres: genres,
             tags: genres,
-            description: element.description, // ✅ Adicionar descrição
-            developer: element.seller?.name, // ✅ Adicionar desenvolvedor
-            publisher: element.seller?.name, // ✅ Adicionar publisher
-            keyImages: element.keyImages, // ✅ Adicionar todas as imagens
+            description: element.description,
+            developer: element.seller?.name,
+            publisher: element.seller?.name,
+            keyImages: element.keyImages,
           },
           steamGenres: [],
-          priceFinal: discountPrice / 100,
+          priceFinal: isUpcoming ? originalPrice / 100 : discountPrice / 100,
           priceBase: originalPrice / 100,
           score: 0,
           popularity: 0,
@@ -248,6 +237,10 @@ export async function fetchEpicGames(): Promise<GameItem[]> {
           urlSlug: element.urlSlug,
           catalogNs: element.catalogNs,
           offerMappings: element.offerMappings,
+          // Informação de "em breve"
+          isUpcoming: isUpcoming,
+          promotionStartDate: startDate?.toISOString(),
+          promotionEndDate: endDate?.toISOString(),
         };
       });
 

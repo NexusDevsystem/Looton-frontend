@@ -10,7 +10,6 @@ import {
   RefreshControl,
   Dimensions,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { WishlistService, WishlistItem } from '../services/WishlistService';
 import { GameCover } from './GameCover';

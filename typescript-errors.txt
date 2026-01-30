@@ -1,0 +1,138 @@
+app/index.tsx(1694,9): error TS1136: Property assignment expected.
+app/index.tsx(1697,11): error TS1005: '}' expected.
+app/index.tsx(1698,11): error TS1005: '}' expected.
+app/index.tsx(1714,7): error TS1136: Property assignment expected.
+app/index.tsx(1714,8): error TS1005: '...' expected.
+app/index.tsx(1734,45): error TS1005: '}' expected.
+app/index.tsx(1735,11): error TS1003: Identifier expected.
+app/index.tsx(1737,17): error TS1127: Invalid character.
+app/index.tsx(1738,11): error TS1005: ',' expected.
+app/index.tsx(1738,17): error TS1005: ',' expected.
+app/index.tsx(1739,9): error TS1109: Expression expected.
+app/index.tsx(1744,9): error TS1005: '}' expected.
+app/index.tsx(1745,9): error TS1005: ',' expected.
+app/index.tsx(1745,14): error TS1136: Property assignment expected.
+app/index.tsx(1745,16): error TS1005: '...' expected.
+app/index.tsx(1745,17): error TS1005: '}' expected.
+app/index.tsx(1756,30): error TS1005: ',' expected.
+app/index.tsx(1756,42): error TS1005: ',' expected.
+app/index.tsx(1766,16): error TS1005: ',' expected.
+app/index.tsx(1767,9): error TS1005: ',' expected.
+app/index.tsx(1768,7): error TS1128: Declaration or statement expected.
+app/index.tsx(1772,7): error TS1136: Property assignment expected.
+app/index.tsx(1773,20): error TS1136: Property assignment expected.
+app/index.tsx(1775,9): error TS1005: ',' expected.
+app/index.tsx(1775,16): error TS1136: Property assignment expected.
+app/index.tsx(1775,39): error TS1005: ';' expected.
+app/index.tsx(1775,73): error TS1005: ';' expected.
+app/index.tsx(1775,98): error TS1005: ';' expected.
+app/index.tsx(1778,15): error TS1005: ';' expected.
+app/index.tsx(1778,22): error TS1136: Property assignment expected.
+app/index.tsx(1788,13): error TS1005: ',' expected.
+app/index.tsx(1789,13): error TS1005: ':' expected.
+app/index.tsx(1791,25): error TS1005: ',' expected.
+app/index.tsx(1791,66): error TS1005: ',' expected.
+app/index.tsx(1792,11): error TS1136: Property assignment expected.
+app/index.tsx(1792,17): error TS1005: ',' expected.
+app/index.tsx(1794,36): error TS1005: '{' expected.
+app/index.tsx(1802,13): error TS1136: Property assignment expected.
+app/index.tsx(1803,15): error TS2657: JSX expressions must have one parent element.
+app/index.tsx(1808,15): error TS1136: Property assignment expected.
+app/index.tsx(1809,41): error TS1005: '{' expected.
+app/index.tsx(1810,15): error TS1005: ',' expected.
+app/index.tsx(1810,21): error TS1005: ',' expected.
+app/index.tsx(1811,13): error TS1109: Expression expected.
+app/index.tsx(1813,11): error TS17002: Expected corresponding JSX closing tag for 'Text'.
+app/index.tsx(1817,14): error TS1136: Property assignment expected.
+app/index.tsx(1820,17): error TS1005: '}' expected.
+app/index.tsx(1821,17): error TS1005: '}' expected.
+app/index.tsx(1823,13): error TS1005: ',' expected.
+app/index.tsx(1824,13): error TS1136: Property assignment expected.
+app/index.tsx(1825,13): error TS1005: '...' expected.
+app/index.tsx(1827,15): error TS1005: '}' expected.
+app/index.tsx(1828,15): error TS1005: '}' expected.
+app/index.tsx(1830,17): error TS1005: ',' expected.
+app/index.tsx(1830,19): error TS1136: Property assignment expected.
+app/index.tsx(1830,21): error TS1005: '...' expected.
+app/index.tsx(1830,26): error TS1005: '}' expected.
+app/index.tsx(1830,28): error TS1003: Identifier expected.
+app/index.tsx(1833,11): error TS1005: ',' expected.
+app/index.tsx(1833,17): error TS1005: ',' expected.
+app/index.tsx(1835,12): error TS1136: Property assignment expected.
+app/index.tsx(1847,23): error TS1005: ',' expected.
+app/index.tsx(1848,15): error TS1109: Expression expected.
+app/index.tsx(1848,21): error TS1005: ',' expected.
+app/index.tsx(1849,13): error TS1109: Expression expected.
+app/index.tsx(1849,19): error TS1005: ',' expected.
+app/index.tsx(1850,11): error TS1109: Expression expected.
+app/index.tsx(1851,9): error TS1003: Identifier expected.
+app/index.tsx(1852,9): error TS17002: Expected corresponding JSX closing tag for 'Text'.
+app/index.tsx(1853,9): error TS1005: ',' expected.
+app/index.tsx(1853,27): error TS1005: ',' expected.
+app/index.tsx(1854,7): error TS1109: Expression expected.
+app/index.tsx(1860,1): error TS1005: '}' expected.
+app/index.tsx(1860,27): error TS1003: Identifier expected.
+app/index.tsx(1860,71): error TS1005: ';' expected.
+app/index.tsx(1860,95): error TS1005: ',' expected.
+app/index.tsx(1863,35): error TS1005: ';' expected.
+app/index.tsx(1864,3): error TS1128: Declaration or statement expected.
+app/index.tsx(1867,57): error TS1128: Declaration or statement expected.
+app/index.tsx(1871,5): error TS1136: Property assignment expected.
+app/index.tsx(1872,3): error TS1136: Property assignment expected.
+app/index.tsx(1873,3): error TS1136: Property assignment expected.
+app/index.tsx(1874,3): error TS1136: Property assignment expected.
+app/index.tsx(1875,5): error TS1136: Property assignment expected.
+app/index.tsx(1876,5): error TS1136: Property assignment expected.
+app/index.tsx(1877,5): error TS1136: Property assignment expected.
+app/index.tsx(1878,3): error TS1136: Property assignment expected.
+app/index.tsx(1879,5): error TS1136: Property assignment expected.
+app/index.tsx(1880,3): error TS1136: Property assignment expected.
+app/index.tsx(1881,5): error TS1136: Property assignment expected.
+app/index.tsx(1882,3): error TS1136: Property assignment expected.
+app/index.tsx(1883,3): error TS1136: Property assignment expected.
+app/index.tsx(1884,5): error TS1136: Property assignment expected.
+app/index.tsx(1885,3): error TS1005: ',' expected.
+app/index.tsx(1891,29): error TS1005: '}' expected.
+app/index.tsx(1895,90): error TS1005: ',' expected.
+app/index.tsx(1895,95): error TS1005: ',' expected.
+app/index.tsx(1895,101): error TS1005: ',' expected.
+app/index.tsx(1896,48): error TS1005: '}' expected.
+app/index.tsx(1897,47): error TS1005: '}' expected.
+app/index.tsx(1898,13): error TS1003: Identifier expected.
+app/index.tsx(1899,11): error TS1109: Expression expected.
+app/index.tsx(1906,15): error TS1005: '}' expected.
+app/index.tsx(1907,15): error TS1005: '}' expected.
+app/index.tsx(1909,11): error TS1005: ',' expected.
+app/index.tsx(1909,17): error TS1005: ',' expected.
+app/index.tsx(1912,70): error TS1005: ',' expected.
+app/index.tsx(1912,98): error TS1005: ',' expected.
+app/index.tsx(1913,24): error TS1005: ',' expected.
+app/index.tsx(1916,19): error TS1005: '}' expected.
+app/index.tsx(1920,26): error TS1136: Property assignment expected.
+app/index.tsx(1920,56): error TS1005: ';' expected.
+app/index.tsx(1920,115): error TS1005: ';' expected.
+app/index.tsx(1920,133): error TS1005: ';' expected.
+app/index.tsx(1922,121): error TS1005: ',' expected.
+app/index.tsx(1922,127): error TS1005: ',' expected.
+app/index.tsx(1922,129): error TS1005: ',' expected.
+app/index.tsx(1922,130): error TS1005: '...' expected.
+app/index.tsx(1922,136): error TS1005: '}' expected.
+app/index.tsx(1923,102): error TS1005: ',' expected.
+app/index.tsx(1923,109): error TS1005: ',' expected.
+app/index.tsx(1924,17): error TS1128: Declaration or statement expected.
+app/index.tsx(1925,15): error TS1109: Expression expected.
+app/index.tsx(1926,13): error TS1005: ',' expected.
+app/index.tsx(1926,25): error TS1005: ',' expected.
+app/index.tsx(1927,11): error TS1109: Expression expected.
+app/index.tsx(1928,11): error TS17002: Expected corresponding JSX closing tag for 'ScrollView'.
+app/index.tsx(1929,7): error TS1005: ',' expected.
+app/index.tsx(1929,21): error TS1005: ',' expected.
+app/index.tsx(1930,5): error TS1109: Expression expected.
+app/index.tsx(1938,31): error TS1382: Unexpected token. Did you mean `{'>'}` or `&gt;`?
+app/index.tsx(1962,11): error TS1136: Property assignment expected.
+app/index.tsx(1966,9): error TS1136: Property assignment expected.
+app/index.tsx(1967,7): error TS1136: Property assignment expected.
+app/index.tsx(1970,9): error TS1136: Property assignment expected.
+app/index.tsx(1971,9): error TS1136: Property assignment expected.
+app/index.tsx(1971,11): error TS1005: '...' expected.
+app/index.tsx(1971,1

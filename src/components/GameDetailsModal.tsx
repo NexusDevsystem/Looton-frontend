@@ -10,8 +10,6 @@ import {
   Modal,
   ActivityIndicator,
   Linking,
-  Platform,
-  FlatList,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -21,13 +19,10 @@ import { AddToListModal } from './AddToListModal';
 import { useLanguage } from '../contexts/LanguageContext';
 import { getGooglePlaySubscriptionDeepLink, SUBSCRIPTION_INFO } from '../constants/app';
 import { API_URL } from '../api/client';
+import { len, arr } from '../utils/array-utils';
 
 
-const { width, height } = Dimensions.get('window');
-
-// ðŸ”’ BLINDAGEM CONTRA .length CRASH
-const len = (v: any) => (Array.isArray(v) ? v.length : 0);
-const arr = <T,>(v: T[] | undefined | null): T[] => (Array.isArray(v) ? v : []);
+const { width } = Dimensions.get('window');
 
 interface GameDetailsProps {
   appId?: number | undefined;

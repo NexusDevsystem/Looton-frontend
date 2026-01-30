@@ -33,6 +33,7 @@ import { AddToListModal } from '../src/components/AddToListModal';
 import { AdBanner } from '../src/components/AdBanner';
 import { interstitialAdService } from '../src/services/InterstitialAdService';
 import { useFilters } from '../src/hooks/useFilters';
+import { fetchEpicGames } from '../src/api/epic-client';
 
 // Lista de jogos que devem ser filtrados/removidos (não disponíveis na Steam mais)
 const GAMES_TO_FILTER = [
@@ -306,7 +307,65 @@ function HomeContent() {
   
   // Estado para controle do layout dos cards (coluna ou grade)
   const [layoutType, setLayoutType] = useState<'column' | 'grid'>('column');
-  
+
+  // Estado para o carrossel de jogos grátis da Epic Games
+  const [epicCarouselIndex, setEpicCarouselIndex] = useState(0);
+
+  // Memoizar lista de jogos grátis da Epic Games
+  const uniqueFreeEpicGames = useMemo(() => {
+    const allItems = [...(gameItems || []), ...(deals || [])];
+
+    const freeEpicGames = allItems.filter(item => {
+      const storeName = (item as any).store?.name || (item as any).store || (item as any).storeName || '';
+
+      // Verificar se é da Epic Games
+      const isEpic = String(storeName).toLowerCase().includes('epic');
+      if (!isEpic) return false;
+
+      // Obter preços com tratamento correto para 0 (usar ?? em vez de ||)
+      const finalPriceCents = (item as any).priceFinalCents ?? (item as any).priceFinal ?? 0;
+      const basePriceCents = (item as any).priceBase ?? (item as any).priceBaseCents ?? 0;
+
+      // Normalizar para centavos se necessário
+      // Se priceFinal < 1000, provavelmente está em reais (ex: 49.90)
+      const finalPrice = finalPriceCents < 1000 && finalPriceCents > 0 ? finalPriceCents * 100 : finalPriceCents;
+      const basePrice = basePriceCents < 1000 && basePriceCents > 0 ? basePriceCents * 100 : basePriceCents;
+
+      // Grátis da semana: preço final = 0 (desconto de 100%)
+      const isFreeNow = finalPrice === 0;
+
+      // Jogos que serão grátis em breve (upcoming promotions)
+      const isUpcomingFree = (item as any).isUpcoming === true;
+
+      // Incluir se for grátis agora OU se for upcoming
+      return isFreeNow || isUpcomingFree;
+    });
+
+    // Remover duplicatas baseado no título do jogo
+    return freeEpicGames.filter((item, index, self) => {
+      const title = (item as any).game?.title || (item as any).title || '';
+      return index === self.findIndex(i => {
+        const iTitle = (i as any).game?.title || (i as any).title || '';
+        return iTitle === title;
+      });
+    });
+  }, [gameItems, deals]);
+
+  // Alternar automaticamente entre os jogos da Epic a cada 4 segundos
+  useEffect(() => {
+    if (uniqueFreeEpicGames.length > 1) {
+      const interval = setInterval(() => {
+        setEpicCarouselIndex((prevIndex) =>
+          (prevIndex + 1) % uniqueFreeEpicGames.length
+        );
+      }, 4000);
+
+      return () => clearInterval(interval);
+    } else {
+      setEpicCarouselIndex(0);
+    }
+  }, [uniqueFreeEpicGames.length]);
+
   // Carregar preferência de layout salva
   useEffect(() => {
     const loadLayoutPreference = async () => {
@@ -539,8 +598,69 @@ function HomeContent() {
     loadMore 
   } = useGameFeed(selectedGenres, sortBy, refreshKey)
 
+  // Estados para jogos categorizados (mesclados no feed principal)
+  const [categoryGames, setCategoryGames] = useState<GameItem[]>([])
+  const [loadingCategories, setLoadingCategories] = useState(false)
 
-  
+  // Carregar jogos por categoria para mesclar no feed
+  const loadCategoryGames = useCallback(async () => {
+    if (__DEV__) console.log('🎮 Carregando jogos categorizados (Corrida, FPS, Sobrevivência, Esporte)...')
+    setLoadingCategories(true)
+    try {
+      // Carregar todas as categorias em paralelo
+      // Backend já filtra para retornar APENAS jogos em promoção e pagos
+      const [racing, fps, survival, sports] = await Promise.all([
+        api<any[]>('/deals?category=racing&limit=20'),
+        api<any[]>('/deals?category=fps&limit=20'),
+        api<any[]>('/deals?category=survival&limit=20'),
+        api<any[]>('/deals?category=sports&limit=20')
+      ])
+
+      // Combinar todos os jogos categorizados
+      const allCategoryGames = [
+        ...(racing || []),
+        ...(fps || []),
+        ...(survival || []),
+        ...(sports || [])
+      ]
+
+      // Converter para GameItem format e filtrar jogos sem título
+      const converted = allCategoryGames
+        .map(deal => ({
+          id: deal._id || deal.appId?.toString() || '',
+          title: deal.game?.title || deal.title || '',
+          coverUrl: deal.game?.coverUrl || deal.image || '',
+          genres: deal.steamGenres || deal.game?.genres || [],
+          tags: deal.game?.tags || deal.tags || [],
+          priceFinalCents: deal.priceFinalCents || Math.round((deal.priceFinal || 0) * 100),
+          discountPct: deal.discountPct || 0,
+          store: deal.store?.name || 'Steam',
+          url: deal.url || ''
+        }))
+        .filter(game => game.title && game.title.trim() !== '') // Filtrar jogos sem título
+
+      setCategoryGames(converted)
+
+      if (__DEV__) console.log('✅ Jogos categorizados carregados:', {
+        racing: racing?.length || 0,
+        fps: fps?.length || 0,
+        survival: survival?.length || 0,
+        sports: sports?.length || 0,
+        total: converted.length
+      })
+    } catch (e) {
+      console.error('❌ Erro ao carregar jogos categorizados:', e)
+    } finally {
+      setLoadingCategories(false)
+    }
+  }, [])
+
+  // Carregar jogos categorizados ao montar
+  useEffect(() => {
+    loadCategoryGames()
+  }, [loadCategoryGames])
+
+
   // Memoizar gameItems para evitar loops
   const memoizedGameItems = useMemo(() => {
   // Se estiver embaralhado, usar os dados embaralhados, senão os originais
@@ -555,11 +675,15 @@ function HomeContent() {
       setShuffledGameItems([]);
     }
   }, [gameItems]);
-  
+
   // Fun��o para filtrar jogos indesejados (não disponíveis na Steam mais)
   const shouldFilterGame = useCallback((title: string) => {
     if (!title) return false;
     const lowerTitle = title.toLowerCase();
+    // Filtrar DLCs e pacotes de extensão
+    if (lowerTitle.includes('pacote de extensão') || lowerTitle.includes('pacote de extensao')) {
+      return true;
+    }
     return GAMES_TO_FILTER.some(filterTitle => lowerTitle.includes(filterTitle));
   }, [])
   
@@ -756,6 +880,7 @@ function HomeContent() {
     
     return {
       _id: item.id,
+      appId: (item as any).appId, // appId numérico para o modal de detalhes
       url: item.url,
       priceBase: priceBase,
       priceFinal: priceFinal,
@@ -773,11 +898,111 @@ function HomeContent() {
     };
   }, [shouldFilterGame, isValidSteamApp, hasSufficientInfo])
 
+  // Memoizar transformação de dados para o FlatList (evita recálculo em cada render)
+  const processedFlatListData = useMemo(() => {
+    if (__DEV__) {
+      console.log(`\n🎮 ========== INÍCIO PROCESSING ==========`);
+      console.log(`📊 memoizedGameItems: ${memoizedGameItems.length}`);
+      console.log(`📊 deals: ${deals.length}`);
+      console.log(`📊 categoryGames: ${categoryGames.length}`);
+      console.log(`📊 hasActiveFilters: ${hasActiveFilters}`);
+    }
+
+    // Usar deals como fallback quando não há itens no feed ou quando o feed falha
+    let baseItems = (hasActiveFilters && memoizedGameItems.length > 0)
+      ? memoizedGameItems
+      : (deals.length > 0 ? deals.map(d => ({
+          ...d,
+          id: d._id || (d as any).id || '',
+          priceFinalCents: (d as any).priceFinalCents || 0,
+          discountPct: d.discountPct || 0
+        } as GameItem)) : memoizedGameItems);
+
+    if (__DEV__) console.log(`📊 baseItems selecionados: ${baseItems.length}`);
+
+    // Adicionar jogos categorizados (já vêm filtrados: apenas em promoção + pagos)
+    let allGames = [...categoryGames, ...baseItems];
+
+    // Remover duplicatas (baseado no ID)
+    const seenIds = new Set<string>();
+    allGames = allGames.filter(game => {
+      const id = game.id || (game as any)._id || '';
+      if (!id || seenIds.has(id)) return false;
+      seenIds.add(id);
+      return true;
+    });
+
+    if (__DEV__) console.log(`📊 allGames após remover duplicatas: ${allGames.length}`);
+
+    // Converter para Deal
+    let result = allGames.map(convertGameItemToDeal).filter((deal): deal is Deal => deal !== null);
+
+    if (__DEV__) console.log(`📊 result após conversão: ${result.length}`);
+
+    // Aplicar ordenação hierárquica: super ofertas primeiro, depois ofertas normais
+    result = result.sort((a: Deal, b: Deal) => {
+      const aIsSuperDeal = a.discountPct >= 70;
+      const bIsSuperDeal = b.discountPct >= 70;
+
+      // Se ambos forem super ofertas ou ambos não forem, ordenar por desconto
+      if (aIsSuperDeal === bIsSuperDeal) {
+        return b.discountPct - a.discountPct;
+      }
+
+      // Super ofertas vêm primeiro
+      return aIsSuperDeal ? -1 : 1;
+    });
+
+    // Remover itens da Epic Games do feed principal APENAS se houver outros jogos
+    // (já que estão no banner, mas mantemos se forem a única fonte)
+    const nonEpicCount = result.filter(deal => {
+      const storeName = deal.store?.name || (deal as any).store || '';
+      return !storeName.toLowerCase().includes('epic');
+    }).length;
+
+    // Só remover Epic Games se houver pelo menos 3 jogos de outras lojas
+    if (nonEpicCount >= 3) {
+      result = result.filter((deal) => {
+        const storeName = deal.store?.name || (deal as any).store || '';
+        if (storeName.toLowerCase().includes('epic')) {
+          return false; // Não incluir itens da Epic no feed principal
+        }
+        return true;
+      });
+    }
+
+    if (__DEV__) console.log(`📊 result após remover Epic: ${result.length}`);
+
+    // Remove known test card(s) by filtering titles or known test IDs
+    const bannedIds = new Set(['info_test_version', 'test_card']);
+    result = result.filter((deal) => {
+      const rawId = (deal as any)._id || (deal as any).id || '';
+      if (rawId && bannedIds.has(String(rawId))) return false;
+
+      const raw = (deal.game?.title || (deal as any).title || '').toString();
+      if (!raw) return true;
+      // Normalize: lowercase and remove common diacritics
+      const normalized = raw.toLowerCase().normalize ? raw.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') : raw.toLowerCase();
+      // Exclude titles that contain both 'nota' and 'teste' or explicit 'versao de teste'
+      if (normalized.includes('nota') && normalized.includes('teste')) return false;
+      if (normalized.includes('versao de teste') || normalized.includes('versão de teste')) return false;
+      return true;
+    });
+
+    if (__DEV__) {
+      console.log(`📊 result após remover testes: ${result.length}`);
+      console.log(`\n✅ RESULTADO FINAL: ${result.length} jogos para exibir`);
+      console.log(`========================================\n`);
+    }
+
+    return result;
+  }, [hasActiveFilters, memoizedGameItems, deals, categoryGames, convertGameItemToDeal]);
+
   // Inicializar app diretamente sem onboarding
   useEffect(() => {
     const initializeApp = async () => {
       try {
-  console.log('Inicializando app...')
+  if (__DEV__) console.log('Inicializando app...')
         
         // Carregar deals iniciais
         fetchDeals()
@@ -919,45 +1144,120 @@ function HomeContent() {
 
     try {
       setIsSearching(true)
-      console.log('Buscando jogos na Steam:', query)
+      if (__DEV__) console.log('🔍 Buscando jogos:', query)
 
-      const data = await api<any>(`/search?q=${encodeURIComponent(query)}&limit=20`)
-      const sourceArray = Array.isArray(data) ? data : []
-      
+      const data = await api<any>(`/search?q=${encodeURIComponent(query)}&limit=300`)
+
+      // A API pode retornar em diferentes formatos:
+      // 1) Array diretamente: [...]
+      // 2) Objeto com games: { games: [...] }
+      // 3) Objeto com results: { results: [...] }
+      let sourceArray: any[] = []
+      if (Array.isArray(data)) {
+        sourceArray = data
+      } else if (data && Array.isArray(data.games)) {
+        sourceArray = data.games
+      } else if (data && Array.isArray(data.results)) {
+        sourceArray = data.results
+      } else if (data && typeof data === 'object') {
+        // Tentar extrair qualquer array do objeto
+        const possibleArrays = Object.values(data).filter(v => Array.isArray(v))
+        if (possibleArrays.length > 0) {
+          sourceArray = possibleArrays[0] as any[]
+        }
+      }
+
+      if (__DEV__) {
+        console.log(`\n🔍 ========== SEARCH RESULTS ==========`);
+        console.log(`📦 Resposta do backend:`, {
+          type: Array.isArray(data) ? 'array' : typeof data,
+          hasGames: data?.games?.length,
+          hasResults: data?.results?.length,
+          sourceArrayLength: sourceArray.length
+        });
+      }
+
       // Mapeamento corrigido para dados da rota /search
       const mappedResults = sourceArray.map((item: any, index: number) => {
-        // Extrair appId do formato "app:12345"
-        const appId = item.id ? item.id.replace('app:', '') : null
-        
-        // Converter preÃ§os de centavos para reais
-        const priceBase = (item.priceOriginalCents || 0) / 100
-        const priceFinal = (item.priceFinalCents || 0) / 100
-        
+        // Extrair appId de diferentes formatos
+        let appId: string | null = null
+        if (item.id) {
+          appId = item.id.toString().replace('app:', '').replace('steam:', '')
+        } else if (item._id) {
+          appId = item._id.toString().replace('app:', '').replace('steam:', '')
+        } else if (item.appId) {
+          appId = item.appId.toString()
+        }
+
+        // Lidar com diferentes formatos de dados
+        // Formato 1: Dados diretos (id, title, priceFinalCents, etc)
+        // Formato 2: Com bestOffer (game, bestOffer)
+        // Formato 3: Deal completo (_id, game, store, priceFinal)
+
+        const gameObj = item.game || item
+        const offer = item.bestOffer || item
+
+        // Converter preços - podem estar em centavos ou reais
+        let priceBase = 0
+        let priceFinal = 0
+
+        if (offer.priceOriginalCents !== undefined) {
+          priceBase = offer.priceOriginalCents / 100
+        } else if (offer.priceBase !== undefined) {
+          priceBase = offer.priceBase
+        }
+
+        if (offer.priceFinalCents !== undefined) {
+          priceFinal = offer.priceFinalCents / 100
+        } else if (offer.priceFinal !== undefined) {
+          priceFinal = offer.priceFinal
+        }
+
+        // Título do jogo
+        const title = gameObj.title || gameObj.name || item.title || item.name || 'Título não encontrado'
+
+        // Cover URL
+        const coverUrl = gameObj.coverUrl || item.image || item.coverUrl || ''
+
         return {
           _id: `search-${appId || index}`,
           appId: appId ? Number(appId) : undefined,
           priceBase: priceBase,
           priceFinal: priceFinal,
-          discountPct: item.discountPct || 0,
-          url: item.url || `https://store.steampowered.com/app/${appId}/`,
-          kind: item.kind || 'game', // Usar classificaÃ§Ã£o real da Steam
+          discountPct: offer.discountPct || item.discountPct || 0,
+          url: offer.url || item.url || `https://store.steampowered.com/app/${appId}/`,
+          kind: item.kind || 'game',
           game: {
-            title: item.title || 'TÃ­tulo nÃ£o encontrado',
-            coverUrl: item.image || ''
+            title: title,
+            coverUrl: coverUrl
           },
           store: {
-            name: item.store || (item.id?.includes('epic_') ? 'Epic Games' : 'Steam')
+            name: offer.store?.name || item.store?.name || item.store ||
+                  (item.id?.includes('epic_') ? 'Epic Games' : 'Steam')
           }
         }
       })
 
-      try { console.debug('Mapped search results (preview):', mappedResults.slice(0, 6)) } catch (e) {}
-      
+      if (__DEV__) {
+        console.log(`📊 Resultados mapeados: ${mappedResults.length}`);
+        console.log(`📝 Preview dos primeiros resultados:`, mappedResults.slice(0, 3).map(r => ({
+          title: r.game?.title,
+          price: r.priceFinal,
+          discount: r.discountPct
+        })));
+      }
+
       // Armazenar resultados originais
       setOriginalSearchResults(mappedResults)
-      
+
       // Aplicar filtro de tipo (games/dlcs)
       const filteredResults = applySearchFilter(mappedResults)
+
+      if (__DEV__) {
+        console.log(`✅ Resultados após filtro (${searchFilter}): ${filteredResults.length}`);
+        console.log(`========================================\n`);
+      }
+
       setSearchResults(filteredResults)
     } catch (err) {
       console.error('Erro na busca Steam:', err)
@@ -1036,27 +1336,53 @@ function HomeContent() {
     try {
       setLoading(true)
       setError(null)
-      
-      // Buscar todos os dados (Steam)
-      const endpoint = `/deals?limit=100`;
-      
+
       // Verificar se já passou um dia desde a última atualização
       const today = new Date();
       const currentDayOfYear = getDayOfYear(today);
       const lastUpdatedDay = await getLastUpdatedDay();
-      
-      // ForÃ§ar atualização se for um novo dia
+
+      // Forçar atualização se for um novo dia
       if (lastUpdatedDay === null || lastUpdatedDay !== currentDayOfYear) {
-  console.log(`Atualizando ofertas - Novo dia detectado (hoje: ${currentDayOfYear}, �ltimo: ${lastUpdatedDay})`);
+        console.log(`Atualizando ofertas - Novo dia detectado (hoje: ${currentDayOfYear}, último: ${lastUpdatedDay})`);
       }
-      
-      // Usar função api do client.ts que agora tem timeout de 20s e mais configurações
-      const response = await api<any>(endpoint);
+
+      // Buscar deals do backend E jogos grátis da Epic em paralelo
+      const [response, epicGames] = await Promise.all([
+        api<any>(`/deals?limit=1000`), // Máximo permitido pelo backend
+        fetchEpicGames() // Buscar jogos grátis da Epic separadamente
+      ]);
 
       // A resposta do endpoint /deals está no formato original
       const curated = Array.isArray(response) ? response : [];
 
-      if (!Array.isArray(curated) || curated.length === 0) {
+      // Combinar deals do backend com jogos da Epic
+      // Converter epicGames para o formato Deal
+      const epicDealsFormatted = epicGames.map((game: any) => ({
+        _id: game.id || `epic-${game.title}`,
+        appId: game.id,
+        url: game.url,
+        priceBase: game.priceBase || 0,
+        priceFinal: game.priceFinal || 0,
+        discountPct: game.discountPct || 100,
+        game: {
+          title: game.title,
+          coverUrl: game.coverUrl,
+          genres: game.genres || [],
+          tags: game.tags || []
+        },
+        store: { name: 'Epic Games' },
+        isUpcoming: game.isUpcoming || false,
+        // Campos adicionais para o banner
+        isEpicFree: true,
+        promotionStartDate: game.promotionStartDate,
+        promotionEndDate: game.promotionEndDate
+      }));
+
+      // Combinar ambos
+      const allDeals = [...epicDealsFormatted, ...curated];
+
+      if (allDeals.length === 0) {
         setDeals([])
         setError('Nenhuma oferta encontrada no momento')
         return
@@ -1064,8 +1390,33 @@ function HomeContent() {
 
       // Processamento otimizado dos dados
 
-      // Processamento normal para dados gerais (Steam e outros)
-      const rawDeals = curated.map((item: any, index: number) => ({
+      // Palavras-chave para filtrar DLCs
+      const DLC_KEYWORDS = [
+        'soundtrack', 'ost', 'season pass', 'expansion pass', 'expansion pack',
+        'character pack', 'weapon pack', 'skin pack', 'map pack', 'booster pack',
+        'artbook', 'art book', 'wallpaper pack', 'deluxe upgrade', 'gold upgrade',
+        'premium upgrade', 'ultimate upgrade', 'digital deluxe upgrade'
+      ];
+      const DLC_PATTERNS = ['dlc', 'expansion', 'soundtrack', 'ost', 'season pass', 'add-on', 'addon'];
+
+      // Função para verificar se é DLC
+      const isDLC = (title: string) => {
+        const lowerTitle = title.toLowerCase();
+        // Verificar palavras-chave exatas
+        for (const keyword of DLC_KEYWORDS) {
+          if (lowerTitle.includes(keyword)) return true;
+        }
+        // Verificar padrão "Game - DLC"
+        if (lowerTitle.includes(' - ')) {
+          for (const pattern of DLC_PATTERNS) {
+            if (lowerTitle.includes(pattern)) return true;
+          }
+        }
+        return false;
+      };
+
+      // Processamento normal para dados gerais (Steam, Epic e outros)
+      const rawDeals = allDeals.map((item: any, index: number) => ({
         _id: item._id || `deal-${item.appId || index}`,
         appId: item.appId,
         url: item.url,
@@ -1073,20 +1424,24 @@ function HomeContent() {
         priceFinal: item.priceFinal || 0,
         discountPct: item.discountPct || 0,
         game: {
-          title: item.game?.title || item.title || 'TÃ­tulo nÃ£o encontrado',
+          title: item.game?.title || item.title || 'Título não encontrado',
           coverUrl: item.game?.coverUrl || item.coverUrl || (item.appId ? `https://cdn.akamai.steamstatic.com/steam/apps/${item.appId}/header.jpg` : null),
           genres: item.game?.genres || item.genres || [],
           tags: item.game?.tags || item.tags || []
         },
-        store: item.store || { name: 'Steam' }
+        store: item.store || { name: 'Steam' },
+        isUpcoming: item.isUpcoming || false,
+        isEpicFree: item.isEpicFree || false
       }));
 
-      // Filtrar jogos indesejados (como DOOM se nÃ£o estiver mais disponÃ­vel), appIds invÃ¡lidos e jogos com informaÃ§Ãµes insuficientes
+      // Filtrar jogos indesejados, appIds inválidos, jogos com informações insuficientes E DLCs
       const sourceDeals: any[] = rawDeals.filter(deal => {
-        if (!hasSufficientInfo(deal)) return false; // Filtrar por informaÃ§Ãµes insuficientes
-        if (shouldFilterGame(deal.game?.title)) return false; // Filtrar por tÃ­tulo
-        // Filtrar por appId invÃ¡lido
+        if (!hasSufficientInfo(deal)) return false; // Filtrar por informações insuficientes
+        if (shouldFilterGame(deal.game?.title)) return false; // Filtrar por título
+        // Filtrar por appId inválido
         if (deal.appId && !isValidSteamApp(deal.appId)) return false;
+        // Filtrar DLCs/pacotes
+        if (isDLC(deal.game?.title || '')) return false;
         return true;
       })
       
@@ -1112,40 +1467,16 @@ function HomeContent() {
         return aIsSuperDeal ? -1 : 1;
       })
       
-      // Sistema de rotaÃ§Ã£o diÃ¡ria de "Ofertas do Dia" - aplicar rotaÃ§Ã£o a todos os dados
-      let dailyRotatedDeals = uniqueDeals;
-      // FunÃ§Ã£o de embaralhamento com seed baseado no dia
-      const shuffleWithSeed = (array: Deal[], seed: number) => {
-        const shuffled = [...array]
-        let currentIndex = shuffled.length, randomIndex
-        
-        // Usar seed para garantir mesmo resultado no mesmo dia
-        const seedRandom = (seed: number) => {
-          const x = Math.sin(seed) * 10000
-          return x - Math.floor(x)
-        }
-        
-        while (currentIndex > 0) {
-          randomIndex = Math.floor(seedRandom(seed + currentIndex) * currentIndex)
-          currentIndex--
-          
-          // Trocar elementos
-          const temp = shuffled[currentIndex]
-          shuffled[currentIndex] = shuffled[randomIndex]
-          shuffled[randomIndex] = temp
-        }
-        
-        return shuffled
-      }
-      
-      // Aplicar rotaÃ§Ã£o diÃ¡ria com seed baseado no dia do ano (embaralhamento tradicional)
-      dailyRotatedDeals = shuffleWithSeed(uniqueDeals, currentDayOfYear);
-      
-  console.log(`Ofertas do Dia - Rotação para ${today.toLocaleDateString()} (dia ${currentDayOfYear})`)
-  console.log(`${dailyRotatedDeals.length} ofertas embaralhadas para hoje`)
+      // Sistema DESATIVADO: Agora mostramos TODOS os jogos disponíveis
+      // Mantém ordenação por desconto para ter os melhores deals no topo
+      const sortedDeals = [...uniqueDeals].sort((a: Deal, b: Deal) => {
+        return (b.discountPct || 0) - (a.discountPct || 0);
+      });
 
+      console.log(`✅ ${sortedDeals.length} ofertas disponíveis para ${today.toLocaleDateString()}`);
 
-      setDeals(dailyRotatedDeals); // Mostrar todos os dados
+      // Mostrar TODOS os deals disponíveis (sem limite de janela)
+      setDeals(sortedDeals);
       
       // Salvar que atualizamos hoje
       await setLastUpdatedDay(currentDayOfYear);
@@ -1242,7 +1573,7 @@ function HomeContent() {
 
     // Para deals normais (Steam), prefere usar appId; tenta extrair do url ou do _id como fallback
     let appId: number | null = (deal as any).appId || null
-    console.debug('handleGamePress start', { id: deal._id, appId: (deal as any).appId, url: (deal as any).url, game: deal.game })
+    if (__DEV__) console.debug('handleGamePress start', { id: deal._id, appId: (deal as any).appId, url: (deal as any).url, game: deal.game })
 
     if (!appId) {
       // tenta extrair do URL (ex: https://store.steampowered.com/app/1849250)
@@ -2570,56 +2901,8 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
             {!feedLoading && !feedError && (gameItems.length > 0 || deals.length > 0) && (
               <>
                 <FlatList
-                key={layoutType} // ForÃ§a nova renderizaÃ§Ã£o quando o layout muda
-                data={(() => {
-                  console.log(`Debug: hasActiveFilters=${hasActiveFilters}, memoizedGameItems.length=${memoizedGameItems.length}, deals.length=${deals.length}`);
-                  
-                  // Usar deals como fallback quando nÃ£o hÃ¡ itens no feed ou quando o feed falha
-                  let result = (hasActiveFilters && memoizedGameItems.length > 0) ? memoizedGameItems.map(convertGameItemToDeal).filter((deal): deal is Deal => deal !== null) : (deals.length > 0 ? deals : memoizedGameItems.map(convertGameItemToDeal).filter((deal): deal is Deal => deal !== null));
-                  console.log(`Debug: FlatList data length=${result.length}`);
-                  
-                  // Aplicar ordenaÃ§Ã£o hierÃ¡rquica: super ofertas primeiro, depois ofertas normais
-            result = result.sort((a: Deal, b: Deal) => {
-                    const aIsSuperDeal = a.discountPct >= 70;
-                    const bIsSuperDeal = b.discountPct >= 70;
-                    
-                    // Se ambos forem super ofertas ou ambos nÃ£o forem, ordenar por desconto
-                    if (aIsSuperDeal === bIsSuperDeal) {
-                      return b.discountPct - a.discountPct;
-                    }
-                    
-                    // Super ofertas vÃªm primeiro
-                    return aIsSuperDeal ? -1 : 1;
-                  });
-
-                  // Remover itens da Epic Games do feed principal (já que estÃ£o no banner)
-                  result = result.filter((deal) => {
-                    const storeName = deal.store?.name || (deal as any).store || '';
-                    if (storeName.toLowerCase().includes('epic')) {
-                      return false; // NÃ£o incluir itens da Epic no feed principal
-                    }
-                    return true;
-                  });
-
-
-                  // Remove known test card(s) by filtering titles or known test IDs
-                  const bannedIds = new Set(['info_test_version', 'test_card']);
-                  result = result.filter((deal) => {
-                    const rawId = (deal as any)._id || (deal as any).id || '';
-                    if (rawId && bannedIds.has(String(rawId))) return false;
-
-                    const raw = (deal.game?.title || (deal as any).title || '').toString();
-                    if (!raw) return true;
-                    // Normalize: lowercase and remove common diacritics
-                    const normalized = raw.toLowerCase().normalize ? raw.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') : raw.toLowerCase();
-                    // Exclude titles that contain both 'nota' and 'teste' or explicit 'versao de teste'
-                    if (normalized.includes('nota') && normalized.includes('teste')) return false;
-                    if (normalized.includes('versao de teste') || normalized.includes('versÃ£o de teste')) return false;
-                    return true;
-                  });
-
-                  return result;
-                })()}
+                key={layoutType} // Força nova renderização quando o layout muda
+                data={processedFlatListData}
                 renderItem={({ item, index }) => {
                   // Renderizar o card com base no layout selecionado
                   if (layoutType === 'grid') {
@@ -2642,9 +2925,10 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                 keyExtractor={(item, index) => `${item._id || 'game'}-${index}`}
                 showsVerticalScrollIndicator={false}
                 removeClippedSubviews={true}
-                initialNumToRender={50}
-                windowSize={21}
-                maxToRenderPerBatch={20}
+                initialNumToRender={8}
+                windowSize={5}
+                maxToRenderPerBatch={5}
+                updateCellsBatchingPeriod={50}
                 numColumns={layoutType === 'grid' ? 2 : 1}
                 columnWrapperStyle={layoutType === 'grid' ? { gap: 8 } : null}
                 getItemLayout={(data, index) => {
@@ -2671,140 +2955,76 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                   }
                 }}
                 onEndReachedThreshold={0.5}
-                ListHeaderComponent={() => {
+                ListHeaderComponent={uniqueFreeEpicGames.length > 0 ? () => {
                   // Banner do Jogo Grátis da Semana da Epic Games (Carrossel)
-                  const allItems = [...(gameItems || []), ...(deals || [])];
+                  const currentGame = uniqueFreeEpicGames[epicCarouselIndex];
 
-                  const freeEpicGames = allItems.filter(item => {
-                    const storeName = (item as any).store?.name || (item as any).store || (item as any).storeName || '';
-                    const finalPrice = (item as any).priceFinalCents || (item as any).priceFinal || 0;
-                    const basePrice = (item as any).priceBase || 0;
+                  // Normalizar o item para o formato Deal
+                  const normalizedDeal: Deal | null = 'priceFinal' in (currentGame as any)
+                    ? (currentGame as Deal)
+                    : convertGameItemToDeal(currentGame as GameItem);
 
-                    // Grátis da semana: preço original > 0 e preço final = 0 (desconto de 100%)
-                    const isTemporaryFree = basePrice > 0 && finalPrice === 0;
+                  if (!normalizedDeal) return null;
 
-                    return (String(storeName).toLowerCase().includes('epic')) && isTemporaryFree;
-                  });
+                  const imageUrl = normalizedDeal.game?.coverUrl || (normalizedDeal as any).image || '';
+                  const gameTitle = normalizedDeal.game?.title || (normalizedDeal as any).title || '';
+                  const isUpcoming = (currentGame as any).isUpcoming === true;
 
-                  // Remover duplicatas baseado no título do jogo
-                  const uniqueFreeEpicGames = freeEpicGames.filter((item, index, self) => {
-                    const title = (item as any).game?.title || (item as any).title || '';
-                    return index === self.findIndex(i => {
-                      const iTitle = (i as any).game?.title || (i as any).title || '';
-                      return iTitle === title;
-                    });
-                  });
-
-                  if (uniqueFreeEpicGames.length > 0) {
-                    // Usar estado para controlar qual jogo está sendo mostrado
-                    const [currentGameIndex, setCurrentGameIndex] = React.useState(0);
-
-                    // Alternar automaticamente entre os jogos a cada 4 segundos
-                    React.useEffect(() => {
-                      if (uniqueFreeEpicGames.length > 1) {
-                        const interval = setInterval(() => {
-                          setCurrentGameIndex((prevIndex) =>
-                            (prevIndex + 1) % uniqueFreeEpicGames.length
-                          );
-                        }, 4000); // 4 segundos
-
-                        return () => clearInterval(interval);
-                      }
-                    }, [uniqueFreeEpicGames.length]);
-
-                    // Pegar o jogo atual
-                    const currentGame = uniqueFreeEpicGames[currentGameIndex];
-
-                    // Normalizar o item para o formato Deal
-                    const normalizedDeal: Deal | null = 'priceFinal' in (currentGame as any)
-                      ? (currentGame as Deal)
-                      : convertGameItemToDeal(currentGame as GameItem);
-
-                    if (!normalizedDeal) return null;
-
-                    const imageUrl = normalizedDeal.game?.coverUrl || (normalizedDeal as any).image || '';
-                    const gameTitle = normalizedDeal.game?.title || (normalizedDeal as any).title || '';
-
-                    return (
-                      <View style={{ marginTop: 3, marginBottom: 10 }}>
-                        <TouchableOpacity
-                          onPress={() => {
-                            handleGamePress(normalizedDeal);
-                          }}
+                  return (
+                    <View style={{ marginTop: 3, marginBottom: 10 }}>
+                      <TouchableOpacity
+                        onPress={() => {
+                          handleGamePress(normalizedDeal);
+                        }}
+                        style={{
+                          borderRadius: 16,
+                          overflow: 'hidden',
+                          height: 160,
+                        }}
+                      >
+                        <Image
+                          source={{ uri: imageUrl }}
                           style={{
-                            borderRadius: 16,
-                            overflow: 'hidden',
-                            height: 160,
+                            width: '100%',
+                            height: '100%',
+                            resizeMode: 'cover',
                           }}
-                        >
-                          <Image
-                            source={{ uri: imageUrl }}
-                            style={{
-                              width: '100%',
-                              height: '100%',
-                              resizeMode: 'cover',
-                            }}
-                          />
-                          <View style={{
-                            position: 'absolute',
-                            top: 10,
-                            left: 10,
+                        />
+                        <View style={{
+                          position: 'absolute',
+                          top: 10,
+                          left: 10,
+                        }}>
+                          <Text style={{
+                            color: '#FFFFFF',
+                            fontSize: 12,
+                            fontWeight: 'bold',
+                            backgroundColor: isUpcoming ? 'rgba(234, 179, 8, 0.9)' : 'rgba(0,0,0,0.7)',
+                            paddingHorizontal: 8,
+                            paddingVertical: 4,
+                            borderRadius: 6,
                           }}>
-                            <Text style={{
-                              color: '#FFFFFF',
-                              fontSize: 12,
-                              fontWeight: 'bold',
-                              backgroundColor: 'rgba(0,0,0,0.7)',
-                              paddingHorizontal: 8,
-                              paddingVertical: 4,
-                              borderRadius: 6,
-                            }}>
-                              Grátis na Epic Games
-                            </Text>
-                          </View>
-                          <View style={{
-                            position: 'absolute',
-                            bottom: 10,
-                            left: 10,
-                            right: 10,
-                          }}>
-                            <Text style={{
-                              color: '#FFFFFF',
-                              fontSize: 16,
-                              fontWeight: 'bold',
-                            }} numberOfLines={1}>
-                              {gameTitle}
-                            </Text>
-                          </View>
-
-                          {/* Indicadores de página (dots) quando há múltiplos jogos */}
-                          {uniqueFreeEpicGames.length > 1 && (
-                            <View style={{
-                              position: 'absolute',
-                              bottom: 10,
-                              right: 10,
-                              flexDirection: 'row',
-                              gap: 6,
-                            }}>
-                              {uniqueFreeEpicGames.map((_, index) => (
-                                <View
-                                  key={`dot-${index}`}
-                                  style={{
-                                    width: 8,
-                                    height: 8,
-                                    borderRadius: 4,
-                                    backgroundColor: index === currentGameIndex ? '#FFFFFF' : 'rgba(255,255,255,0.4)',
-                                  }}
-                                />
-                              ))}
-                            </View>
-                          )}
-                        </TouchableOpacity>
-                      </View>
-                    );
-                  }
-                  return null;
-                }}
+                            {isUpcoming ? 'Em breve na Epic Games' : 'Grátis na Epic Games'}
+                          </Text>
+                        </View>
+                        <View style={{
+                          position: 'absolute',
+                          bottom: 10,
+                          left: 10,
+                          right: 10,
+                        }}>
+                          <Text style={{
+                            color: '#FFFFFF',
+                            fontSize: 16,
+                            fontWeight: 'bold',
+                          }} numberOfLines={1}>
+                            {gameTitle}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    </View>
+                  );
+                } : undefined}
                 ListFooterComponent={() => (
                   <View style={{ height: 20 }}>
                     {hasActiveFilters && feedLoading ? (

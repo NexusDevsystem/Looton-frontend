@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { View, Text, FlatList, RefreshControl, SafeAreaView, TextInput, Pressable, ActivityIndicator } from 'react-native'
+import { View, Text, FlatList, RefreshControl, SafeAreaView, TextInput, Pressable, ActivityIndicator, ScrollView } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { tokens } from '../src/theme/tokens'
 import { fetchPcDeals, PcOffer } from '../src/services/HardwareService'
@@ -7,12 +7,15 @@ import { PcDealCard } from '../src/components/PcDealCard'
 import { CurrencyProvider } from '../src/contexts/CurrencyContext'
 import { SmartHardwareSearch } from '../src/services/SmartHardwareSearch'
 import { LocalHardwareCacheService } from '../src/services/LocalHardwareCacheService'
+import { LinearGradient } from 'expo-linear-gradient'
 
 // Old inline card removed in favor of PcDealCard
 
 export function HardwareInner() {
   const [items, setItems] = useState<PcOffer[]>([])
   const [allItems, setAllItems] = useState<PcOffer[]>([]) // Base para busca client-side
+  const [aliexpressItems, setAliexpressItems] = useState<PcOffer[]>([]) // Promoções do AliExpress
+  const [loadingAliexpress, setLoadingAliexpress] = useState(true)
   const [page, setPage] = useState(0)
   const pageSize = 60
   const [refreshing, setRefreshing] = useState(false)
@@ -29,6 +32,27 @@ export function HardwareInner() {
     return () => clearTimeout(id)
   }, [query])
 
+  // Carregar promoções do AliExpress especificamente
+  const loadAliexpressDeals = useCallback(async () => {
+    console.log('🛒 Carregando promoções do AliExpress...')
+    setLoadingAliexpress(true)
+    try {
+      // Buscar apenas produtos do AliExpress
+      const res = await fetchPcDeals({ limit: 20, full: true, store: ['aliexpress'] })
+      const aliItems = (res.items || [])
+        .filter(item => item.store.toLowerCase() === 'aliexpress')
+        .sort((a, b) => (b.discountPct || 0) - (a.discountPct || 0)) // Ordenar por maior desconto
+        .slice(0, 10) // Top 10 promoções
+
+      setAliexpressItems(aliItems)
+      console.log('✅ Carregou', aliItems.length, 'promoções do AliExpress')
+    } catch (e) {
+      console.error('❌ Erro ao carregar promoções do AliExpress:', e)
+    } finally {
+      setLoadingAliexpress(false)
+    }
+  }, [])
+
   // Tentar carregar dados do cache local primeiro
   const loadFromCache = useCallback(async () => {
     try {
@@ -36,6 +60,17 @@ export function HardwareInner() {
       if (cachedItems && cachedItems.length > 0) {
         setAllItems(cachedItems);
         setItems(cachedItems.slice(0, 30));
+
+        // Também extrair itens do AliExpress do cache
+        const aliItems = cachedItems
+          .filter(item => item.store.toLowerCase() === 'aliexpress')
+          .sort((a, b) => (b.discountPct || 0) - (a.discountPct || 0))
+          .slice(0, 10)
+        if (aliItems.length > 0) {
+          setAliexpressItems(aliItems)
+          setLoadingAliexpress(false)
+        }
+
         return true;
       }
     } catch (error) {
@@ -130,6 +165,7 @@ export function HardwareInner() {
     loadFromCache().then(() => {
       // Depois carregar do backend para atualizar os dados
       loadCurated();
+      loadAliexpressDeals(); // Carregar promoções do AliExpress
     });
     setPage(1)
   }, []) // Remove loadCurated dependency to ensure it runs only once on mount
@@ -157,8 +193,8 @@ export function HardwareInner() {
       <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 }}>
         <Text style={{ color: tokens.colors.text, fontSize: 22, fontWeight: '800' }}>Hardware</Text>
         <View style={{ marginTop: 10, marginBottom: 6 }}>
-          <View style={{ 
-            flexDirection: 'row', 
+          <View style={{
+            flexDirection: 'row',
             alignItems: 'center',
             backgroundColor: tokens.colors.chip,
             borderRadius: 8,
@@ -171,7 +207,7 @@ export function HardwareInner() {
               onChangeText={setQuery}
               placeholder="Buscar hardware (GPU, CPU, RTX, Ryzen, SSD...)"
               placeholderTextColor={tokens.colors.textDim}
-              style={{ 
+              style={{
                 flex: 1,
                 color: tokens.colors.text,
                 paddingHorizontal: 8,
@@ -184,14 +220,71 @@ export function HardwareInner() {
           </View>
         </View>
         <Text style={{ color: tokens.colors.textDim, marginTop: 4, fontSize: 12 }}>
-          {loading 
+          {loading
             ? 'Carregando produtos...'
-            : debounced 
+            : debounced
               ? `🎯 ${items.length} produto${items.length !== 1 ? 's' : ''} encontrado${items.length !== 1 ? 's' : ''} para "${debounced}"`
               : `${allItems.length} produtos disponíveis • Busca inteligente ativa`
           }
         </Text>
       </View>
+
+      {/* Seção de Promoções do AliExpress - DESTAQUE */}
+      {!debounced && aliexpressItems.length > 0 && (
+        <View style={{ marginBottom: 16 }}>
+          <LinearGradient
+            colors={['#FF6B00', '#FF8F00']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={{
+              marginHorizontal: 16,
+              borderRadius: 12,
+              padding: 12,
+              marginBottom: 8
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                <Ionicons name="flame" size={20} color="#FFFFFF" />
+                <Text style={{
+                  color: '#FFFFFF',
+                  fontSize: 16,
+                  fontWeight: '800',
+                  marginLeft: 8
+                }}>
+                  Promoções AliExpress
+                </Text>
+              </View>
+              <View style={{
+                backgroundColor: 'rgba(255,255,255,0.3)',
+                paddingHorizontal: 8,
+                paddingVertical: 4,
+                borderRadius: 12
+              }}>
+                <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '700' }}>
+                  ATÉ {Math.max(...aliexpressItems.map(i => i.discountPct || 0))}% OFF
+                </Text>
+              </View>
+            </View>
+            <Text style={{ color: '#FFFFFF', fontSize: 12, marginTop: 4, opacity: 0.95 }}>
+              Os melhores preços internacionais • Frete grátis
+            </Text>
+          </LinearGradient>
+
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ paddingHorizontal: 12, gap: 12 }}
+          >
+            {aliexpressItems.map((item, index) => (
+              <View key={`aliexpress-${index}-${item.sku || item.url}`} style={{ width: 180 }}>
+                <PcDealCard item={item} variant="grid" />
+              </View>
+            ))}
+          </ScrollView>
+        </View>
+      )}
+
       {error && <Text style={{ color: 'tomato', paddingHorizontal: 16 }}>{error}</Text>}
       <FlatList
         data={items}
@@ -222,16 +315,16 @@ export function HardwareInner() {
                     setPage(1)
                   } catch (error) {
                     console.error('Erro ao atualizar busca:', error)
-                  } finally { 
-                    setRefreshing(false) 
+                  } finally {
+                    setRefreshing(false)
                   }
                 })()
               } else {
                 // refresh curated minimal
-                loadCurated().finally(() => {
-                  setRefreshing(false)
-                  setPage(1)
-                })
+                loadCurated()
+                loadAliexpressDeals() // Atualizar também as promoções do AliExpress
+                setRefreshing(false)
+                setPage(1)
               }
             }}
             tintColor={tokens.colors.primary}
