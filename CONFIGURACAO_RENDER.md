@@ -24,7 +24,7 @@ Quando o APK de produção é gerado usando EAS Build, a variável de ambiente `
        "buildType": "apk"
      },
      "env": {
-       "EXPO_PUBLIC_API_URL": "https://looton-backend.onrender.com"  // Esta é a URL real do seu backend
+       "EXPO_PUBLIC_API_URL": "https://looton-backend-production.up.railway.app"  // Esta é a URL real do seu backend no Railway
      }
    }
    ```
