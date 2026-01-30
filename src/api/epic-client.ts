@@ -33,6 +33,19 @@ interface EpicGameElement {
     id: string;
     name: string;
   };
+  productSlug?: string;
+  urlSlug?: string;
+  catalogItemId?: string;
+  offerMappings?: Array<{
+    pageSlug?: string;
+    pageType?: string;
+  }>;
+  catalogNs?: {
+    mappings?: Array<{
+      pageSlug?: string;
+      pageType?: string;
+    }>;
+  };
   price: {
     totalPrice: {
       discountPrice: number;
@@ -48,6 +61,16 @@ interface EpicGameElement {
   };
   promotions?: {
     promotionalOffers?: Array<{
+      promotionalOffers: Array<{
+        startDate: string;
+        endDate: string;
+        discountSetting: {
+          discountType: string;
+          discountPercentage: number;
+        };
+      }>;
+    }>;
+    upcomingPromotionalOffers?: Array<{
       promotionalOffers: Array<{
         startDate: string;
         endDate: string;
@@ -93,52 +116,121 @@ export async function fetchEpicGames(): Promise<GameItem[]> {
       return [];
     }
 
+    console.log(`📦 Total de elementos recebidos da Epic API: ${data.data.Catalog.searchStore.elements.length}`);
+
+    const now = new Date();
+    console.log(`🕒 Data/hora atual: ${now.toISOString()}`);
+
     const epicGames = data.data.Catalog.searchStore.elements
       .filter(element => {
         // Filtrar por categorias relevantes (excluir addons, bundles se necessário)
         const categoryPaths = element.categories?.map(cat => cat.path) || [];
-        const isRelevantCategory = categoryPaths.some(path => 
+        const isRelevantCategory = categoryPaths.some(path =>
           path.includes('games') || path.includes('freegames')
         );
-        
+
         // Excluir addons e bundles se desejado
-        const isAddon = categoryPaths.some(path => 
+        const isAddon = categoryPaths.some(path =>
           path.includes('addons') || path.includes('bundles')
         );
-        
-        return isRelevantCategory && !isAddon;
+
+        // CRITÉRIO 1: Verificar se o preço atual é 0 (realmente grátis)
+        const isFree = element.price.totalPrice.discountPrice === 0;
+
+        // CRITÉRIO 2: Verificar se tem promoção ATIVA no momento (não futura)
+        let hasActivePromotion = false;
+        let promotionEndDate = null;
+
+        if (element.promotions?.promotionalOffers && element.promotions.promotionalOffers.length > 0) {
+          element.promotions.promotionalOffers.forEach(offer => {
+            offer.promotionalOffers.forEach(promo => {
+              const startDate = new Date(promo.startDate);
+              const endDate = new Date(promo.endDate);
+
+              // Verificar se a promoção está ativa AGORA
+              if (now >= startDate && now < endDate) {
+                hasActivePromotion = true;
+                promotionEndDate = endDate;
+              }
+            });
+          });
+        }
+
+        // Um jogo é válido se:
+        // 1. É da categoria relevante (games/freegames)
+        // 2. NÃO é addon ou bundle
+        // 3. Está GRÁTIS (preço = 0)
+        // 4. Tem promoção ATIVA no momento
+        const isValid = isRelevantCategory && !isAddon && isFree && hasActivePromotion;
+
+        // Log detalhado para debugging
+        if (!isValid) {
+          console.log(`🚫 Filtrando "${element.title}":`);
+          console.log(`   - Categoria relevante: ${isRelevantCategory}`);
+          console.log(`   - É addon/bundle: ${isAddon}`);
+          console.log(`   - Preço: ${element.price.totalPrice.discountPrice}`);
+          console.log(`   - É grátis (preço=0): ${isFree}`);
+          console.log(`   - Tem promoção ativa: ${hasActivePromotion}`);
+          if (promotionEndDate) {
+            console.log(`   - Promoção termina em: ${promotionEndDate.toISOString()}`);
+          }
+        } else {
+          console.log(`✅ Incluindo "${element.title}" - Grátis até ${promotionEndDate?.toISOString()}`);
+        }
+
+        return isValid;
       })
       .map(element => {
         // Encontrar a imagem principal
-        const offerImage = element.keyImages.find(img => 
+        const offerImage = element.keyImages.find(img =>
           img.type === 'OfferImageWide' || img.type === 'Thumbnail'
         );
-        
+
         // Calcular desconto percentual
         const originalPrice = element.price.totalPrice.originalPrice;
         const discountPrice = element.price.totalPrice.discountPrice;
-        const discountPct = originalPrice > 0 
-          ? Math.round(((originalPrice - discountPrice) / originalPrice) * 100) 
+        const discountPct = originalPrice > 0
+          ? Math.round(((originalPrice - discountPrice) / originalPrice) * 100)
           : 0;
+
+        // Extrair categorias como gêneros
+        const genres = element.categories?.map(cat => {
+          const parts = cat.path.split('/');
+          return parts[parts.length - 1].replace(/-/g, ' ');
+        }).filter(g => g && g !== 'games' && g !== 'freegames') || [];
+
+        // Log dos slugs disponíveis para debugging
+        console.log(`🔍 Slugs para "${element.title}":`, {
+          productSlug: element.productSlug,
+          urlSlug: element.urlSlug,
+          catalogNs: element.catalogNs,
+          offerMappings: element.offerMappings,
+        });
+
+        const gameUrl = 'https://store.epicgames.com/pt-BR/free-games';
 
         return {
           id: element.id,
           title: element.title,
           coverUrl: offerImage?.url,
-          genres: [], // A API da Epic não fornece gêneros diretamente
-          tags: [], // A API da Epic não fornece tags diretamente
+          genres: genres,
+          tags: genres,
           priceFinalCents: discountPrice,
           discountPct: discountPct,
           store: 'Epic Games',
-          url: `https://store.epicgames.com/p/${element.id}`,
+          url: gameUrl,
           releaseDate: element.effectiveDate ? new Date(element.effectiveDate).toISOString() : undefined,
           // Campos adicionais para compatibilidade com ranking
           _id: element.id,
           game: {
             title: element.title,
             coverUrl: offerImage?.url,
-            genres: [],
-            tags: []
+            genres: genres,
+            tags: genres,
+            description: element.description, // ✅ Adicionar descrição
+            developer: element.seller?.name, // ✅ Adicionar desenvolvedor
+            publisher: element.seller?.name, // ✅ Adicionar publisher
+            keyImages: element.keyImages, // ✅ Adicionar todas as imagens
           },
           steamGenres: [],
           priceFinal: discountPrice / 100,
@@ -146,8 +238,23 @@ export async function fetchEpicGames(): Promise<GameItem[]> {
           score: 0,
           popularity: 0,
           trending: false,
+          // Dados completos do elemento da Epic para uso no modal de detalhes
+          description: element.description,
+          developer: element.seller?.name,
+          publisher: element.seller?.name,
+          keyImages: element.keyImages,
+          // Slugs para construir URL correta
+          productSlug: element.productSlug,
+          urlSlug: element.urlSlug,
+          catalogNs: element.catalogNs,
+          offerMappings: element.offerMappings,
         };
       });
+
+    console.log(`🎮 Total de jogos grátis da Epic retornados: ${epicGames.length}`);
+    epicGames.forEach((game, index) => {
+      console.log(`  ${index + 1}. ${game.title} - R$ ${game.priceFinal}`);
+    });
 
     return epicGames;
   } catch (error) {

@@ -1,5 +1,9 @@
+﻿/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/no-var-requires */
+/* eslint-disable no-empty */
 import { View, Text, ScrollView, ActivityIndicator, Image, TouchableOpacity, Dimensions, TextInput, Modal, SafeAreaView, FlatList, Animated, RefreshControl, Platform, Linking, Alert, Share } from 'react-native';
-import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,30 +12,24 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GameDetailsModal } from '../src/components/GameDetailsModal';
 import { HardwareInner } from './hardware';
 
-import LoadingModal from './components/LoadingModal';
-
 import { CurrencyProvider, useCurrency } from '../src/contexts/CurrencyContext';
 import { LanguageProvider, useLanguage } from '../src/contexts/LanguageContext';
 import { useBottomInset } from '../src/hooks/useBottomInset';
 import { WishlistTab } from '../src/components/WishlistTab';
 import FavoritesAndLists from './favorites';
 import { WishlistService } from '../src/services/WishlistService';
-import { WishlistSyncService } from '../src/services/WishlistSyncService';
 import { SubscriptionService } from '../src/services/SubscriptionService';
 import { GameCover } from '../src/components/GameCover';
-import { FavoriteButton } from '../src/components/FavoriteButton';
-import SmartNotificationService from '../src/services/SmartNotificationService';
 import { EventBus } from '../src/lib/EventBus';
 
 import SteamPriceHistoryService from '../src/services/SteamPriceHistoryService';
 
-// ⚠️ Notificações locais REMOVIDAS - Backend envia tudo automaticamente
-// DailyOfferNotificationService → Removido (backend envia às 12h e 18h)
-// WatchedGamesNotificationService → Removido (backend monitora a cada 6h)
-// BackgroundWatchedGamesService → Removido (backend cuida de tudo)
+// 🔕 Notificações locais REMOVIDAS - Backend envia tudo automaticamente
+// DailyOfferNotificationService — Removido (backend envia às 12h e 18h)
+// WatchedGamesNotificationService — Removido (backend monitora a cada 6h)
+// BackgroundWatchedGamesService — Removido (backend cuida de tudo)
 
 import { AddToListModal } from '../src/components/AddToListModal';
-import { FilterChips } from '../src/components/FilterChips';
 import { AdBanner } from '../src/components/AdBanner';
 import { interstitialAdService } from '../src/services/InterstitialAdService';
 import { useFilters } from '../src/hooks/useFilters';
@@ -102,7 +100,7 @@ const GAMES_TO_FILTER = [
   'Shoot! & Ahhhhh~',
 ].map(title => title.toLowerCase()); // Converter para minúsculas para comparação case-insensitive
 import { SteamGenresPreferencesModal } from '../src/components/SteamGenresPreferencesModal';
-import { fetchCuratedFeed, SteamGenre, UserPreferences } from '../src/services/SteamGenresService';
+import { SteamGenre } from '../src/services/SteamGenresService';
 
 import { showToast } from '../src/utils/SimpleToast';
 import { useGameFeed, GameItem } from '../src/hooks/useGameFeed';
@@ -133,41 +131,42 @@ export interface Deal {
 }
 
 
-import { API_URL, api } from '../src/api/client';
+import { api } from '../src/api/client';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 const isTablet = width >= 768;
 
 // Small component to render a price using CurrencyContext so it updates reactively
-const PriceText: React.FC<{ 
-  value?: number | null; 
-  style?: any; 
-  deal?: any; 
-  showEarlyAccess?: boolean 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const PriceText: React.FC<{
+  value?: number | null;
+  style?: any;
+  deal?: any;
+  showEarlyAccess?: boolean
 }> = ({ value, style, deal, showEarlyAccess = true }) => {
   try {
-    const { formatPrice, currency } = useCurrency() as any;
+    const { formatPrice, currency } = useCurrency();
     const { t } = useLanguage();
-    
-    // Verificar se é um jogo de Acesso Antecipado - busca mais ampla
+
+  // Verificar se é um jogo de Acesso Antecipado - busca mais ampla
     const isEarlyAccess = showEarlyAccess && deal && (
       deal.isEarlyAccess === true ||
-      // Verificar no título do jogo
+  // Verificar no título do jogo
       (deal.game?.title && String(deal.game.title).toLowerCase().includes('early access')) ||
       (deal.game?.title && String(deal.game.title).toLowerCase().includes('acesso antecipado')) ||
       // Verificar nas tags
-      (deal.game?.tags && Array.isArray(deal.game.tags) && 
-       deal.game.tags.some((tag: string) => 
-         String(tag).toLowerCase().includes('early access') || 
+      (deal.game?.tags && Array.isArray(deal.game.tags) &&
+       deal.game.tags.some((tag: string) =>
+         String(tag).toLowerCase().includes('early access') ||
          String(tag).toLowerCase().includes('acesso antecipado'))) ||
-      // Verificar nos gêneros Steam
-      (deal.steamGenres && Array.isArray(deal.steamGenres) && 
-       deal.steamGenres.some((genre: any) => 
+  // Verificar nos gêneros Steam
+      (deal.steamGenres && Array.isArray(deal.steamGenres) &&
+       deal.steamGenres.some((genre: Record<string, unknown>) => 
          (genre.name && String(genre.name).toLowerCase().includes('early access')) || 
          (genre.name && String(genre.name).toLowerCase().includes('acesso antecipado')) ||
          (genre.description && String(genre.description).toLowerCase().includes('early access')) ||
          (genre.description && String(genre.description).toLowerCase().includes('acesso antecipado')))) ||
-      // Verificar nos gêneros do jogo
+  // Verificar nos gêneros do jogo
       (deal.game?.genres && Array.isArray(deal.game.genres) && 
        deal.game.genres.some((genre: string | any) => 
          (typeof genre === 'string' && (String(genre).toLowerCase().includes('early access') || String(genre).toLowerCase().includes('acesso antecipado'))) ||
@@ -176,10 +175,10 @@ const PriceText: React.FC<{
 
     let display;
     if (isEarlyAccess) {
-      // Se é early access, sempre mostrar "Acesso Antecipado"
+  // Se é early access, sempre mostrar "Acesso Antecipado"
       display = t('price.earlyAccess');
     } else {
-      // Caso contrário, mostrar o preço normal ou "Grátis"
+  // Caso contrário, mostrar o preço normal ou "Grátis"
       display = value === null || value === undefined || isNaN(value) || value === 0 ? t('price.free') : formatPrice(value);
     }
 
@@ -196,7 +195,7 @@ const PriceText: React.FC<{
     // fallback: use Intl for pt-BR
     const { t: tFallback } = useLanguage();
     try {
-      // Verificar se é acesso antecipado
+  // Verificar se é acesso antecipado
       const isEarlyAccess = showEarlyAccess && deal && (
         (deal.game?.tags && Array.isArray(deal.game.tags) && 
          deal.game.tags.some((tag: string) => 
@@ -218,7 +217,7 @@ const PriceText: React.FC<{
       const normalized = String(display).replace(/^R\$\s*/, 'R$ ');
       return <Text style={[style, { textTransform: 'none' }]}>{normalized}</Text>
     } catch (e2) {
-      // Verificar se é acesso antecipado
+  // Verificar se é acesso antecipado
       const isEarlyAccess = showEarlyAccess && deal && (
         (deal.game?.tags && Array.isArray(deal.game.tags) && 
          deal.game.tags.some((tag: string) => 
@@ -268,6 +267,8 @@ function HomeContent() {
   const [wishlistGames, setWishlistGames] = useState<any[]>([])
   const [showDetails, setShowDetails] = useState(false)
   const [filteredDeals, setFilteredDeals] = useState<Deal[]>([])
+  
+
   const [searchResults, setSearchResults] = useState<Deal[]>([])
   const [originalSearchResults, setOriginalSearchResults] = useState<Deal[]>([])
   const [isSearching, setIsSearching] = useState(false)
@@ -315,14 +316,14 @@ function HomeContent() {
           setLayoutType(savedLayout);
         }
       } catch (error) {
-        console.error('Erro ao carregar preferência de layout:', error);
+  console.error('Erro ao carregar preferência de layout:', error);
       }
     };
     
     loadLayoutPreference();
   }, []);
 
-  // 🔔 Registrar push token automaticamente quando o app abre
+  // Registrar push token automaticamente quando o app abre
   useEffect(() => {
     const registerPushToken = async () => {
       try {
@@ -330,14 +331,14 @@ function HomeContent() {
         const pushToken = await getCurrentPushToken('41306841-8939-4568-a1a1-af93af0428d1');
         
         if (pushToken) {
-          console.log('✅ Push token obtido:', pushToken.substring(0, 30) + '...');
+          console.log('Push token obtido:', pushToken.substring(0, 30) + '...');
           await sendPushTokenToBackend(pushToken);
-          console.log('✅ Push token enviado para o backend');
+          console.log('Push token enviado para o backend');
         } else {
-          console.log('⚠️ Nenhum push token disponível (permissão não concedida)');
+          console.log('Nenhum push token disponível (permissão não concedida)');
         }
       } catch (error) {
-        console.error('❌ Erro ao registrar push token:', error);
+        console.error('Erro ao registrar push token:', error);
       }
     };
     
@@ -351,8 +352,8 @@ function HomeContent() {
         const premium = await SubscriptionService.isPremium();
         setIsPremium(premium);
         if (premium) {
-          console.log('👑 Usuário premium detectado - recursos premium ativados');
-          // Atualizar o serviço de anúncios intersticiais
+          console.log('Usu�rio premium detectado - recursos premium ativados');
+          // Atualizar o servi�o de anúncios intersticiais
           await interstitialAdService.updatePremiumStatus();
         }
       } catch (error) {
@@ -370,7 +371,7 @@ function HomeContent() {
       try {
         await AsyncStorage.setItem('@layout_preference', layoutType);
       } catch (error) {
-        console.error('Erro ao salvar preferência de layout:', error);
+  console.error('Erro ao salvar preferência de layout:', error);
       }
     };
     
@@ -380,20 +381,20 @@ function HomeContent() {
   // Verificar se deve mostrar onboarding de preferências no primeiro acesso
   // (Notificações agora são gerenciadas 100% pelo backend)
   
-  // Listener para registrar notificações no histórico SEM bloquear exibição nativa
+  // Listener para registrar notificações no histórico SEM bloquear exibi��o nativa
   useEffect(() => {
     const Notifications = require('expo-notifications');
     const subscription = Notifications.addNotificationReceivedListener((notification: any) => {
       const { title, body, data } = notification.request.content;
       
-      // � Ignorar notificações que já foram reagendadas (evitar duplicatas!)
+      // Registrar todas as notificações remotas, exceto notificações reagendadas localmente
       if (data?.isLocalReschedule) {
-        return; // Não registrar notificações reagendadas no histórico
+        return; // N�o registrar notificações reagendadas localmente (evitar duplicatas)
       }
       
-      console.log('📬 Notificação recebida (registrando no histórico):', title);
+      console.log('?? Notificação recebida (registrando no histórico):', title);
       
-      // Apenas adicionar ao histórico - Android já mostrou nativamente
+  // Adicionar ao histórico - tanto remotas quanto locais, exceto reagendadas
       setReceivedNotifications(prev => [{
         id: notification.request.identifier,
         title: title,
@@ -403,7 +404,7 @@ function HomeContent() {
       }, ...prev]);
     });
     
-    // Carregar notificações do AsyncStorage (histórico persistente)
+  // Carregar notificações do AsyncStorage (histórico persistente)
     const loadNotificationsHistory = async () => {
       try {
         const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
@@ -415,15 +416,38 @@ function HomeContent() {
         console.error('Erro ao carregar histórico de notificações:', error);
       }
     };
-    
+
     loadNotificationsHistory();
-    
+
     return () => {
       subscription.remove();
     };
   }, []);
+
+  // Listener para notificações manipuladas (abertas pelo usuário) - para registrar também no histórico
+  useEffect(() => {
+    const Notifications = require('expo-notifications');
+    const responseSubscription = Notifications.addNotificationResponseReceivedListener((response: any) => {
+      const { notification } = response;
+      const { title, body, data } = notification.request.content;
+
+      // Registrar no histórico quando o usuário interage com a notificação
+      setReceivedNotifications(prev => [{
+        id: notification.request.identifier,
+        title: title,
+        body: body,
+        data: data,
+        timestamp: new Date().toISOString(),
+        opened: true // Marcar que foi aberta pelo usuário
+      }, ...prev]);
+    });
+
+    return () => {
+      responseSubscription.remove();
+    };
+  }, []);
   
-  // Salvar notificações no AsyncStorage quando houver mudanças
+  // Salvar notificações no AsyncStorage quando houver mudan�as
   useEffect(() => {
     const saveNotificationsHistory = async () => {
       try {
@@ -442,7 +466,7 @@ function HomeContent() {
   // Listener para evento de abrir detalhes do jogo (vindo do modal de notificação)
   useEffect(() => {
     const handleOpenGameDetails = async (data: { appId: string }) => {
-      console.log('📱 Abrindo detalhes do jogo via EventBus:', data.appId);
+      console.log('Abrindo detalhes do jogo via EventBus:', data.appId);
       
       // Buscar dados do jogo
       try {
@@ -469,8 +493,8 @@ function HomeContent() {
   
   // Background fetch removido - backend cuida de tudo automaticamente
   
-  // Notificações de oferta do dia são enviadas automaticamente pelo backend às 12h e 18h
-  // Não há mais necessidade de toggle local
+  // Notificações de oferta do dia são enviadas automaticamente pelo backend �s 12h e 18h
+  // N�o hé mais necessidade de toggle local
   
   // Filtro de busca: 'all' | 'games' | 'dlcs'
   const [searchFilter, setSearchFilter] = useState<'all' | 'games' | 'dlcs'>('games')
@@ -483,8 +507,10 @@ function HomeContent() {
   
   const fadeAnim = useRef(new Animated.Value(0)).current
   const slideAnim = useRef(new Animated.Value(100)).current
-  const searchTimeout = useRef<NodeJS.Timeout | null>(null)
-  const searchInputRef = useRef<TextInput>(null)
+  // Em React Native o retorno de setTimeout costuma ser um number em alguns ambientes
+  // Usar ReturnType<typeof setTimeout> para compatibilidade entre browsers/Node/RN
+  const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const searchInputRef = useRef<TextInput | null>(null)
 
   
   // Hook de filtros
@@ -517,7 +543,7 @@ function HomeContent() {
   
   // Memoizar gameItems para evitar loops
   const memoizedGameItems = useMemo(() => {
-    // Se estiver embaralhado, usar os dados embaralhados, senão os originais
+  // Se estiver embaralhado, usar os dados embaralhados, senão os originais
     return isShuffled && shuffledGameItems.length > 0 ? shuffledGameItems : gameItems;
   }, [gameItems, shuffledGameItems, isShuffled]);
   
@@ -530,28 +556,28 @@ function HomeContent() {
     }
   }, [gameItems]);
   
-  // Função para filtrar jogos indesejados (não disponíveis na Steam mais)
+  // Fun��o para filtrar jogos indesejados (não disponíveis na Steam mais)
   const shouldFilterGame = useCallback((title: string) => {
     if (!title) return false;
     const lowerTitle = title.toLowerCase();
     return GAMES_TO_FILTER.some(filterTitle => lowerTitle.includes(filterTitle));
   }, [])
   
-  // Função para verificar se o appId do jogo é válido (não removido da Steam)
+  // FunÃ§Ã£o para verificar se o appId do jogo é vÃ¡lido (nÃ£o removido da Steam)
   const isValidSteamApp = useCallback((appId: number | string | null | undefined) => {
-    if (!appId) return true; // Se não tem appId, não podemos verificar, então assumimos como válido
+    if (!appId) return true; // Se nÃ£o tem appId, nÃ£o podemos verificar, entÃ£o assumimos como vÃ¡lido
     
-    // Para jogos da Epic Games, o appId pode ser um UUID em vez de um número
-    // Assumir como válido se for string não numérica (provavelmente UUID da Epic)
+    // Para jogos da Epic Games, o appId pode ser um UUID em vez de um nÃºmero
+    // Assumir como vÃ¡lido se for string nÃ£o numérica (provavelmente UUID da Epic)
     if (typeof appId === 'string' && isNaN(Number(appId)) && !appId.includes(':')) {
       return true;
     }
     
     let numericAppId: number;
     
-    // Converter appId para número, lidando com diferentes formatos
+    // Converter appId para nÃºmero, lidando com diferentes formatos
     if (typeof appId === 'string' && appId.includes(':')) {
-      // Se o appId está no formato "app:123456", extrair o número
+      // Se o appId estÃ¡ no formato "app:123456", extrair o nÃºmero
       const parts = appId.split(':');
       numericAppId = parseInt(parts[1], 10);
     } else if (typeof appId === 'string') {
@@ -560,21 +586,21 @@ function HomeContent() {
       numericAppId = appId;
     }
     
-    // Verificar se o appId é um número válido
+    // Verificar se o appId é um número v�lido
     if (isNaN(numericAppId) || numericAppId <= 0) {
-      return false; // appId inválido
+      return false; // appId inv�lido
     }
     
-    // Alguns appIds conhecidos que foram removidos ou são inválidos
+    // Alguns appIds conhecidos que foram removidos ou são inv�lidos
     const invalidAppIds = [
-      1234567890, // Exemplo de appId claramente inválido
-      // Adicione aqui mais appIds conhecidos como inválidos, se necessário
+      1234567890, // Exemplo de appId claramente invÃ¡lido
+      // Adicione aqui mais appIds conhecidos como invÃ¡lidos, se necessÃ¡rio
     ];
     
     return !invalidAppIds.includes(numericAppId);
   }, [])
   
-  // Função para verificar se um jogo é recém-lançado (nos últimos 60 dias)
+  // Fun��o para verificar se um jogo é rec�m-lan�ado (nos �ltimos 60 dias)
   const isRecentlyReleased = useCallback((releaseDate: string | undefined) => {
     if (!releaseDate) return false;
     
@@ -584,15 +610,15 @@ function HomeContent() {
       const diffTime = Math.abs(today.getTime() - release.getTime());
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       
-      // Considerar como recém-lançado se lançado nos últimos 60 dias
+      // Considerar como rec�m-lan�ado se lan�ado nos �ltimos 60 dias
       return diffDays <= 60;
     } catch (error) {
-      console.error('Erro ao verificar data de lançamento:', error);
+      console.error('Erro ao verificar data de lan�amento:', error);
       return false;
     }
   }, []);
 
-  // Função para verificar se um jogo tem informações suficientes para ser exibido
+  // Fun��o para verificar se um jogo tem informações suficientes para ser exibido
   const hasSufficientInfo = useCallback((deal: any) => {
     // Verificar se tem título
     if (!deal.game?.title || deal.game.title.trim() === '') {
@@ -600,45 +626,45 @@ function HomeContent() {
       return false;
     }
     
-    // Verificar se tem URL válida (deve conter steam ou epic, dependendo da loja)
+    // Verificar se tem URL v�lida (deve conter steam ou epic, dependendo da loja)
     if (!deal.url) {
       console.log('Filtrando jogo sem URL:', deal.game?.title);
       return false;
     }
     
-    // Para jogos da Steam ou Epic, verificar se tem URL válida
+    // Para jogos da Steam ou Epic, verificar se tem URL v�lida
     const isSteamUrl = deal.url.includes('store.steampowered.com') || deal.url.includes('steamcommunity.com');
     const isEpicUrl = deal.url.includes('epicgames.com') || deal.url.includes('store.epicgames.com');
     
     if (!isSteamUrl && !isEpicUrl) {
-      console.log('Filtrando jogo com URL inválida:', deal.game?.title, deal.url);
+      console.log('Filtrando jogo com URL inv�lida:', deal.game?.title, deal.url);
       return false;
     }
     
-    // Verificar se tem appId válido (pode ser número ou string no formato "app:123456")
+    // Verificar se tem appId vÃ¡lido (pode ser nÃºmero ou string no formato "app:123456")
     if (deal.appId) {
       let appIdIsValid = true;
       
       if (typeof deal.appId === 'string') {
         if (deal.appId.includes(':')) {
-          // Verificar se o appId está no formato "app:123456" e o número é válido
+          // Verificar se o appId estÃ¡ no formato "app:123456" e o nÃºmero é vÃ¡lido
           const parts = deal.appId.split(':');
           const appIdNumber = parseInt(parts[1], 10);
           appIdIsValid = !isNaN(appIdNumber) && appIdNumber > 0;
         } else {
-          // Verificar se a string é um número válido
+          // Verificar se a string é um nÃºmero vÃ¡lido
           const appIdNumber = parseInt(deal.appId, 10);
           appIdIsValid = !isNaN(appIdNumber) && appIdNumber > 0;
         }
       } else if (typeof deal.appId === 'number') {
-        // Verificar se o número é válido
+        // Verificar se o nÃºmero é vÃ¡lido
         appIdIsValid = !isNaN(deal.appId) && deal.appId > 0;
       } else {
         appIdIsValid = false;
       }
       
       if (!appIdIsValid) {
-        console.log('Filtrando jogo com appId inválido:', deal.game?.title, deal.appId);
+        console.log('Filtrando jogo com appId invÃ¡lido:', deal.game?.title, deal.appId);
         return false;
       }
     }
@@ -646,18 +672,18 @@ function HomeContent() {
     return true;
   }, [])
   
-  // Função para converter GameItem para Deal (compatibilidade) e filtrar itens inválidos
+  // FunÃ§Ã£o para converter GameItem para Deal (compatibilidade) e filtrar itens invÃ¡lidos
   const convertGameItemToDeal = useCallback((item: GameItem): Deal | null => {
-    // Criar um objeto temporário para verificar informações suficientes
+    // Criar um objeto temporÃ¡rio para verificar informaÃ§Ãµes suficientes
     const tempDeal = {
       game: { title: item.title },
       url: item.url,
       appId: item.id
     };
     
-    // Verificar se tem informações suficientes
+    // Verificar se tem informaÃ§Ãµes suficientes
     if (!hasSufficientInfo(tempDeal)) {
-      return null; // Filtrar este jogo por informações insuficientes
+      return null; // Filtrar este jogo por informaÃ§Ãµes insuficientes
     }
     
     // Verificar se o jogo deve ser filtrado
@@ -665,33 +691,33 @@ function HomeContent() {
       return null; // Filtrar este jogo
     }
     
-    // Verificar se o appId é válido
+    // Verificar se o appId é vÃ¡lido
     if (item.id && !isValidSteamApp(item.id)) {
-      return null; // Filtrar este jogo se o appId for inválido
+      return null; // Filtrar este jogo se o appId for invÃ¡lido
     }
     
-    // Calcular preço base a partir do preço final e desconto percentual
+    // Calcular preÃ§o base a partir do preÃ§o final e desconto percentual
     let discountPct = item.discountPct || 0;
     const priceFinal = item.priceFinalCents / 100;
     let priceBase: number;
     
-    // Verificar e corrigir descontos inválidos
+    // Verificar e corrigir descontos invÃ¡lidos
     if (discountPct < 0 || discountPct > 200) {
-      // Desconto inválido detectado, recalculando
-      console.warn(`Desconto inválido detectado: ${discountPct}% para ${item.title}, recalculando...`);
+      // Desconto invÃ¡lido detectado, recalculando
+      console.warn(`Desconto invÃ¡lido detectado: ${discountPct}% para ${item.title}, recalculando...`);
       
-      // Se preço final for 0, é jogo grátis (100% de desconto)
+      // Se preÃ§o final for 0, é jogo grÃ¡tis (100% de desconto)
       if (priceFinal === 0) {
         discountPct = 100;
       } else if (item.priceFinalCents > 0) {
         // Tentar inferir o desconto com base na origem dos dados
         // Para dados da Epic Games, podemos confiar mais no desconto fornecido
         if (item.store === 'Epic Games') {
-          // No caso da Epic, se temos desconto inválido e preço_final = 0, é grátis
+          // No caso da Epic, se temos desconto invÃ¡lido e preÃ§o_final = 0, é grÃ¡tis
           if (priceFinal === 0) {
             discountPct = 100;
           } else {
-            // Manter o desconto como 0 se for inválido e não for grátis
+            // Manter o desconto como 0 se for invÃ¡lido e nÃ£o for grÃ¡tis
             discountPct = 0;
           }
         } else {
@@ -699,33 +725,33 @@ function HomeContent() {
           discountPct = 0;
         }
       } else {
-        // Desconto inválido e dados inconsistentes, manter como 0
+        // Desconto invÃ¡lido e dados inconsistentes, manter como 0
         discountPct = 0;
       }
     }
     
-    // Verificar se o preço final é 0 (gratuito), o que indica 100% de desconto
+    // Verificar se o preÃ§o final é 0 (gratuito), o que indica 100% de desconto
     if (priceFinal === 0) {
-      // Jogo grátis - desconto deve ser 100%
-      priceBase = item.priceFinalCents > 0 ? item.priceFinalCents / 100 : 100; // Preço base fictício para cálculos
+      // Jogo grÃ¡tis - desconto deve ser 100%
+      priceBase = item.priceFinalCents > 0 ? item.priceFinalCents / 100 : 100; // PreÃ§o base fictÃ­cio para cÃ¡lculos
       discountPct = 100;
     } else if (discountPct > 0 && discountPct < 100) {
-      // Se houver desconto entre 0 e 100%, calcular o preço original
+      // Se houver desconto entre 0 e 100%, calcular o preÃ§o original
       // priceBase = priceFinal / (1 - discountPct / 100)
       priceBase = priceFinal / (1 - discountPct / 100);
     } else if (discountPct >= 100) {
-      // Se o desconto for 100% ou mais (gratuito), o preço base é o preço final dividido por um valor muito pequeno
-      // Neste caso, vamos considerar o preço final como o preço base para evitar problemas de divisão por zero
+      // Se o desconto for 100% ou mais (gratuito), o preÃ§o base é o preÃ§o final dividido por um valor muito pequeno
+      // Neste caso, vamos considerar o preÃ§o final como o preÃ§o base para evitar problemas de divisÃ£o por zero
       priceBase = priceFinal;
     } else {
-      // Se não houver desconto (ou desconto negativo), usar o preço final como preço base
+      // Se nÃ£o houver desconto (ou desconto negativo), usar o preÃ§o final como preÃ§o base
       priceBase = priceFinal;
     }
     
-    // Garantir que o desconto esteja dentro de limites razoáveis
+    // Garantir que o desconto esteja dentro de limites razoÃ¡veis
     const finalDiscountPct = Math.max(0, Math.min(100, discountPct));
     
-    // Arredondar para 2 casas decimais para evitar problemas de precisão
+    // Arredondar para 2 casas decimais para evitar problemas de precisÃ£o
     priceBase = Math.round(priceBase * 100) / 100;
     
     return {
@@ -734,7 +760,7 @@ function HomeContent() {
       priceBase: priceBase,
       priceFinal: priceFinal,
       discountPct: finalDiscountPct, // Usar o desconto corrigido
-      releaseDate: item.releaseDate, // Incluindo a data de lançamento
+      releaseDate: item.releaseDate, // Incluindo a data de lanÃ§amento
       game: {
         title: item.title,
         coverUrl: item.coverUrl || '',
@@ -751,12 +777,12 @@ function HomeContent() {
   useEffect(() => {
     const initializeApp = async () => {
       try {
-        console.log('🚀 Inicializando app...')
+  console.log('Inicializando app...')
         
         // Carregar deals iniciais
         fetchDeals()
         
-        // Solicitar permissão de notificação apenas uma vez
+        // Solicitar permissÃ£o de notificaÃ§Ã£o apenas uma vez
         const requestNotificationPermission = async () => {
           try {
             const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default
@@ -770,18 +796,18 @@ function HomeContent() {
                   await Notifications.requestPermissionsAsync()
                   await AsyncStorage.setItem('@notification_permission_asked', 'true')
                 } catch (e) {
-                  console.log('Erro ao solicitar permissão de notificação:', e)
+                  console.log('Erro ao solicitar permissÃ£o de notificaÃ§Ã£o:', e)
                 }
               }, 2000)
             }
           } catch (e) {
-            console.log('Erro ao verificar permissão de notificação:', e)
+            console.log('Erro ao verificar permissÃ£o de notificaÃ§Ã£o:', e)
           }
         }
         
         requestNotificationPermission()
         
-        // Animação de entrada do app
+        // AnimaÃ§Ã£o de entrada do app
         Animated.parallel([
           Animated.timing(fadeAnim, {
             toValue: 1,
@@ -805,40 +831,40 @@ function HomeContent() {
   }, [])
 
 
-  // Inicializar serviços inteligentes (otimizado)
+  // Inicializar serviÃ§os inteligentes (otimizado)
   const initializeSmartServices = async () => {
     try {
-      // Outros serviços inteligentes podem ser inicializados aqui
-      // Removido popup automático de doação
+      // Outros serviÃ§os inteligentes podem ser inicializados aqui
+      // Removido popup automÃ¡tico de doaÃ§Ã£o
     } catch (error) {
-      console.error('Erro ao inicializar serviços:', error)
+      console.error('Erro ao inicializar serviÃ§os:', error)
     }
   }
 
-  // Efeito para atualizar os dados quando necessário
+  // Efeito para atualizar os dados quando necessÃ¡rio
   useEffect(() => {
     if (activeTab === 'home') {
       fetchDeals(); // Atualizar os dados
     }
-  }, [activeTab]); // Removida a dependência de selectedStore
+  }, [activeTab]); // Removida a dependÃªncia de selectedStore
 
 
 
 
   const checkFirstTime = async () => {
-    // Verificação de termos removida - não estamos usando esta funcionalidade no momento
+    // VerificaÃ§Ã£o de termos removida - nÃ£o estamos usando esta funcionalidade no momento
   }
 
 
 
 
 
-  // Função para filtrar resultados de busca por tipo usando classificação real da Steam
+  // FunÃ§Ã£o para filtrar resultados de busca por tipo usando classificaÃ§Ã£o real da Steam
   const applySearchFilter = useCallback((results: Deal[]) => {
     if (searchFilter === 'all') return results
     
     return results.filter((item: any) => {
-      const kind = item.kind || 'game' // Usar classificação real da Steam API
+      const kind = item.kind || 'game' // Usar classificaÃ§Ã£o real da Steam API
       
       if (searchFilter === 'dlcs') {
         // Mostrar apenas DLCs, pacotes e bundles classificados pela Steam
@@ -879,11 +905,11 @@ function HomeContent() {
       // Limpar resultados da busca ao sair da aba
       setSearchResults([]);
       setOriginalSearchResults([]);
-      // Não limpar a query para manter o texto caso o usuário volte rapidamente
+      // NÃ£o limpar a query para manter o texto caso o usuÃ¡rio volte rapidamente
     }
   }, [activeTab])
 
-  // Função para buscar jogos na Steam API
+  // FunÃ§Ã£o para buscar jogos na Steam API
   const searchSteamGames = useCallback(async (query: string) => {
     if (query.trim().length < 2) {
       setSearchResults([])
@@ -903,7 +929,7 @@ function HomeContent() {
         // Extrair appId do formato "app:12345"
         const appId = item.id ? item.id.replace('app:', '') : null
         
-        // Converter preços de centavos para reais
+        // Converter preÃ§os de centavos para reais
         const priceBase = (item.priceOriginalCents || 0) / 100
         const priceFinal = (item.priceFinalCents || 0) / 100
         
@@ -914,9 +940,9 @@ function HomeContent() {
           priceFinal: priceFinal,
           discountPct: item.discountPct || 0,
           url: item.url || `https://store.steampowered.com/app/${appId}/`,
-          kind: item.kind || 'game', // Usar classificação real da Steam
+          kind: item.kind || 'game', // Usar classificaÃ§Ã£o real da Steam
           game: {
-            title: item.title || 'Título não encontrado',
+            title: item.title || 'TÃ­tulo nÃ£o encontrado',
             coverUrl: item.image || ''
           },
           store: {
@@ -942,7 +968,7 @@ function HomeContent() {
     }
   }, [])
 
-  // Função para limpar a busca (resultados e query)
+  // FunÃ§Ã£o para limpar a busca (resultados e query)
   const clearSearch = useCallback(() => {
     setSearchQuery('');
     setSearchResults([]);
@@ -958,7 +984,7 @@ function HomeContent() {
       clearTimeout(searchTimeout.current)
     }
     
-    // Buscar após 500ms de inatividade
+    // Buscar apÃ³s 500ms de inatividade
     searchTimeout.current = setTimeout(() => {
       if (activeTab === 'search') {
         searchSteamGames(text)
@@ -981,12 +1007,12 @@ function HomeContent() {
     }
   }, [activeTab, searchQuery, searchSteamGames, clearSearch])
 
-  // Função para obter o dia do ano
+  // FunÃ§Ã£o para obter o dia do ano
   const getDayOfYear = (date: Date): number => {
     return Math.floor((date.getTime() - new Date(date.getFullYear(), 0, 0).getTime()) / (1000 * 60 * 60 * 24));
   };
 
-  // Função para obter data armazenada/local
+  // FunÃ§Ã£o para obter data armazenada/local
   const getLastUpdatedDay = async (): Promise<number | null> => {
     try {
       const lastUpdateStr = await AsyncStorage.getItem('LAST_DEALS_UPDATE_DAY');
@@ -997,7 +1023,7 @@ function HomeContent() {
     }
   };
 
-  // Função para salvar a data do último update
+  // FunÃ§Ã£o para salvar a data do Ãºltimo update
   const setLastUpdatedDay = async (day: number): Promise<void> => {
     try {
       await AsyncStorage.setItem('LAST_DEALS_UPDATE_DAY', day.toString());
@@ -1012,24 +1038,23 @@ function HomeContent() {
       setError(null)
       
       // Buscar todos os dados (Steam)
-      let endpoint = `/deals?limit=100`;
+      const endpoint = `/deals?limit=100`;
       
       // Verificar se já passou um dia desde a última atualização
       const today = new Date();
       const currentDayOfYear = getDayOfYear(today);
       const lastUpdatedDay = await getLastUpdatedDay();
       
-      // Forçar atualização se for um novo dia
+      // ForÃ§ar atualização se for um novo dia
       if (lastUpdatedDay === null || lastUpdatedDay !== currentDayOfYear) {
-        console.log(`🔄 Atualizando ofertas - Novo dia detectado (hoje: ${currentDayOfYear}, último: ${lastUpdatedDay})`);
+  console.log(`Atualizando ofertas - Novo dia detectado (hoje: ${currentDayOfYear}, �ltimo: ${lastUpdatedDay})`);
       }
       
       // Usar função api do client.ts que agora tem timeout de 20s e mais configurações
       const response = await api<any>(endpoint);
-      let curated: any[];
-      
+
       // A resposta do endpoint /deals está no formato original
-      curated = Array.isArray(response) ? response : [];
+      const curated = Array.isArray(response) ? response : [];
 
       if (!Array.isArray(curated) || curated.length === 0) {
         setDeals([])
@@ -1038,10 +1063,9 @@ function HomeContent() {
       }
 
       // Processamento otimizado dos dados
-      let rawDeals: any[];
-      
+
       // Processamento normal para dados gerais (Steam e outros)
-      rawDeals = curated.map((item: any, index: number) => ({
+      const rawDeals = curated.map((item: any, index: number) => ({
         _id: item._id || `deal-${item.appId || index}`,
         appId: item.appId,
         url: item.url,
@@ -1049,7 +1073,7 @@ function HomeContent() {
         priceFinal: item.priceFinal || 0,
         discountPct: item.discountPct || 0,
         game: {
-          title: item.game?.title || item.title || 'Título não encontrado',
+          title: item.game?.title || item.title || 'TÃ­tulo nÃ£o encontrado',
           coverUrl: item.game?.coverUrl || item.coverUrl || (item.appId ? `https://cdn.akamai.steamstatic.com/steam/apps/${item.appId}/header.jpg` : null),
           genres: item.game?.genres || item.genres || [],
           tags: item.game?.tags || item.tags || []
@@ -1057,16 +1081,16 @@ function HomeContent() {
         store: item.store || { name: 'Steam' }
       }));
 
-      // Filtrar jogos indesejados (como DOOM se não estiver mais disponível), appIds inválidos e jogos com informações insuficientes
+      // Filtrar jogos indesejados (como DOOM se nÃ£o estiver mais disponÃ­vel), appIds invÃ¡lidos e jogos com informaÃ§Ãµes insuficientes
       const sourceDeals: any[] = rawDeals.filter(deal => {
-        if (!hasSufficientInfo(deal)) return false; // Filtrar por informações insuficientes
-        if (shouldFilterGame(deal.game?.title)) return false; // Filtrar por título
-        // Filtrar por appId inválido
+        if (!hasSufficientInfo(deal)) return false; // Filtrar por informaÃ§Ãµes insuficientes
+        if (shouldFilterGame(deal.game?.title)) return false; // Filtrar por tÃ­tulo
+        // Filtrar por appId invÃ¡lido
         if (deal.appId && !isValidSteamApp(deal.appId)) return false;
         return true;
       })
       
-      // Remoção otimizada de duplicatas
+      // RemoÃ§Ã£o otimizada de duplicatas
       const seen = new Set()
       const uniqueDeals = sourceDeals.filter((deal: any) => {
         if (seen.has(deal._id)) return false
@@ -1074,23 +1098,23 @@ function HomeContent() {
         return true
       })
 
-      // Ordenação hierárquica: super ofertas primeiro, depois ofertas normais
+      // OrdenaÃ§Ã£o hierÃ¡rquica: super ofertas primeiro, depois ofertas normais
       uniqueDeals.sort((a: Deal, b: Deal) => {
         const aIsSuperDeal = a.discountPct >= 70;
         const bIsSuperDeal = b.discountPct >= 70;
         
-        // Se ambos forem super ofertas ou ambos não forem, ordenar por desconto
+        // Se ambos forem super ofertas ou ambos nÃ£o forem, ordenar por desconto
         if (aIsSuperDeal === bIsSuperDeal) {
           return b.discountPct - a.discountPct;
         }
         
-        // Super ofertas vêm primeiro
+        // Super ofertas vÃªm primeiro
         return aIsSuperDeal ? -1 : 1;
       })
       
-      // Sistema de rotação diária de "Ofertas do Dia" - aplicar rotação a todos os dados
+      // Sistema de rotaÃ§Ã£o diÃ¡ria de "Ofertas do Dia" - aplicar rotaÃ§Ã£o a todos os dados
       let dailyRotatedDeals = uniqueDeals;
-      // Função de embaralhamento com seed baseado no dia
+      // FunÃ§Ã£o de embaralhamento com seed baseado no dia
       const shuffleWithSeed = (array: Deal[], seed: number) => {
         const shuffled = [...array]
         let currentIndex = shuffled.length, randomIndex
@@ -1114,11 +1138,11 @@ function HomeContent() {
         return shuffled
       }
       
-      // Aplicar rotação diária com seed baseado no dia do ano (embaralhamento tradicional)
+      // Aplicar rotaÃ§Ã£o diÃ¡ria com seed baseado no dia do ano (embaralhamento tradicional)
       dailyRotatedDeals = shuffleWithSeed(uniqueDeals, currentDayOfYear);
       
-      console.log(`🎲 Ofertas do Dia - Rotação para ${today.toLocaleDateString()} (dia ${currentDayOfYear})`)
-      console.log(`🔄 ${dailyRotatedDeals.length} ofertas embaralhadas para hoje`)
+  console.log(`Ofertas do Dia - Rotação para ${today.toLocaleDateString()} (dia ${currentDayOfYear})`)
+  console.log(`${dailyRotatedDeals.length} ofertas embaralhadas para hoje`)
 
 
       setDeals(dailyRotatedDeals); // Mostrar todos os dados
@@ -1126,12 +1150,12 @@ function HomeContent() {
       // Salvar que atualizamos hoje
       await setLastUpdatedDay(currentDayOfYear);
       
-      // Notificação de oferta do dia agora é enviada pelo backend às 12h e 18h
+      // Notificação de oferta do dia agora é enviada pelo backend Ã s 12h e 18h
       
     } catch (err: any) {
       let errorMessage = 'Erro ao carregar ofertas'
       if (err?.name === 'AbortError') {
-        errorMessage = 'Timeout: Verifique sua conexão'
+        errorMessage = 'Timeout: Verifique sua conexÃ£o'
       } else if (err?.message?.includes('Network')) {
         errorMessage = 'Erro de rede: Verifique sua internet'
       } else if (err?.message) {
@@ -1145,7 +1169,7 @@ function HomeContent() {
     }
   }
 
-  // Função auxiliar para embaralhar array aleatoriamente
+  // FunÃ§Ã£o auxiliar para embaralhar array aleatoriamente
   const shuffleArray = (array: any[]) => {
     const newArray = [...array];
     for (let i = newArray.length - 1; i > 0; i--) {
@@ -1167,7 +1191,7 @@ function HomeContent() {
       if (hasActiveFilters) {
         refreshFeed()
       } else {
-        // Se não tiver filtros, forçar a atualização dos gameItems
+        // Se nÃ£o tiver filtros, forÃ§ar a atualização dos gameItems
         refreshFeed()
       }
     } finally {
@@ -1178,7 +1202,7 @@ function HomeContent() {
 
 
 
-  // Verificar se há filtros ativos
+  // Verificar se hÃ¡ filtros ativos
   const hasActiveFiltersLocal = hasActiveFilters
 
   const loadWishlistCount = async () => {
@@ -1193,74 +1217,30 @@ function HomeContent() {
   const handleGamePress = async (deal: Deal) => {
     // Detectar se é um jogo da Epic Games
     const isEpicGame = deal.store?.name?.toLowerCase().includes('epic') || deal.url.includes('epicgames.com');
-    
+
     if (isEpicGame) {
-      try {
-        // Montar URL usando as regras específicas da Epic Games
-        // Primeiro, tentar obter slug a partir dos dados do deal
-        let finalUrl;
-        
-        // Verificar se o deal tem os campos necessários para montar a URL correta
-        const gameData: any = deal;
-        
-        // 1. Se tiver productSlug → https://store.epicgames.com/pt-BR/p/{productSlug}
-        if (gameData.productSlug) {
-          finalUrl = `https://store.epicgames.com/pt-BR/p/${gameData.productSlug}`;
-        } else if (gameData.catalogNs?.mappings?.[0]?.pageSlug) {
-          // 2. Se tiver catalogNs.mappings[0].pageSlug → https://store.epicgames.com/pt-BR/p/{pageSlug}
-          finalUrl = `https://store.epicgames.com/pt-BR/p/${gameData.catalogNs.mappings[0].pageSlug}`;
-        } else if (gameData.offerMappings?.[0]?.pageSlug) {
-          // 3. Ou se tiver offerMappings[0].pageSlug → https://store.epicgames.com/pt-BR/p/{pageSlug}
-          finalUrl = `https://store.epicgames.com/pt-BR/p/${gameData.offerMappings[0].pageSlug}`;
-        } else {
-          // 4. Se ambos faltarem (casos raros) → usa busca
-          const encodedTitle = encodeURIComponent(deal.game?.title || '');
-          finalUrl = `https://store.epicgames.com/pt-BR/browse?q=${encodedTitle}`;
-        }
-        
-        // Mostrar alerta de confirmação para abrir a página na loja da Epic
-        Alert.alert(
-          'Abrir na Epic Games Store',
-          `Deseja abrir "${deal.game?.title}" na loja oficial da Epic Games?`,
-          [
-            { text: 'Cancelar', style: 'cancel' },
-            {
-              text: 'Abrir',
-              style: 'default',
-              onPress: () => {
-                // Abrir a URL encontrada do jogo na Epic Games Store
-                Linking.openURL(finalUrl);
-              }
-            }
-          ]
-        );
-      } catch (error) {
-        console.error('Erro ao tentar encontrar URL correta da Epic Games Store:', error);
-        
-        // Fallback: usar uma URL de busca com o título do jogo
-        const encodedTitle = encodeURIComponent(deal.game?.title || '');
-        const fallbackUrl = `https://store.epicgames.com/pt-BR/browse?q=${encodedTitle}`;
-        
-        Alert.alert(
-          'Abrir na Epic Games Store',
-          `Deseja abrir "${deal.game?.title}" na loja oficial da Epic Games?`,
-          [
-            { text: 'Cancelar', style: 'cancel' },
-            {
-              text: 'Abrir',
-              style: 'default',
-              onPress: () => {
-                Linking.openURL(fallbackUrl);
-              }
-            }
-          ]
-        );
-      }
-      
-      return; // Retornar sem abrir o modal de detalhes
+      // Para jogos da Epic, usar o _id como identificador único (em vez de appId)
+      // O modal vai usar os dados locais do deal em vez de buscar da API Steam
+      const epicGameId = deal._id || deal.game?.title || 'epic-game';
+
+      console.log('🎮 Abrindo detalhes do jogo da Epic:', {
+        title: deal.game?.title,
+        productSlug: (deal as any).productSlug,
+        urlSlug: (deal as any).urlSlug,
+        catalogNs: (deal as any).catalogNs,
+        offerMappings: (deal as any).offerMappings,
+      });
+
+      setSelectedGameId(epicGameId as any);
+      setSelectedDeal(deal);
+      setGameDetailsModalVisible(true);
+
+      // Rastrear ação de abrir detalhes do jogo
+      interstitialAdService.trackAction();
+      return;
     }
-    
-    // Para deals normais, prefere usar appId; tenta extrair do url ou do _id como fallback
+
+    // Para deals normais (Steam), prefere usar appId; tenta extrair do url ou do _id como fallback
     let appId: number | null = (deal as any).appId || null
     console.debug('handleGamePress start', { id: deal._id, appId: (deal as any).appId, url: (deal as any).url, game: deal.game })
 
@@ -1285,7 +1265,7 @@ function HomeContent() {
     setSelectedGameId(appId)
     setSelectedDeal(deal)
     setGameDetailsModalVisible(true)
-    
+
     // Rastrear ação de abrir detalhes do jogo
     interstitialAdService.trackAction();
   }
@@ -1294,9 +1274,9 @@ function HomeContent() {
     setGameDetailsModalVisible(false)
     setSelectedGameId(null)
     setSelectedDeal(null)
-    loadWishlistCount() // Recarregar contador após possíveis mudanças na wishlist
+    loadWishlistCount() // Recarregar contador apÃ³s possÃ­veis mudanÃ§as na wishlist
     
-    // Tentar mostrar anúncio ao fechar detalhes
+    // Tentar mostrar anÃºncio ao fechar detalhes
     interstitialAdService.tryShowAd();
   }
 
@@ -1315,7 +1295,7 @@ function HomeContent() {
       await loadWishlistCount()
       await loadWishlistGames()
     } catch (error) {
-      console.error('Erro ao adicionar à wishlist:', error)
+      console.error('Erro ao adicionar Ã  wishlist:', error)
     }
   }
 
@@ -1334,7 +1314,7 @@ function HomeContent() {
       await WishlistService.updateDesiredPrice(appId, newPrice)
       await loadWishlistGames()
     } catch (error) {
-      console.error('Erro ao atualizar preço desejado:', error)
+      console.error('Erro ao atualizar preÃ§o desejado:', error)
     }
   }
 
@@ -1379,21 +1359,21 @@ function HomeContent() {
       current.discountPct > best.discountPct ? current : best, deals[0])
   }
 
-  // Componente para análise de preço Steam
-  // Componente removido: análise de preço avançada não essencial
+  // Componente para anÃ¡lise de preÃ§o Steam
+  // Componente removido: anÃ¡lise de preÃ§o avanÃ§ada nÃ£o essencial
 
 
   const openGameDetails = (deal: Deal) => {
     handleGamePress(deal)
   }
 
-  // Função para analisar se o preço está alto ou baixo
+  // FunÃ§Ã£o para analisar se o preÃ§o estÃ¡ alto ou baixo
   const getPriceIndicator = (deal: Deal) => {
     const discount = deal.discountPct || 0
     const finalPrice = deal.priceFinal || 0
     const originalPrice = deal.priceBase || finalPrice
     
-    // Análise baseada no desconto e preço
+    // AnÃ¡lise baseada no desconto e preÃ§o
     if (discount >= 70) {
       return { label: t('price.veryLow'), color: '#10B981', bgColor: 'rgba(16, 185, 129, 0.15)' }
     } else if (discount >= 50) {
@@ -1403,14 +1383,14 @@ function HomeContent() {
     } else if (discount >= 10) {
       return { label: t('price.high'), color: '#DC2626', bgColor: 'rgba(220, 38, 38, 0.15)' }
     } else if (finalPrice > 150) {
-      // Preço alto mesmo sem desconto
+      // PreÃ§o alto mesmo sem desconto
       return { label: t('price.veryHigh'), color: '#991B1B', bgColor: 'rgba(153, 27, 27, 0.15)' }
     } else if (finalPrice < 20 && discount === 0) {
-      // Preço baixo naturalmente
+      // PreÃ§o baixo naturalmente
       return { label: t('price.good'), color: '#059669', bgColor: 'rgba(5, 150, 105, 0.15)' }
     }
     
-    // Se não tem desconto e preço médio
+    // Se nÃ£o tem desconto e preÃ§o médio
     if (discount === 0) {
       return { label: t('price.normal'), color: '#6B7280', bgColor: 'rgba(107, 114, 128, 0.15)' }
     }
@@ -1418,10 +1398,10 @@ function HomeContent() {
     return null
   }
 
-  // Função para testar a notificação de oferta do dia
-  const testDailyOfferNotification = async () => {
+  // FunÃ§Ã£o para testar a notificaÃ§Ã£o de oferta do dia
+  const sendTestDailyOffer = async () => {
     try {
-      // Pegar a primeira oferta disponível para usar como exemplo
+      // Pegar a primeira oferta disponÃ­vel para usar como exemplo
       const testDeal: Deal = deals[0] || {
         _id: 'test-deal',
         url: 'https://store.steampowered.com',
@@ -1439,21 +1419,21 @@ function HomeContent() {
         }
       };
       
-      // Notificações agora são enviadas pelo backend
+      // NotificaÃ§Ãµes agora sÃ£o enviadas pelo backend
       // Para testar, use os endpoints de debug do backend:
       // GET /debug/test-daily-offer
       // GET /debug/test-watched-games
-      showToast('Use os endpoints de debug do backend para testar notificações');
+      showToast('Use os endpoints de debug do backend para testar notificaÃ§Ãµes');
     } catch (error) {
-      console.error('Erro ao enviar notificação de teste:', error);
-      showToast('Erro ao enviar notificação de teste');
+      console.error('Erro ao enviar notificaÃ§Ã£o de teste:', error);
+      showToast('Erro ao enviar notificaÃ§Ã£o de teste');
     }
   };
 
-  // Função para testar notificação de jogo vigiado
-  const testWatchedGameNotification = async () => {
+  // FunÃ§Ã£o para testar notificaÃ§Ã£o de jogo vigiado
+  const sendTestWatchedGame = async () => {
     try {
-      // Notificações agora são enviadas pelo backend
+      // NotificaÃ§Ãµes agora sÃ£o enviadas pelo backend
       // Para testar, use: GET /debug/test-watched-games
       showToast('Use GET /debug/test-watched-games no backend para testar');
     } catch (error) {
@@ -1462,7 +1442,7 @@ function HomeContent() {
     }
   };
 
-  // Componente para análise de preço Steam
+  // Componente para anÃ¡lise de preÃ§o Steam
   const PriceAnalysisIndicator: React.FC<{ appId: number; currentPrice: number; title: string }> = ({ appId, currentPrice, title }) => {
     const [analysis, setAnalysis] = useState<any>(null)
     const [loading, setLoading] = useState(false)
@@ -1476,7 +1456,7 @@ function HomeContent() {
             const result = await priceService.getPriceAnalysis(appId, title, currentPrice)
             setAnalysis(result)
           } catch (error) {
-            console.error('Erro ao carregar análise de preço:', error)
+            console.error('Erro ao carregar anÃ¡lise de preÃ§o:', error)
           } finally {
             setLoading(false)
           }
@@ -1500,10 +1480,10 @@ function HomeContent() {
 
     const getStatusText = () => {
       switch (analysis.priceStatus) {
-        case 'lowest': return 'Menor preço!'
-        case 'good': return 'Bom preço'
-        case 'average': return 'Preço médio'
-        case 'high': return 'Preço alto'
+        case 'lowest': return 'Menor preÃ§o!'
+        case 'good': return 'Bom preÃ§o'
+        case 'average': return 'PreÃ§o médio'
+        case 'high': return 'PreÃ§o alto'
         default: return ''
       }
     }
@@ -1520,7 +1500,7 @@ function HomeContent() {
 
     // Mostrar apenas para deals realmente relevantes
     if (!analysis.isGoodDeal && analysis.priceStatus === 'average') return null
-    if (analysis.priceStatus === 'high') return null // Não mostrar preços altos
+    if (analysis.priceStatus === 'high') return null // NÃ£o mostrar preÃ§os altos
 
     return (
       <View style={{ 
@@ -1594,7 +1574,7 @@ function HomeContent() {
             />
           </TouchableOpacity>
 
-          {/* Sino de notificações */}
+          {/* Sino de notificaÃ§Ãµes */}
           <TouchableOpacity
             onPress={() => setShowNotificationsHistory(true)}
             style={{
@@ -1632,11 +1612,11 @@ function HomeContent() {
   // Componente animado para contorno dos jogos em destaque
   // Apenas contorno simples, sem brilho
   const AnimatedHighlightBorder: React.FC<{ children: React.ReactNode; isHighlighted: boolean; highlightColor: string }> = ({ children, isHighlighted, highlightColor }) => {
-    // Sempre retornar os filhos - o destaque será aplicado diretamente no card
+    // Sempre retornar os filhos - o destaque serÃ¡ aplicado diretamente no card
     return <>{children}</>
   }
 
-  // Função auxiliar para renderizar o ícone da loja como logo circular
+  // FunÃ§Ã£o auxiliar para renderizar o Ã­cone da loja como logo circular
   const renderStoreIcon = (storeName: string | undefined) => {
     if (!storeName) {
       return (
@@ -1746,7 +1726,7 @@ function HomeContent() {
     
     // Verificar se é Early Access - busca mais ampla
     const isEarlyAccess = deal.isEarlyAccess === true ||
-      // Verificar no título do jogo
+      // Verificar no tÃ­tulo do jogo
       (deal.game?.title && String(deal.game.title).toLowerCase().includes('early access')) ||
       (deal.game?.title && String(deal.game.title).toLowerCase().includes('acesso antecipado')) ||
       // Verificar nas tags
@@ -1754,20 +1734,20 @@ function HomeContent() {
        deal.game.tags.some((tag: string) => 
          String(tag).toLowerCase().includes('early access') || 
          String(tag).toLowerCase().includes('acesso antecipado'))) ||
-      // Verificar nos gêneros Steam
+      // Verificar nos gÃªneros Steam
       (deal.steamGenres && Array.isArray(deal.steamGenres) && 
        deal.steamGenres.some((genre: any) => 
          (genre.name && String(genre.name).toLowerCase().includes('early access')) || 
          (genre.name && String(genre.name).toLowerCase().includes('acesso antecipado')) ||
          (genre.description && String(genre.description).toLowerCase().includes('early access')) ||
          (genre.description && String(genre.description).toLowerCase().includes('acesso antecipado')))) ||
-      // Verificar nos gêneros do jogo
+      // Verificar nos gÃªneros do jogo
       (deal.game?.genres && Array.isArray(deal.game.genres) && 
        deal.game.genres.some((genre: string | any) => 
          (typeof genre === 'string' && (String(genre).toLowerCase().includes('early access') || String(genre).toLowerCase().includes('acesso antecipado'))) ||
          (typeof genre === 'object' && genre.name && (String(genre.name).toLowerCase().includes('early access') || String(genre.name).toLowerCase().includes('acesso antecipado')))));
     
-    // Ajustar dimensões para modo grid (como hardware)
+    // Ajustar dimensÃµes para modo grid (como hardware)
     const imageHeight = isGridLayout ? 120 : 200;
     const titleFontSize = isGridLayout ? (isTablet ? 16 : 14) : (isTablet ? 20 : 18);
     const priceFontSize = isGridLayout ? (isTablet ? 20 : 18) : (isTablet ? 26 : 22);
@@ -1802,14 +1782,14 @@ function HomeContent() {
           }}
         >
 
-      {/* Destaque para jogos recém-lançados */}
+      {/* Destaque para jogos recém-lanÃ§ados */}
       {isRecentlyReleasedFlag && !isGridLayout && (
         <View style={{ position: 'absolute', top: 8, left: 8, zIndex: 20, alignItems: 'center' }}>
           <View
             accessible
-            accessibilityLabel="Novo Lançamento!"
+            accessibilityLabel="Novo LanÃ§amento!"
             style={{
-              backgroundColor: '#10B981', // Verde para novos lançamentos
+              backgroundColor: '#10B981', // Verde para novos lanÃ§amentos
               padding: 4,
               borderRadius: 16,
               borderWidth: 1,
@@ -1826,7 +1806,7 @@ function HomeContent() {
             <Ionicons name="flame" size={16} color="#FFFFFF" />
           </View>
           <Text style={{ color: '#10B981', fontSize: 9, marginTop: 4, fontWeight: '600' }}>
-            LANÇAMENTO!
+            LANÃ‡AMENTO!
           </Text>
         </View>
       )}
@@ -1859,7 +1839,7 @@ function HomeContent() {
         </Text>
       </LinearGradient>
       
-      {/* Removido: botões de favorito e adicionar à lista foram movidos para o botão 'Desejar' no modal */}
+      {/* Removido: botões de favorito e adicionar Ã  lista foram movidos para o botão 'Desejar' no modal */}
 
       <GameCover 
         imageUrls={(deal.imageUrls && deal.imageUrls.length > 0) ? deal.imageUrls : [deal.game?.coverUrl]} 
@@ -1880,7 +1860,7 @@ function HomeContent() {
             numberOfLines={2}
             ellipsizeMode="tail"
           >
-            {String(deal.game?.title || 'Título não encontrado')}
+            {String(deal.game?.title || 'TÃ­tulo nÃ£o encontrado')}
           </Text>
           
           {getPriceIndicator(deal) && !isGridLayout && (
@@ -1910,7 +1890,7 @@ function HomeContent() {
               <PriceText
                 value={deal.priceBase}
                 deal={deal}
-                style={{ color: '#EF4444', fontSize: oldPriceFontSize, textDecorationLine: 'line-through', marginBottom: 2, lineHeight: isGridLayout ? (isTablet ? 14 : 13) : (isTablet ? 18 : 16) }} // Preço base em vermelho
+                style={{ color: '#EF4444', fontSize: oldPriceFontSize, textDecorationLine: 'line-through', marginBottom: 2, lineHeight: isGridLayout ? (isTablet ? 14 : 13) : (isTablet ? 18 : 16) }} // PreÃ§o base em vermelho
               />
             )}
             {/* Final price: highlight in green when discounted */}
@@ -1918,7 +1898,7 @@ function HomeContent() {
               value={deal.priceFinal}
               deal={deal}
               style={((deal.discountPct || 0) > 0 || (deal.priceBase && deal.priceFinal < deal.priceBase))
-                ? { color: '#10B981', backgroundColor: 'rgba(16,185,129,0.08)', paddingHorizontal: 3, paddingVertical: 1, borderRadius: 4, fontSize: priceFontSize, fontWeight: '900', lineHeight: isGridLayout ? (isTablet ? 22 : 20) : (isTablet ? 28 : 24), textShadowColor: 'rgba(16,185,129,0.06)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 1, alignSelf: 'flex-start' } // Preço final em destaque verde
+                ? { color: '#10B981', backgroundColor: 'rgba(16,185,129,0.08)', paddingHorizontal: 3, paddingVertical: 1, borderRadius: 4, fontSize: priceFontSize, fontWeight: '900', lineHeight: isGridLayout ? (isTablet ? 22 : 20) : (isTablet ? 28 : 24), textShadowColor: 'rgba(16,185,129,0.06)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 1, alignSelf: 'flex-start' } // PreÃ§o final em destaque verde
                 : { color: (deal as any).isFree || deal.priceFinal === 0 ? '#3B82F6' : '#FFFFFF', fontSize: priceFontSize, fontWeight: '800', lineHeight: isGridLayout ? (isTablet ? 22 : 20) : (isTablet ? 28 : 24) }
               }
             />
@@ -1961,18 +1941,18 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
   const currencyList = [
     { code: 'BRL', name: 'Real Brasileiro', symbol: 'R$' },
     { code: 'USD', name: 'US Dollar', symbol: '$' },
-    { code: 'EUR', name: 'Euro', symbol: '€' },
-    { code: 'GBP', name: 'British Pound', symbol: '£' },
-    { code: 'JPY', name: 'Japanese Yen', symbol: '¥' },
+  { code: 'EUR', name: 'Euro', symbol: '�' },
+  { code: 'GBP', name: 'British Pound', symbol: '�' },
+  { code: 'JPY', name: 'Japanese Yen', symbol: '�' },
     { code: 'AUD', name: 'Australian Dollar', symbol: '$' },
     { code: 'CAD', name: 'Canadian Dollar', symbol: '$' },
     { code: 'CHF', name: 'Swiss Franc', symbol: 'CHF' },
-    { code: 'CNY', name: 'Chinese Yuan', symbol: '¥' },
+  { code: 'CNY', name: 'Chinese Yuan', symbol: '�' },
     { code: 'ARS', name: 'Argentine Peso', symbol: '$' },
-    { code: 'INR', name: 'Indian Rupee', symbol: '₹' },
+  { code: 'INR', name: 'Indian Rupee', symbol: '?' },
     { code: 'MXN', name: 'Mexican Peso', symbol: '$' },
-    { code: 'RUB', name: 'Russian Ruble', symbol: '₽' },
-    { code: 'KRW', name: 'South Korean Won', symbol: '₩' },
+  { code: 'RUB', name: 'Russian Ruble', symbol: '?' },
+  { code: 'KRW', name: 'South Korean Won', symbol: '?' },
     { code: 'SEK', name: 'Swedish Krona', symbol: 'kr' }
   ]
 
@@ -1992,7 +1972,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
 
           <View style={{ paddingBottom: 12 }}>
             <TextInput
-              placeholder="Buscar moeda (código ou nome)"
+              placeholder="Buscar moeda (cÃ³digo ou nome)"
               placeholderTextColor="#9CA3AF"
               value={query}
               onChangeText={setQuery}
@@ -2011,7 +1991,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                   }}
                   style={{ padding: 12, backgroundColor: c.code === currency ? '#3B82F6' : '#26272b', borderRadius: 10, marginBottom: 8 }}
                 >
-                  <Text style={{ color: c.code === currency ? '#FFFFFF' : '#E5E7EB', fontSize: 15, fontWeight: '700' }}>{c.code} — {c.name}</Text>
+                  <Text style={{ color: c.code === currency ? '#FFFFFF' : '#E5E7EB', fontSize: 15, fontWeight: '700' }}>{c.code} é {c.name}</Text>
                   <Text style={{ color: c.code === currency ? '#FFFFFF' : '#9CA3AF', marginTop: 4 }}>{c.symbol}</Text>
                 </TouchableOpacity>
               ))}
@@ -2030,11 +2010,11 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
   const renderBottomNav = () => (
     <View style={{ 
       backgroundColor: 'transparent', 
-      paddingBottom: bottomNavPadding, // Usa o padding dinâmico baseado no tipo de navegação
+      paddingBottom: bottomNavPadding, // Usa o padding dinÃ¢mico baseado no tipo de navegaÃ§Ã£o
       paddingTop: 7
     }}>
       <View style={{ 
-        backgroundColor: 'rgba(55, 65, 81, 0.7)', // Cinza escuro com leve transparência
+        backgroundColor: 'rgba(55, 65, 81, 0.7)', // Cinza escuro com leve transparÃªncia
         flexDirection: 'row',
         paddingBottom: 10, // Padding consistente
         paddingHorizontal: 20,
@@ -2067,7 +2047,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
         <TouchableOpacity
           key={tab.key}
           onPress={() => {
-            // Rastrear ação e tentar mostrar anúncio intersticial
+            // Rastrear aÃ§Ã£o e tentar mostrar anÃºncio intersticial
             interstitialAdService.trackAction();
             interstitialAdService.tryShowAd();
             setActiveTab(tab.key as any);
@@ -2098,7 +2078,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
     </View>
   )
 
-  // Modal de Histórico de Notificações
+  // Modal de HistÃ³rico de NotificaÃ§Ãµes
   const NotificationsHistoryModal = () => {
     const clearAllNotifications = async () => {
       setReceivedNotifications([]);
@@ -2116,10 +2096,10 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
       const diffDays = Math.floor(diffMs / 86400000);
       
       if (diffMins < 1) return 'Agora';
-      if (diffMins < 60) return `${diffMins}min atrás`;
-      if (diffHours < 24) return `${diffHours}h atrás`;
+      if (diffMins < 60) return `${diffMins}min atrÃ¡s`;
+      if (diffHours < 24) return `${diffHours}h atrÃ¡s`;
       if (diffDays === 1) return 'Ontem';
-      return `${diffDays}d atrás`;
+      return `${diffDays}d atrÃ¡s`;
     };
     
     return (
@@ -2178,7 +2158,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
               </TouchableOpacity>
             </View>
             
-            {/* Lista de Notificações */}
+            {/* Lista de NotificaÃ§Ãµes */}
             {receivedNotifications.length === 0 ? (
               <View style={{ padding: 40, alignItems: 'center' }}>
                 <Ionicons name="notifications-off-outline" size={48} color="#4B5563" />
@@ -2237,7 +2217,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                           }}
                         >
                           <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '600' }}>
-                            🛒 Ver Oferta
+                            Ver Oferta
                           </Text>
                         </TouchableOpacity>
                       )}
@@ -2245,7 +2225,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                   ))}
                 </ScrollView>
                 
-                {/* Botão Limpar Todas */}
+                {/* BotÃ£o Limpar Todas */}
                 <View style={{ 
                   padding: 16, 
                   paddingTop: 12,
@@ -2300,16 +2280,16 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
               fontSize: 18, 
               fontWeight: '700' 
             }}>
-              Política de Privacidade
+              Políticas de Privacidade
             </Text>
-            <TouchableOpacity 
-              onPress={() => setShowPrivacyModal(false)} 
+            <TouchableOpacity
+              onPress={() => setShowPrivacyModal(false)}
               style={{ padding: 8 }}
             >
               <Ionicons name="close" size={24} color="#E5E7EB" />
             </TouchableOpacity>
           </View>
-          
+
           <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 300 }}>
             <Text style={{ color: '#E5E7EB', fontSize: 15, lineHeight: 22 }}>
               Nossa política de privacidade:{'\n\n'}
@@ -2401,7 +2381,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
               }}
             >
               <Text style={{ color: '#3B82F6', fontSize: 15, fontWeight: '600' }}>
-                🌐 Visitar nosso site
+                Visitar nosso site
               </Text>
             </TouchableOpacity>
             
@@ -2417,7 +2397,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
               }}
             >
               <Text style={{ color: '#3B82F6', fontSize: 15, fontWeight: '600' }}>
-                📧 Enviar email
+                Enviar email
               </Text>
             </TouchableOpacity>
           </View>
@@ -2426,8 +2406,8 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
     </Modal>
   )
 
-  // Componente para Modal da Versão Pro
-  // TEMPORARIAMENTE DESABILITADO - Será ativado quando configurar assinaturas no Play Console
+  // Componente para Modal da VersÃ£o Pro
+  // TEMPORARIAMENTE DESABILITADO - SerÃ¡ ativado quando configurar assinaturas no Play Console
   /*
   const ProModal = () => (
     <Modal visible={showProModal} animationType="fade" transparent onRequestClose={() => setShowProModal(false)}>
@@ -2485,7 +2465,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                 console.error('Erro ao abrir Google Play:', error);
                 Alert.alert(
                   'Erro',
-                  'Não foi possível abrir a Google Play Store'
+                  'NÃ£o foi possÃ­vel abrir a Google Play Store'
                 );
               }
             }}
@@ -2540,7 +2520,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
         
         {activeTab === 'home' && (
           <View style={{ flex: 1 }}>
-            <View style={{ paddingBottom: 20 }}>
+            <View style={{ paddingBottom: 0 }}>
               {renderHeader()}
             </View>
             
@@ -2589,29 +2569,38 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
 
             {!feedLoading && !feedError && (gameItems.length > 0 || deals.length > 0) && (
               <>
-
                 <FlatList
-                key={layoutType} // Força nova renderização quando o layout muda
+                key={layoutType} // ForÃ§a nova renderizaÃ§Ã£o quando o layout muda
                 data={(() => {
-                  console.log(`🔍 Debug: hasActiveFilters=${hasActiveFilters}, memoizedGameItems.length=${memoizedGameItems.length}, deals.length=${deals.length}`);
+                  console.log(`Debug: hasActiveFilters=${hasActiveFilters}, memoizedGameItems.length=${memoizedGameItems.length}, deals.length=${deals.length}`);
                   
-                  // Usar deals como fallback quando não há itens no feed ou quando o feed falha
+                  // Usar deals como fallback quando nÃ£o hÃ¡ itens no feed ou quando o feed falha
                   let result = (hasActiveFilters && memoizedGameItems.length > 0) ? memoizedGameItems.map(convertGameItemToDeal).filter((deal): deal is Deal => deal !== null) : (deals.length > 0 ? deals : memoizedGameItems.map(convertGameItemToDeal).filter((deal): deal is Deal => deal !== null));
-                  console.log(`🔍 Debug: FlatList data length=${result.length}`);
+                  console.log(`Debug: FlatList data length=${result.length}`);
                   
-                  // Aplicar ordenação hierárquica: super ofertas primeiro, depois ofertas normais
+                  // Aplicar ordenaÃ§Ã£o hierÃ¡rquica: super ofertas primeiro, depois ofertas normais
             result = result.sort((a: Deal, b: Deal) => {
                     const aIsSuperDeal = a.discountPct >= 70;
                     const bIsSuperDeal = b.discountPct >= 70;
                     
-                    // Se ambos forem super ofertas ou ambos não forem, ordenar por desconto
+                    // Se ambos forem super ofertas ou ambos nÃ£o forem, ordenar por desconto
                     if (aIsSuperDeal === bIsSuperDeal) {
                       return b.discountPct - a.discountPct;
                     }
                     
-                    // Super ofertas vêm primeiro
+                    // Super ofertas vÃªm primeiro
                     return aIsSuperDeal ? -1 : 1;
                   });
+
+                  // Remover itens da Epic Games do feed principal (já que estÃ£o no banner)
+                  result = result.filter((deal) => {
+                    const storeName = deal.store?.name || (deal as any).store || '';
+                    if (storeName.toLowerCase().includes('epic')) {
+                      return false; // NÃ£o incluir itens da Epic no feed principal
+                    }
+                    return true;
+                  });
+
 
                   // Remove known test card(s) by filtering titles or known test IDs
                   const bannedIds = new Set(['info_test_version', 'test_card']);
@@ -2625,7 +2614,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                     const normalized = raw.toLowerCase().normalize ? raw.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') : raw.toLowerCase();
                     // Exclude titles that contain both 'nota' and 'teste' or explicit 'versao de teste'
                     if (normalized.includes('nota') && normalized.includes('teste')) return false;
-                    if (normalized.includes('versao de teste') || normalized.includes('versão de teste')) return false;
+                    if (normalized.includes('versao de teste') || normalized.includes('versÃ£o de teste')) return false;
                     return true;
                   });
 
@@ -2682,7 +2671,140 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                   }
                 }}
                 onEndReachedThreshold={0.5}
-                ListHeaderComponent={null}
+                ListHeaderComponent={() => {
+                  // Banner do Jogo Grátis da Semana da Epic Games (Carrossel)
+                  const allItems = [...(gameItems || []), ...(deals || [])];
+
+                  const freeEpicGames = allItems.filter(item => {
+                    const storeName = (item as any).store?.name || (item as any).store || (item as any).storeName || '';
+                    const finalPrice = (item as any).priceFinalCents || (item as any).priceFinal || 0;
+                    const basePrice = (item as any).priceBase || 0;
+
+                    // Grátis da semana: preço original > 0 e preço final = 0 (desconto de 100%)
+                    const isTemporaryFree = basePrice > 0 && finalPrice === 0;
+
+                    return (String(storeName).toLowerCase().includes('epic')) && isTemporaryFree;
+                  });
+
+                  // Remover duplicatas baseado no título do jogo
+                  const uniqueFreeEpicGames = freeEpicGames.filter((item, index, self) => {
+                    const title = (item as any).game?.title || (item as any).title || '';
+                    return index === self.findIndex(i => {
+                      const iTitle = (i as any).game?.title || (i as any).title || '';
+                      return iTitle === title;
+                    });
+                  });
+
+                  if (uniqueFreeEpicGames.length > 0) {
+                    // Usar estado para controlar qual jogo está sendo mostrado
+                    const [currentGameIndex, setCurrentGameIndex] = React.useState(0);
+
+                    // Alternar automaticamente entre os jogos a cada 4 segundos
+                    React.useEffect(() => {
+                      if (uniqueFreeEpicGames.length > 1) {
+                        const interval = setInterval(() => {
+                          setCurrentGameIndex((prevIndex) =>
+                            (prevIndex + 1) % uniqueFreeEpicGames.length
+                          );
+                        }, 4000); // 4 segundos
+
+                        return () => clearInterval(interval);
+                      }
+                    }, [uniqueFreeEpicGames.length]);
+
+                    // Pegar o jogo atual
+                    const currentGame = uniqueFreeEpicGames[currentGameIndex];
+
+                    // Normalizar o item para o formato Deal
+                    const normalizedDeal: Deal | null = 'priceFinal' in (currentGame as any)
+                      ? (currentGame as Deal)
+                      : convertGameItemToDeal(currentGame as GameItem);
+
+                    if (!normalizedDeal) return null;
+
+                    const imageUrl = normalizedDeal.game?.coverUrl || (normalizedDeal as any).image || '';
+                    const gameTitle = normalizedDeal.game?.title || (normalizedDeal as any).title || '';
+
+                    return (
+                      <View style={{ marginTop: 3, marginBottom: 10 }}>
+                        <TouchableOpacity
+                          onPress={() => {
+                            handleGamePress(normalizedDeal);
+                          }}
+                          style={{
+                            borderRadius: 16,
+                            overflow: 'hidden',
+                            height: 160,
+                          }}
+                        >
+                          <Image
+                            source={{ uri: imageUrl }}
+                            style={{
+                              width: '100%',
+                              height: '100%',
+                              resizeMode: 'cover',
+                            }}
+                          />
+                          <View style={{
+                            position: 'absolute',
+                            top: 10,
+                            left: 10,
+                          }}>
+                            <Text style={{
+                              color: '#FFFFFF',
+                              fontSize: 12,
+                              fontWeight: 'bold',
+                              backgroundColor: 'rgba(0,0,0,0.7)',
+                              paddingHorizontal: 8,
+                              paddingVertical: 4,
+                              borderRadius: 6,
+                            }}>
+                              Grátis na Epic Games
+                            </Text>
+                          </View>
+                          <View style={{
+                            position: 'absolute',
+                            bottom: 10,
+                            left: 10,
+                            right: 10,
+                          }}>
+                            <Text style={{
+                              color: '#FFFFFF',
+                              fontSize: 16,
+                              fontWeight: 'bold',
+                            }} numberOfLines={1}>
+                              {gameTitle}
+                            </Text>
+                          </View>
+
+                          {/* Indicadores de página (dots) quando há múltiplos jogos */}
+                          {uniqueFreeEpicGames.length > 1 && (
+                            <View style={{
+                              position: 'absolute',
+                              bottom: 10,
+                              right: 10,
+                              flexDirection: 'row',
+                              gap: 6,
+                            }}>
+                              {uniqueFreeEpicGames.map((_, index) => (
+                                <View
+                                  key={`dot-${index}`}
+                                  style={{
+                                    width: 8,
+                                    height: 8,
+                                    borderRadius: 4,
+                                    backgroundColor: index === currentGameIndex ? '#FFFFFF' : 'rgba(255,255,255,0.4)',
+                                  }}
+                                />
+                              ))}
+                            </View>
+                          )}
+                        </TouchableOpacity>
+                      </View>
+                    );
+                  }
+                  return null;
+                }}
                 ListFooterComponent={() => (
                   <View style={{ height: 20 }}>
                     {hasActiveFilters && feedLoading ? (
@@ -2704,20 +2826,19 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                 }}
                 refreshControl={
                   <RefreshControl
-                    refreshing={refreshing}
+                    refreshing={false}
                     onRefresh={onRefresh}
-                    tintColor="#3B82F6"
-                    colors={["#3B82F6"]}
+                    enabled={true}
                   />
                 }
               />
               </>
             )}
             
-            {/* Renderizar FlatList vazia quando não há dados */}
+            {/* Renderizar FlatList vazia quando nÃ£o hÃ¡ dados */}
             {!loading && !feedLoading && !error && !feedError && gameItems.length === 0 && deals.length === 0 && (
               <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 100 }}>
-                <Text style={{ color: '#9CA3AF', fontSize: 16 }}>Nenhuma oferta disponível no momento</Text>
+                <Text style={{ color: '#9CA3AF', fontSize: 16 }}>Nenhuma oferta disponÃ­vel no momento</Text>
               </View>
             )}
           </View>
@@ -2741,7 +2862,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                 backgroundColor: '#374151', 
                 borderRadius: 16, 
                 paddingHorizontal: 16,
-                paddingVertical: 4,
+                paddingVertical: 2,
                 marginBottom: 20,
                 alignItems: 'center'
               }}>
@@ -2755,7 +2876,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                     flex: 1,
                     color: '#FFFFFF',
                     fontSize: 16,
-                    paddingVertical: 12
+                    paddingVertical: 8
                   }}
                 />
                 {isSearching && (
@@ -2778,10 +2899,9 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                 )}
               </View>
 
-              {/* Botões de Filtro Jogos/DLCs */}
+              {/* BotÃµes de Filtro Jogos/DLCs */}
               <View style={{ 
                 flexDirection: 'row', 
-                marginBottom: 20,
                 backgroundColor: '#374151',
                 borderRadius: 12,
                 padding: 4
@@ -2802,7 +2922,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                     fontSize: 14,
                     fontWeight: '600'
                   }}>
-                    🎮 {t('gameDetails.tabs.games')}
+                    {t('gameDetails.tabs.games')}
                   </Text>
                 </TouchableOpacity>
                 
@@ -2822,7 +2942,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                     fontSize: 14,
                     fontWeight: '600'
                   }}>
-                    📦 {t('gameDetails.tabs.dlcs')}
+                    {t('gameDetails.tabs.dlcs')}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -2832,14 +2952,38 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
 
             <FlatList
               data={searchQuery.trim().length > 0 ? searchResults : []}
-              renderItem={renderGameCard}
+              renderItem={({ item, index }) => {
+                // Calcular largura exata: (largura total - padding lateral - gap) / 2
+                const screenWidth = width;
+                const horizontalPadding = (isTablet ? 40 : 24) * 2;
+                const gap = 8;
+                const cardWidth = (screenWidth - horizontalPadding - gap) / 2;
+
+                return (
+                  <View style={{ 
+                    width: cardWidth,
+                  }}>
+                    {renderGameCard({ item, index, isGridLayout: true })}
+                  </View>
+                );
+              }}
               keyExtractor={(item, index) => `search-${item._id || 'game'}-${index}`}
-              contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 120 }}
+              contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 120, gap: 8 }}
               showsVerticalScrollIndicator={false}
               removeClippedSubviews={true}
               initialNumToRender={8}
               windowSize={5}
               maxToRenderPerBatch={5}
+              numColumns={2}
+              columnWrapperStyle={{ gap: 8 }}
+              getItemLayout={(data, index) => {
+                // Para layout em grade, calcular altura diferente
+                return {
+                  length: 300, // Altura estimada de cada item no layout de grade
+                  offset: 300 * index,
+                  index,
+                };
+              }}
               ListEmptyComponent={() => (
                 <View style={{ alignItems: 'center', marginTop: 50 }}>
                   {isSearching ? (
@@ -2887,7 +3031,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
             <View style={{ paddingHorizontal: isTablet ? 40 : 20, maxWidth: isTablet ? 600 : '100%', alignSelf: 'center', width: '100%' }}>
               {/* Header do Perfil - REMOVIDO */}
 
-              {/* Configurações */}
+              {/* ConfiguraÃ§Ãµes */}
               <View style={{
                 backgroundColor: '#374151',
                 borderRadius: 16,
@@ -2915,14 +3059,14 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                     <TouchableOpacity
                       key={index}
                       onPress={() => {
-                        // Implementar ações para cada item
+                        // Implementar aÃ§Ãµes para cada item
                         if (item.key === 'rate') {
-                          // Abrir avaliação na Play Store
+                          // Abrir avaliaÃ§Ã£o na Play Store
                           Linking.openURL('https://play.google.com/store/apps/details?id=com.nexusdevsystem.looton&pcampaignid=web_share');
                         } else if (item.key === 'language') {
                           setShowLanguageModal(true);
                         } else if (item.key === 'share') {
-                          // Compartilhar o aplicativo via opções do sistema
+                          // Compartilhar o aplicativo via opÃ§Ãµes do sistema
                           const shareMessage = 'Confira o Looton - aplicativo para encontrar as melhores ofertas de jogos! https://play.google.com/store/apps/details?id=com.nexusdevsystem.looton&pcampaignid=web_share';
                           Share.share({
                             title: 'Confira esse app de ofertas de jogos',
@@ -2939,7 +3083,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                         flexDirection: 'row',
                         alignItems: 'center',
                         padding: isTablet ? 20 : 16,
-                        borderBottomWidth: index < 4 ? 1 : 0, // Não adicionar borda na última opção
+                        borderBottomWidth: index < 4 ? 1 : 0, // NÃ£o adicionar borda na última opÃ§Ã£o
                         borderBottomColor: '#4B5563'
                       }}
                     >
@@ -2998,9 +3142,9 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                   lineHeight: isTablet ? 24 : 20,
                   textAlign: isTablet ? 'center' : 'left'
                 }}>
-                  {t('about.version')} 1.7{'\n'}
+                  {t('about.version')} 1.8{'\n'}
                   {t('about.description')}{'\n'}
-                  {t('about.tagline')} ❤️ {t('about.taglineEnd')}
+                  {t('about.tagline')}
                 </Text>
               </View>
 
@@ -3015,16 +3159,16 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
 
       {selectedGameId && (
           <GameDetailsModal
-            appId={typeof selectedGameId === 'number' ? selectedGameId : parseInt(selectedGameId || '0')}
+            appId={typeof selectedGameId === 'number' ? selectedGameId : 0}
             visible={gameDetailsModalVisible}
             onClose={() => setGameDetailsModalVisible(false)}
             currentPrice={selectedDeal?.priceFinal}
             originalPrice={selectedDeal?.priceBase}
             discount={selectedDeal?.discountPct}
             gameTitle={selectedDeal?.game?.title}
-            store='steam'
+            store={selectedDeal?.store?.name?.toLowerCase().includes('epic') || selectedDeal?.url?.includes('epicgames.com') ? 'epic' : 'steam'}
             gameData={selectedDeal} // Passar os dados completos do jogo
-            useLocalDataOnly={false} // Não buscar da API da Steam para jogos da Epic
+            useLocalDataOnly={selectedDeal?.store?.name?.toLowerCase().includes('epic') || selectedDeal?.url?.includes('epicgames.com')} // Usar dados locais para Epic
           />
       )}
 
@@ -3038,7 +3182,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
         onClose={() => setShowCurrencyModal(false)}
       />
 
-      {/* Modal de adicionar à lista */}
+      {/* Modal de adicionar Ã  lista */}
       {selectedGameForList && (
         <AddToListModal
           visible={showAddToListModal}
@@ -3088,7 +3232,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
             
             <View style={{ marginBottom: 20 }}>
               <Text style={{ color: '#E5E7EB', fontSize: 15, lineHeight: 22, marginBottom: 10 }}>
-                Precisa de ajuda? Temos algumas opções para você:
+                Precisa de ajuda? Temos algumas opÃ§Ãµes para vocÃª:
               </Text>
               
               <TouchableOpacity
@@ -3104,7 +3248,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                 }}
               >
                 <Text style={{ color: '#3B82F6', fontSize: 15, fontWeight: '600' }}>
-                  🌐 Visitar nosso site
+                  ?? Visitar nosso site
                 </Text>
               </TouchableOpacity>
               
@@ -3120,7 +3264,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                 }}
               >
                 <Text style={{ color: '#3B82F6', fontSize: 15, fontWeight: '600' }}>
-                  📧 Enviar email
+                  ?? Enviar email
                 </Text>
               </TouchableOpacity>
             </View>
@@ -3149,15 +3293,15 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
 
 
 
-      {/* Modal de Preferências - Steam Genres */}
+  {/* Modal de Prefer�ncias - Steam Genres */}
       <SteamGenresPreferencesModal
         visible={showPreferencesModal}
         onClose={() => setShowPreferencesModal(false)}
         currentPreferences={userPreferredSteamGenres}
         onSave={async (selectedGenreIds: string[]) => {
           try {
-            console.log('=== SALVANDO PREFERÊNCIAS STEAM ===')
-            console.log('Gêneros selecionados:', selectedGenreIds)
+            console.log('=== SALVANDO PREFER�NCIAS STEAM ===')
+            console.log('G�neros selecionados:', selectedGenreIds)
             
             // Atualizar estado local
             setUserPreferredSteamGenres(selectedGenreIds)
@@ -3166,20 +3310,20 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
             await fetchDeals()
             
             setShowPreferencesModal(false)
-            showToast('Preferências salvas! 🎮')
+            showToast('Prefer�ncias salvas! ?')
             
           } catch (error) {
-            console.error('Erro ao salvar preferências:', error)
-            showToast('Erro ao salvar preferências')
+            console.error('Erro ao salvar preferÃªncias:', error)
+            showToast('Erro ao salvar preferÃªncias')
           }
         }}
       />
       
-      {/* Modal de Doação - Apenas quando o usuário ativa manualmente */}
+      {/* Modal de DoaÃ§Ã£o - Apenas quando o usuÃ¡rio ativa manualmente */}
       
 
       
-      {/* Modal de Histórico de Notificações */}
+      {/* Modal de HistÃ³rico de NotificaÃ§Ãµes */}
       {showNotificationsHistory && <NotificationsHistoryModal />}
       
       {/* Modal de Idioma */}
@@ -3216,9 +3360,9 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
             
             <View style={{ marginBottom: 20 }}>
               {[
-                { code: 'pt', name: 'Português', flag: '🇧🇷' },
-                { code: 'en', name: 'English', flag: '🇺🇸' },
-                { code: 'es', name: 'Español', flag: '🇪🇸' }
+                { code: 'pt', name: 'Portugu�s', flag: '????' },
+                { code: 'en', name: 'English', flag: '????' },
+                { code: 'es', name: 'Espa�ol', flag: '????' }
               ].map((lang, index) => (
                 <TouchableOpacity
                   key={lang.code}
@@ -3276,16 +3420,16 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
                 fontSize: 18, 
                 fontWeight: '700' 
               }}>
-                Política de Privacidade
+                Políticas de Privacidade
               </Text>
-              <TouchableOpacity 
-                onPress={() => setShowPrivacyModal(false)} 
+              <TouchableOpacity
+                onPress={() => setShowPrivacyModal(false)}
                 style={{ padding: 8 }}
               >
                 <Ionicons name="close" size={24} color="#E5E7EB" />
               </TouchableOpacity>
             </View>
-            
+
             <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 300 }}>
               <Text style={{ color: '#E5E7EB', fontSize: 15, lineHeight: 22 }}>
                 Nossa política de privacidade:{'\n\n'}
@@ -3324,7 +3468,7 @@ const CurrencyModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ vi
         </SafeAreaView>
       </Modal>
 
-      {/* Modal da Versão Pro - TEMPORARIAMENTE DESABILITADO */}
+      {/* Modal da VersÃ£o Pro - TEMPORARIAMENTE DESABILITADO */}
       {/* <ProModal /> */}
       
       </View>
@@ -3341,3 +3485,8 @@ export default function Home() {
     </SafeAreaProvider>
   );
 }
+
+
+
+
+

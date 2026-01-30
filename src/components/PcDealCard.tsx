@@ -52,13 +52,26 @@ export function PcDealCard({ item, variant = 'grid' }: { item: PcOffer; variant?
             </View>
           )}
         </View>
-        {labelRight ? (
+        {item.category ? (
           <View style={{ position: 'absolute', top: 6, right: 6, paddingHorizontal: 8, paddingVertical: 4, backgroundColor: '#3F3F46', borderRadius: 6 }}>
-            <Text style={{ color: '#E5E7EB', fontSize: 12, fontWeight: '700' }}>{labelRight}</Text>
+            <Text style={{ color: '#E5E7EB', fontSize: 10, fontWeight: '700' }}>{item.category.toUpperCase()}</Text>
           </View>
         ) : null}
       </View>
       <View style={{ padding: 10 }}>
+        {/* Indicador de loja mais proeminente */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+          <View style={{ 
+            paddingHorizontal: 6, 
+            paddingVertical: 2, 
+            backgroundColor: '#1D4ED8', // Azul padrão para todas as lojas
+            borderRadius: 4 
+          }}>
+            <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '700' }}>
+              {item.store.toUpperCase()}
+            </Text>
+          </View>
+        </View>
         <Text style={{ color: tokens.colors.text, fontWeight: '800', fontSize: 14 }} numberOfLines={2}>{item.title || 'Produto sem título'}</Text>
         <View style={{ marginTop: 8 }}>
           {item.priceBaseCents && item.priceBaseCents > 0 && item.priceFinalCents !== item.priceBaseCents ? (
