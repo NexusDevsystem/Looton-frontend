@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "464064480689",
+    "project_id": "looton-a2877",
+    "storage_bucket": "looton-a2877.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:464064480689:android:bfa938a4b94c4b44b86990",
+        "android_client_info": {
+          "package_name": "com.nexusdevsystem.looton"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBvaXMdemVUWN340iOor20hP18Tm_GfhxU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

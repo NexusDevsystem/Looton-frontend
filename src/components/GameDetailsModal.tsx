@@ -10,19 +10,22 @@ import {
   Modal,
   ActivityIndicator,
   Linking,
-  Platform,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { WishlistService, WishlistItem } from '../services/WishlistService';
-import { AddToListModal } from './AddToListModal'
+import { AddToListModal } from './AddToListModal';
+import { useLanguage } from '../contexts/LanguageContext';
+import { getGooglePlaySubscriptionDeepLink, SUBSCRIPTION_INFO } from '../constants/app';
+import { API_URL } from '../api/client';
+import { len, arr } from '../utils/array-utils';
 
-const { width, height } = Dimensions.get('window');
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+
+const { width } = Dimensions.get('window');
 
 interface GameDetailsProps {
-  appId: number;
+  appId?: number | undefined;
   visible: boolean;
   onClose: () => void;
   currentPrice?: number;
@@ -30,6 +33,9 @@ interface GameDetailsProps {
   discount?: number;
   gameTitle?: string;
   userId?: string;
+  store?: 'steam' | 'epic';
+  gameData?: any;
+  useLocalDataOnly?: boolean;
 }
 
 interface GameDetails {
@@ -130,31 +136,165 @@ export const GameDetailsModal: React.FC<GameDetailsProps> = ({
   discount = 0,
   gameTitle = '',
   userId,
+  store = 'steam',
+  gameData,
+  useLocalDataOnly = false,
 }) => {
   const [gameDetails, setGameDetails] = useState<GameDetails | null>(null);
   const [loading, setLoading] = useState(false);
   const [showWishlistModal, setShowWishlistModal] = useState(false);
   const [showAddToListModal, setShowAddToListModal] = useState(false);
+  const [showScreenshotModal, setShowScreenshotModal] = useState(false);
+  const [selectedScreenshot, setSelectedScreenshot] = useState<string | null>(null);
+  const [watchOption, setWatchOption] = useState<'any' | 'specific' | null>(null); // 'any' para qualquer promoção, 'specific' para preço específico
+  const [showUpgradeToPremiumModal, setShowUpgradeToPremiumModal] = useState(false);
+
   const [desiredPrice, setDesiredPrice] = useState('');
   const [isInWishlist, setIsInWishlist] = useState(false);
   const [wishlistItem, setWishlistItem] = useState<WishlistItem | null>(null);
+  const { t } = useLanguage();
 
   useEffect(() => {
-    if (visible && appId) {
+    if (!visible) return;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const tryUseProvidedData = async (gd?: any) => {
+      try {
+        const data = gd as any;
+
+        // Para jogos da Epic, os dados vêm em data.game ou diretamente em data
+        const gameInfo = data.game || data;
+
+        // Extrair keyImages (todas as imagens disponíveis da Epic)
+        const keyImages = gameInfo.keyImages || data.keyImages || [];
+
+        // Extrair imagem de capa (preferir OfferImageWide ou DieselStoreFrontWide)
+        const offerImage = keyImages.find((img: any) =>
+          img.type === 'OfferImageWide' || img.type === 'DieselStoreFrontWide'
+        );
+        const coverImage = offerImage?.url || gameInfo.coverUrl || gameInfo.image || data.image ||
+                          (keyImages[0]?.url) || '';
+
+        // Extrair screenshots (usar keyImages filtradas por tipo de screenshot)
+        let screenshots = keyImages.filter((img: any) =>
+          img.type === 'Screenshot' ||
+          img.type === 'OfferImageWide' ||
+          img.type === 'DieselStoreFrontWide' ||
+          img.type === 'Thumbnail'
+        );
+
+        // Se não houver screenshots específicos, usar todas as keyImages
+        if (screenshots.length === 0 && keyImages.length > 0) {
+          screenshots = keyImages;
+        }
+
+        // Se ainda não houver screenshots mas houver imagem de capa, adicionar a capa
+        if (screenshots.length === 0 && coverImage) {
+          screenshots = [{ url: coverImage, type: 'Cover' }];
+        }
+
+        // Filtrar apenas imagens válidas
+        screenshots = screenshots.filter((s: any) => s?.url || typeof s === 'string');
+
+        // Extrair gêneros
+        const genres = gameInfo.genres || data.genres || gameInfo.tags || data.tags || [];
+
+        // Extrair descrição
+        const description = gameInfo.description || data.description || gameInfo.about || data.about || '';
+
+        // Extrair desenvolvedor e publisher
+        const developer = gameInfo.developer || data.developer || 'Epic Games';
+        const publisher = gameInfo.publisher || data.publisher || 'Epic Games';
+
+        const mapped: GameDetails = {
+          appId: data.appId || data.id || 0,
+          name: gameInfo.title || gameInfo.name || data.title || data.name || '',
+          type: 'game',
+          required_age: 0,
+          is_free: data.isFree || (data.priceFinal === 0) || (data.priceFinalCents === 0) || false,
+          detailed_description: description || 'Descrição não disponível',
+          about_the_game: description || 'Informações não disponíveis',
+          short_description: description || 'Descrição não disponível',
+          developers: [developer],
+          publishers: [publisher],
+          platforms: {
+            windows: true,
+            mac: false,
+            linux: false,
+          },
+          categories: genres.map((g: any, idx: number) => ({
+            id: idx,
+            description: typeof g === 'string' ? g : (g.name || g.path || g)
+          })),
+          genres: genres.map((g: any, idx: number) => ({
+            id: String(idx),
+            description: typeof g === 'string' ? g : (g.name || g.path || g)
+          })),
+          screenshots: screenshots.map((s: any, idx: number) => {
+            // Suportar diferentes formatos: string, objeto com url, objeto com path_full
+            const fullPath = typeof s === 'string' ? s : (s.url || s.path_full || '');
+            const thumbPath = typeof s === 'string' ? s : (s.thumbnail || s.url || s.path_full || '');
+
+            return {
+              id: idx,
+              path_full: fullPath,
+              path_thumbnail: thumbPath
+            };
+          }),
+          movies: [],
+          recommendations: { total: 0 },
+          achievements: { total: 0 },
+          release_date: {
+            coming_soon: false,
+            date: gameInfo.releaseDate || gameInfo.effectiveDate || data.releaseDate || data.effectiveDate || ''
+          },
+          support_info: { url: '', email: '' },
+          background: coverImage,
+          background_raw: coverImage,
+          pc_requirements: {
+            minimum: 'Requisitos não disponíveis para jogos da Epic Games Store'
+          },
+          mac_requirements: { minimum: 'Requisitos não disponíveis' },
+          linux_requirements: { minimum: 'Requisitos não disponíveis' },
+          header_image: coverImage,
+          capsule_image: coverImage,
+          capsule_imagev5: coverImage
+        } as GameDetails;
+
+        setGameDetails(mapped);
+        return true;
+      } catch (e) {
+        console.error('tryUseProvidedData failed', e);
+        return false;
+      }
+    };
+
+    // Se useLocalDataOnly for true (jogos da Epic), usar dados locais
+    if (useLocalDataOnly && gameData) {
+      tryUseProvidedData(gameData);
+      setLoading(false);
+      if (appId) checkWishlistStatus();
+    }
+    // Default behavior: fetch details by appId (Steam flow)
+    else if (appId) {
       fetchGameDetails();
       checkWishlistStatus();
     }
-  }, [visible, appId]);
+  }, [visible, appId, gameData, store, useLocalDataOnly]);
 
   const fetchGameDetails = async () => {
     try {
       setLoading(true);
-      console.log(`Buscando detalhes para appId: ${appId}`);
+      console.log(`Buscando detalhes para appId: ${appId}`, 'store:', store);
       
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 segundos timeout
       
-      const response = await fetch(`${API_URL}/steam/details/${appId}`, {
+      // Determinar endpoint baseado na loja
+      let endpoint = '';
+      endpoint = `${API_URL}/steam/details/${appId}`;
+      
+      const response = await fetch(endpoint, {
         signal: controller.signal,
         headers: {
           'Accept': 'application/json',
@@ -202,15 +342,26 @@ export const GameDetailsModal: React.FC<GameDetailsProps> = ({
       }
       
       const data = await response.json();
-      console.log(`Detalhes carregados para: ${data.name}`);
-      setGameDetails(data);
+      console.log(`Detalhes carregados para: ${data.name || data.title}`);
+      
+      // Definir os detalhes recebidos da API
+      setGameDetails({
+        ...data,
+        appId: appId || data.appId,
+        name: data.name || data.title || gameTitle,
+        header_image: data.header_image || data.coverUrl || '',
+        capsule_image: data.capsule_image || data.coverUrl || '',
+        capsule_imagev5: data.capsule_imagev5 || data.coverUrl || ''
+      });
+      
+
     } catch (error) {
       console.error('Erro ao buscar detalhes:', error);
       if (error instanceof Error && error.name === 'AbortError') {
         Alert.alert('Timeout', 'A busca por detalhes demorou muito para responder');
       } else {
-        console.log('Definindo dados básicos devido ao erro');
-        // Define dados mínimos em caso de erro
+  console.log('Definindo dados básicos devido ao erro');
+  // Define dados mínimos em caso de erro
         setGameDetails({
           appId,
           name: gameTitle || 'Erro ao carregar',
@@ -271,17 +422,51 @@ export const GameDetailsModal: React.FC<GameDetailsProps> = ({
         currentPrice,
         desiredPrice: price,
         coverUrl: gameDetails?.header_image || '',
-        store: 'Steam',
-        url: `https://store.steampowered.com/app/${appId}`,
         notified: false,
+        store: store || 'steam',
+        url: store === 'steam' && appId ? `https://store.steampowered.com/app/${appId}` : (gameData?.storeUrl || gameDetails?.support_info?.url || '')
       };
 
       await WishlistService.addToWishlist(wishlistItem);
       setIsInWishlist(true);
       setShowWishlistModal(false);
-      Alert.alert('Sucesso', `${gameDetails?.name || gameTitle} foi adicionado à sua lista de desejos!`);
-    } catch (error) {
-      Alert.alert('Erro', 'Não foi possível adicionar à lista de desejos');
+  setWatchOption(null); // Resetar a opção selecionada
+  Alert.alert('Sucesso', `${gameDetails?.name || gameTitle} foi adicionado à sua lista de vigilância!`);
+    } catch (error: any) {
+      // TEMPORARIAMENTE DESABILITADO - Sem limite de jogos vigiados
+      // if (error.message === 'LIMIT_REACHED') {
+      //   setShowWishlistModal(false);
+      //   setShowUpgradeToPremiumModal(true);
+      // } else {
+        Alert.alert('Erro', 'Não foi possível adicionar à lista de vigilância');
+      // }
+    }
+  };
+
+  const handleAddToWishlistAnyPromotion = async () => {
+    try {
+      await WishlistService.addToWishlist({
+        appId,
+        title: gameDetails?.name || gameTitle,
+        currentPrice,
+        desiredPrice: 0, // 0 indica que deve ser notificado sobre qualquer promoção
+        coverUrl: gameDetails?.header_image || '',
+        notified: false,
+        store: store || 'steam',
+        url: store === 'steam' && appId ? `https://store.steampowered.com/app/${appId}` : (gameData?.storeUrl || gameDetails?.support_info?.url || '')
+      });
+      setIsInWishlist(true);
+      setShowWishlistModal(false);
+      setWatchOption(null); // Resetar a opção selecionada
+      Alert.alert('Sucesso', `Agora você está vigiando ${gameDetails?.name || gameTitle} para qualquer promoção!`);
+    } catch (error: any) {
+      // TEMPORARIAMENTE DESABILITADO - Sem limite de jogos vigiados
+      // if (error.message === 'LIMIT_REACHED') {
+      //   setShowWishlistModal(false);
+      //   setShowUpgradeToPremiumModal(true);
+      // } else {
+        Alert.alert('Erro', 'Não foi possível adicionar à lista de vigilância');
+      // }
     }
   };
 
@@ -313,7 +498,23 @@ export const GameDetailsModal: React.FC<GameDetailsProps> = ({
     formatPrice = (p?: number | null) => ctx.formatPrice(p ?? 0)
   } catch (e) {
     formatPrice = (p?: number | null) => {
-      if (!p || isNaN(p) || p === 0) return 'Grátis'
+      // Verificar se é acesso antecipado
+      const isEarlyAccess = gameDetails && (
+        (gameDetails.genres && Array.isArray(gameDetails.genres) && 
+         gameDetails.genres.some((genre: any) => 
+           typeof genre === 'object' 
+             ? (genre.description?.toLowerCase().includes('early access') || 
+                genre.description?.toLowerCase().includes('acesso antecipado'))
+             : (genre.toLowerCase().includes('early access') || 
+                genre.toLowerCase().includes('acesso antecipado')))) ||
+        (gameDetails.categories && Array.isArray(gameDetails.categories) && 
+         gameDetails.categories.some((cat: any) => 
+           cat.description?.toLowerCase().includes('early access') || 
+           cat.description?.toLowerCase().includes('acesso antecipado')))
+      );
+      
+      if (isEarlyAccess) return t('price.earlyAccess');
+      if (!p || isNaN(p) || p === 0) return t('price.free')
       try {
         return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p)
       } catch (e2) {
@@ -322,16 +523,136 @@ export const GameDetailsModal: React.FC<GameDetailsProps> = ({
     }
   }
 
-  const openSteamPage = () => {
-    const url = `https://store.steampowered.com/app/${appId}`;
-    Linking.openURL(url);
+  const openStorePage = () => {
+    let url = '';
+
+    try {
+      // Prefer gameData.url or gameData.storeUrl if available
+      if (gameData?.url) {
+        url = gameData.url;
+      } else if (gameData?.storeUrl) {
+        url = gameData.storeUrl;
+      } else if ((gameDetails as any)?.storeUrl) {
+        url = (gameDetails as any).storeUrl;
+      } else if ((gameDetails as any)?.purchaseUrl) {
+        url = (gameDetails as any).purchaseUrl;
+      }
+      // Construir URL específica da loja
+      else if (store === 'epic') {
+        // Para Epic Games, montar URL usando slugs disponíveis
+        const epicData: any = gameData || {};
+
+        console.log('🔍 Tentando construir URL da Epic Games:', {
+          productSlug: epicData.productSlug,
+          urlSlug: epicData.urlSlug,
+          catalogNs: epicData.catalogNs,
+          offerMappings: epicData.offerMappings,
+          gameTitle: gameTitle
+        });
+
+        // Tentar múltiplas estratégias de construção de URL
+        let slug = '';
+
+        // 1. Tentar productSlug
+        if (epicData.productSlug) {
+          slug = epicData.productSlug;
+          console.log('✅ Usando productSlug:', slug);
+        }
+        // 2. Tentar urlSlug
+        else if (epicData.urlSlug) {
+          slug = epicData.urlSlug;
+          console.log('✅ Usando urlSlug:', slug);
+        }
+        // 3. Tentar catalogNs.mappings
+        else if (epicData.catalogNs?.mappings?.[0]?.pageSlug) {
+          slug = epicData.catalogNs.mappings[0].pageSlug;
+          console.log('✅ Usando catalogNs.mappings[0].pageSlug:', slug);
+        }
+        // 4. Tentar offerMappings
+        else if (epicData.offerMappings?.[0]?.pageSlug) {
+          slug = epicData.offerMappings[0].pageSlug;
+          console.log('✅ Usando offerMappings[0].pageSlug:', slug);
+        }
+        // 5. Tentar construir slug do título
+        else if (gameTitle) {
+          // Converter título para slug (kebab-case)
+          slug = gameTitle
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '');
+          console.log('⚠️ Usando slug gerado do título:', slug);
+        }
+
+        if (slug) {
+          url = `https://store.epicgames.com/pt-BR/p/${slug}`;
+          console.log('🔗 URL construída:', url);
+        } else {
+          // Fallback final: busca pelo título
+          const title = gameDetails?.name || gameTitle || '';
+          const encodedTitle = encodeURIComponent(title);
+          url = `https://store.epicgames.com/pt-BR/browse?q=${encodedTitle}`;
+          console.log('🔗 Usando fallback de busca:', url);
+        }
+      } else if (store === 'steam' && appId) {
+        url = `https://store.steampowered.com/app/${appId}`;
+      }
+    } catch (e) {
+      console.error('❌ Erro ao construir URL:', e);
+      // Fallback: tentar construir URL baseado na loja
+      if (store === 'steam' && appId) {
+        url = `https://store.steampowered.com/app/${appId}`;
+      } else if (store === 'epic') {
+        const title = gameDetails?.name || gameTitle || '';
+        const encodedTitle = encodeURIComponent(title);
+        url = `https://store.epicgames.com/pt-BR/browse?q=${encodedTitle}`;
+      }
+    }
+
+    if (url) {
+      Linking.openURL(url);
+    } else {
+      console.warn('openStorePage: nenhum URL disponível para este jogo');
+    }
   };
+
+    const fixMojibake = (s: string) => {
+      return String(s)
+        // common bullets
+        .replace(/â€¢/g, '•')
+        // accented vowels
+        .replace(/Ã¡/g, 'á')
+        .replace(/Ã¢/g, 'â')
+        .replace(/Ã£/g, 'ã')
+        .replace(/Ã©/g, 'é')
+        .replace(/Ãª/g, 'ê')
+        .replace(/Ã­/g, 'í')
+        .replace(/Ã³/g, 'ó')
+        .replace(/Ã´/g, 'ô')
+        .replace(/Ãµ/g, 'õ')
+        .replace(/Ãº/g, 'ú')
+        .replace(/Ã€/g, 'À')
+        .replace(/Ã /g, 'Á')
+        .replace(/Ã©/g, 'é')
+        .replace(/Ã‰/g, 'É')
+        .replace(/Ãª/g, 'ê')
+        // cedilla
+        .replace(/Ã§/g, 'ç')
+        // other control garbage
+        .replace(/\uFFFD/g, '')
+        .replace(/\u0092/g, "'")
+        // common HTML encoded sequences sometimes double-encoded
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&nbsp;/g, ' ')
+        .trim()
+    }
 
   const renderSystemRequirements = (requirements?: { minimum: string; recommended?: string }) => {
     if (!requirements) return null;
 
     const toList = (raw?: string): string[] => {
-      if (!raw || typeof raw !== 'string') return []
+  if (!raw || typeof raw !== 'string') return []
       let s = raw
         // keep line breaks before stripping tags
         .replace(/<br\s*\/?\s*>/gi, '\n')
@@ -339,21 +660,21 @@ export const GameDetailsModal: React.FC<GameDetailsProps> = ({
         .replace(/<\/?p\s*>/gi, '\n')
         .replace(/&quot;/g, '"')
       // strip remaining tags
-      s = s.replace(/<[^>]*>/g, '')
+   s = s.replace(/<[^>]*>/g, '')
       // insert breaks before common labels (pt/en)
-      s = s.replace(/\s*(M[íi]nimos?:)/gi, '\n$1 ')
-           .replace(/\s*(Recomendados?:)/gi, '\n$1 ')
-           .replace(/\s*(Sistema Operativo:|Sistema operacional:|OS:|Processor:|Processador:|CPU:|Mem[óo]ria:|Memory:|RAM:|Gr[áa]ficos?:|Placa (de )?v[íi]deo:|Graphics?:|GPU:|DirectX:|Rede:|Network:|Armazenamento:|Espa[çc]o (no )?disco:|Storage:|Som:|Sound:|Notas adicionais:|Additional Notes:|Vers[ãa]o:|Version:)/gi, '\n$1 ')
+   s = s.replace(/\s*(M[ií]nimos?:)/gi, '\n$1 ')
+     .replace(/\s*(Recomendad[oa]s?:)/gi, '\n$1 ')
+     .replace(/\s*(Sistema Operativo:|Sistema operacional:|OS:|Processor:|Processador:|CPU:|Mem[oó]ria:|Memory:|RAM:|Gr[aá]ficos?:|Placa (de )?v[ií]deo:|Graphics?:|GPU:|DirectX:|Rede:|Network:|Armazenamento:|Espa[cç]o (no )?disco:|Storage:|Som:|Sound:|Notas adicionais:|Additional Notes:|Vers[aã]o:|Version:)/gi, '\n$1 ')
       // normalize whitespace
       s = s.replace(/\r?\n+/g, '\n').replace(/\s{2,}/g, ' ').trim()
       // split into lines
       const lines = s.split('\n')
-        .map(l => l.trim())
+        .map(l => fixMojibake(l.trim()))
+        .map(l => l.replace(/^(M[ií]nimos?:|Mínimos?:)\s*/i, ''))
+        .map(l => l.replace(/^(Recomendad[oa]s?:|Recomendados?:)\s*/i, ''))
         .filter(l => l && l.length > 2)
 
-      // remove headers like "Mínimos:" or "Recomendados:" as items
-      const cleaned = lines.map(l => l.replace(/^(M[íi]nimos?|Recomendados?):\s*/i, ''))
-      return cleaned
+      return lines
     }
 
     const minItems = toList(requirements.minimum)
@@ -362,7 +683,7 @@ export const GameDetailsModal: React.FC<GameDetailsProps> = ({
     const BulletList = ({ items }: { items: string[] }) => (
       <View>
         {items.map((line, idx) => (
-          <View key={idx} style={{ flexDirection: 'row', marginBottom: 6 }}>
+          <View style={{ flexDirection: 'row', marginBottom: 6 }} key={`bullet-${idx}`}>
             <Text style={{ color: '#9CA3AF', marginRight: 8 }}>•</Text>
             <Text style={{ color: '#D1D5DB', fontSize: 14, lineHeight: 20, flex: 1 }}>{line}</Text>
           </View>
@@ -370,28 +691,119 @@ export const GameDetailsModal: React.FC<GameDetailsProps> = ({
       </View>
     )
 
+    // Função para formatar os requisitos com base no formato desejado
+    const formatRequirements = (items: string[]) => {
+      const formattedItems: string[] = [];
+      
+      // Adiciona o prefixo comum
+      formattedItems.push("Requer um processador e sistema operacional de 64 bits");
+      
+      items.forEach(item => {
+        // Verifica se o item contém alguma informação de sistema operacional
+        if (item.toLowerCase().includes("windows")) {
+          const osMatch = item.match(/(Windows\s*(?:7|8|8\.1|10|11).*)/i);
+          if (osMatch) {
+            formattedItems.push(`SO *: ${osMatch[1]}`);
+          } else {
+            formattedItems.push(`SO: ${item}`);
+          }
+        } 
+        // Verifica se o item contém informação de processador
+        else if (item.toLowerCase().includes("processor") || item.toLowerCase().includes("cpu") || 
+                 item.toLowerCase().includes("core") || item.toLowerCase().includes("intel") || 
+                 item.toLowerCase().includes("amd")) {
+          const procMatch = item.match(/(Intel.*|AMD.*|Core.*|Ryzen.*|Xeon.*)/i);
+          if (procMatch) {
+            formattedItems.push(`Processador: ${procMatch[1]}`);
+          } else {
+            formattedItems.push(`Processador: ${item}`);
+          }
+        } 
+        // Verifica se o item contém informação de memória
+        else if (item.toLowerCase().includes("memory") || item.toLowerCase().includes("ram")) {
+          const ramMatch = item.match(/(\d+\s*GB.*RAM|\d+\s*MB.*RAM)/i);
+          if (ramMatch) {
+            formattedItems.push(`Memória: ${ramMatch[1]}`);
+          } else {
+            formattedItems.push(`Memória: ${item}`);
+          }
+        } 
+        // Verifica se o item contém informação de placa de vídeo
+        else if (item.toLowerCase().includes("graphics") || item.toLowerCase().includes("gpu") || 
+                 item.toLowerCase().includes("video") || item.toLowerCase().includes("placa") || 
+                 item.toLowerCase().includes("nvidia") || item.toLowerCase().includes("gtx") || 
+                 item.toLowerCase().includes("rtx") || item.toLowerCase().includes("radeon") || 
+                 item.toLowerCase().includes("amd")) {
+          const gpuMatch = item.match(/(Nvidia.*|GTX.*|RTX.*|AMD.*|Radeon.*|Placa.*|Gráficos.*)/i);
+          if (gpuMatch) {
+            formattedItems.push(`Placa de vídeo: ${gpuMatch[1]}`);
+          } else {
+            formattedItems.push(`Placa de vídeo: ${item}`);
+          }
+        } 
+        // Verifica se o item contém informação de DirectX
+        else if (item.toLowerCase().includes("directx")) {
+          const dxMatch = item.match(/(DirectX.*|Versão.*)/i);
+          if (dxMatch) {
+            formattedItems.push(`DirectX: ${dxMatch[1]}`);
+          } else {
+            formattedItems.push(`DirectX: ${item}`);
+          }
+        } 
+        // Verifica se o item contém informação de armazenamento
+        else if (item.toLowerCase().includes("storage") || item.toLowerCase().includes("armazenamento") || 
+                 item.toLowerCase().includes("espaço") || item.toLowerCase().includes("disco")) {
+          const storageMatch = item.match(/(\d+\s*GB.*|\d+\s*MB.*|\d+\s*TB.*|espaço.*disco.*)/i);
+          if (storageMatch) {
+            formattedItems.push(`Armazenamento: ${storageMatch[1]}`);
+          } else {
+            formattedItems.push(`Armazenamento: ${item}`);
+          }
+        } 
+        // Verifica se o item contém informação de placa de som
+        else if (item.toLowerCase().includes("sound") || item.toLowerCase().includes("áudio") || 
+                 item.toLowerCase().includes("placa.*som")) {
+          const soundMatch = item.match(/(DirectX.*sound|áudio.*|placa.*som.*)/i);
+          if (soundMatch) {
+            formattedItems.push(`Placa de som: ${soundMatch[1]}`);
+          } else {
+            formattedItems.push(`Placa de som: ${item}`);
+          }
+        } 
+        // Adiciona o item original se não se encaixar nas categorias acima, mas só se não estiver vazio
+        else if (item.trim() !== "" && !formattedItems.includes(item)) {
+          formattedItems.push(item);
+        }
+      });
+
+      return formattedItems;
+    };
+
+    const formattedMinItems = formatRequirements(minItems);
+    const formattedRecItems = formatRequirements(recItems);
+
     return (
       <View style={{ marginVertical: 16 }}>
         <Text style={{ color: '#E5E7EB', fontSize: 18, fontWeight: 'bold', marginBottom: 12 }}>
-          Requisitos do Sistema
+          {t('gameDetails.systemRequirements')}
         </Text>
         
         <View style={{ backgroundColor: '#374151', borderRadius: 12, padding: 16 }}>
-          {minItems.length > 0 && (
-            <View style={{ marginBottom: recItems.length > 0 ? 16 : 0 }}>
-              <Text style={{ color: '#F9FAFB', fontSize: 16, fontWeight: '600', marginBottom: 8 }}>
-                Requisitos Mínimos:
+          {formattedMinItems.length > 0 && (
+            <View style={{ marginBottom: formattedRecItems.length > 0 ? 12 : 0 }}>
+              <Text style={{ color: '#F9FAFB', fontSize: 15, fontWeight: '700', marginBottom: 6 }}>
+                {t('gameDetails.minimumRequirements')}
               </Text>
-              <BulletList items={minItems} />
+              <BulletList items={formattedMinItems} />
             </View>
           )}
 
-          {recItems.length > 0 && (
+          {formattedRecItems.length > 0 && (
             <View>
-              <Text style={{ color: '#F9FAFB', fontSize: 16, fontWeight: '600', marginBottom: 8 }}>
-                Requisitos Recomendados:
+              <Text style={{ color: '#F9FAFB', fontSize: 15, fontWeight: '700', marginBottom: 6 }}>
+                {t('gameDetails.recommendedRequirements')}
               </Text>
-              <BulletList items={recItems} />
+              <BulletList items={formattedRecItems} />
             </View>
           )}
         </View>
@@ -413,30 +825,29 @@ export const GameDetailsModal: React.FC<GameDetailsProps> = ({
         <View style={{ 
           flexDirection: 'row', 
           alignItems: 'center', 
-          justifyContent: 'space-between',
+          justifyContent: 'center',
           paddingHorizontal: 20,
           paddingTop: 50,
           paddingBottom: 16,
           borderBottomWidth: 1,
           borderBottomColor: '#374151'
         }}>
-          <TouchableOpacity onPress={onClose}>
+          <TouchableOpacity 
+            onPress={onClose} 
+            style={{ position: 'absolute', left: 20, top: 50, padding: 8 }}
+          >
             <Ionicons name="close" size={28} color="#E5E7EB" />
           </TouchableOpacity>
           
-          <Text style={{ color: '#F9FAFB', fontSize: 18, fontWeight: '600', flex: 1, textAlign: 'center' }}>
-            Detalhes do Jogo
+          <Text style={{ color: '#F9FAFB', fontSize: 18, fontWeight: '600' }}>
+            {t('gameDetails.title')}
           </Text>
-          
-          <TouchableOpacity onPress={openSteamPage}>
-            <Ionicons name="open-outline" size={24} color="#3B82F6" />
-          </TouchableOpacity>
         </View>
 
         {loading ? (
           <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
             <ActivityIndicator size="large" color="#3B82F6" />
-            <Text style={{ color: '#9CA3AF', marginTop: 16 }}>Carregando detalhes...</Text>
+            <Text style={{ color: '#9CA3AF', marginTop: 16 }}>{t('home.loading')}</Text>
           </View>
         ) : gameDetails ? (
           <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
@@ -445,7 +856,7 @@ export const GameDetailsModal: React.FC<GameDetailsProps> = ({
               <Image
                 source={{ uri: gameDetails.header_image }}
                 style={{ width: '100%', height: 200 }}
-                contentFit="cover"
+                resizeMode="cover"
                 cachePolicy="disk"
                 transition={200}
               />
@@ -497,43 +908,63 @@ export const GameDetailsModal: React.FC<GameDetailsProps> = ({
                     </View>
                   </View>
 
-                  <TouchableOpacity
-                    onPress={() => {
-                      if (userId) {
-                        // authenticated flow: open server lists modal
-                        setShowAddToListModal(true)
-                      } else {
-                        // anonymous: local wishlist behavior
-                        if (isInWishlist) {
-                          handleRemoveFromWishlist()
-                        } else {
-                          setShowWishlistModal(true)
-                        }
-                      }
-                    }}
+                  {/* Botão Vigiar - Apenas para jogos que não são grátis da Epic */}
+                  {store !== 'epic' && (
+                    <View style={{ flexDirection: 'row', gap: 12 }}>
+                      <TouchableOpacity
+                        onPress={() => {
+                          if (userId) {
+                            // authenticated flow: open server lists modal
+                            setShowAddToListModal(true)
+                          } else {
+                            // anonymous: local wishlist behavior
+                            if (isInWishlist) {
+                              handleRemoveFromWishlist()
+                            } else {
+                              setShowWishlistModal(true)
+                            }
+                          }
+                        }}
 
-                    style={{
-                      backgroundColor: isInWishlist ? '#EF4444' : '#3B82F6',
-                      paddingHorizontal: 16,
-                      paddingVertical: 8,
-                      borderRadius: 20,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                    }}
-                    // We'll replace the handler in the next patch to avoid large hunks
-                  >
-                    <Ionicons 
-                      name={isInWishlist ? "heart" : "heart-outline"} 
-                      size={16} 
-                      color="white" 
-                      style={{ marginRight: 6 }}
-                    />
-                    <Text style={{ color: 'white', fontWeight: '600' }}>
-                      {isInWishlist ? 'Na Lista' : 'Desejar'}
-                    </Text>
-                  </TouchableOpacity>
+                        style={{
+                          backgroundColor: isInWishlist ? '#EF4444' : '#3B82F6',
+                          paddingHorizontal: 16,
+                          paddingVertical: 8,
+                          borderRadius: 20,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                        }}
+                      >
+                        <Ionicons
+                          name={isInWishlist ? "eye" : "eye-outline"}
+                          size={16}
+                          color="white"
+                          style={{ marginRight: 6 }}
+                        />
+                        <Text style={{ color: 'white', fontWeight: '600' }}>
+                          {isInWishlist ? t('tab.watching') : t('gameDetails.watch')}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
                 </View>
               </View>
+
+              {/* Botão Acesse a loja oficial */}
+              <TouchableOpacity
+                onPress={openStorePage}
+                style={{
+                  backgroundColor: '#3B82F6',
+                  paddingVertical: 15,
+                  borderRadius: 12,
+                  alignItems: 'center',
+                  marginBottom: 20
+                }}
+              >
+                <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 16 }}>
+                  {store === 'epic' ? 'Abrir na Epic Games Store' : t('gameDetails.accessStore')}
+                </Text>
+              </TouchableOpacity>
 
               {/* Quick Info */}
               <View style={{ 
@@ -578,7 +1009,7 @@ export const GameDetailsModal: React.FC<GameDetailsProps> = ({
                   <Ionicons name="logo-apple" size={20} color="#E5E7EB" style={{ marginRight: 8 }} />
                 )}
                 {gameDetails.platforms.linux && (
-                  <Text style={{ color: '#E5E7EB', fontSize: 16, marginRight: 8 }}>🐧</Text>
+                  <Text style={{ color: '#E5E7EB', fontSize: 16, marginRight: 8 }}>ðŸ§</Text>
                 )}
               </View>
 
@@ -593,44 +1024,52 @@ export const GameDetailsModal: React.FC<GameDetailsProps> = ({
               </View>
 
               {/* Screenshots */}
-              {gameDetails.screenshots.length > 0 && (
+              {len(gameDetails?.screenshots) > 0 && (
                 <View style={{ marginBottom: 20 }}>
                   <Text style={{ color: '#E5E7EB', fontSize: 18, fontWeight: 'bold', marginBottom: 12 }}>
                     Capturas de Tela
                   </Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                    {gameDetails.screenshots.slice(0, 5).map((screenshot, index) => (
-                      <Image
-                        key={screenshot.id}
-                        source={{ uri: screenshot.path_thumbnail }}
-                        style={{
-                          width: 150,
-                          height: 90,
-                          borderRadius: 8,
-                          marginRight: 12,
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} 
+                    contentContainerStyle={{ paddingBottom: 8 }}>
+                    {arr(gameDetails?.screenshots).slice(0, 5).map((screenshot, index) => 
+                      <TouchableOpacity 
+                        key={`screenshot-${index}`}
+                        onPress={() => {
+                          setSelectedScreenshot(screenshot.path_full || screenshot.path_thumbnail);
+                          setShowScreenshotModal(true);
                         }}
-                        contentFit="cover"
-                        cachePolicy="disk"
-                        transition={200}
-                      />
-                    ))}
+                      >
+                        {React.createElement(Image, {
+                          source: { uri: screenshot.path_thumbnail },
+                          style: {
+                            width: 280,
+                            height: 160,
+                            borderRadius: 12,
+                            marginRight: 12,
+                          },
+                          contentFit: "cover" as const,
+                          cachePolicy: "disk" as const,
+                          transition: 200,
+                        })}
+                      </TouchableOpacity>
+                    )}
                   </ScrollView>
                 </View>
               )}
 
-              {/* System Requirements */}
-              {renderSystemRequirements(gameDetails.pc_requirements)}
+              {/* System Requirements - Apenas para jogos que não são da Epic */}
+              {store !== 'epic' && renderSystemRequirements(gameDetails.pc_requirements)}
 
               {/* Genres */}
-              {gameDetails.genres.length > 0 && (
+              {len(gameDetails?.genres) > 0 && (
                 <View style={{ marginVertical: 16 }}>
                   <Text style={{ color: '#E5E7EB', fontSize: 18, fontWeight: 'bold', marginBottom: 12 }}>
-                    Gêneros
+                    {t('gameDetails.genres')}
                   </Text>
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-                    {gameDetails.genres.map((genre) => (
+                    {arr(gameDetails?.genres).map((genre, index) => 
                       <View
-                        key={genre.id}
+                        key={`genre-${index}`}
                         style={{
                           backgroundColor: '#374151',
                           paddingHorizontal: 12,
@@ -640,11 +1079,9 @@ export const GameDetailsModal: React.FC<GameDetailsProps> = ({
                           marginBottom: 8,
                         }}
                       >
-                        <Text style={{ color: '#E5E7EB', fontSize: 12 }}>
-                          {genre.description}
-                        </Text>
+                        <Text style={{ color: '#E5E7EB', fontSize: 12 }}>{fixMojibake(genre.description)}</Text>
                       </View>
-                    ))}
+                    )}
                   </View>
                 </View>
               )}
@@ -673,78 +1110,186 @@ export const GameDetailsModal: React.FC<GameDetailsProps> = ({
             <View style={{
               backgroundColor: '#1F2937',
               borderRadius: 16,
-              padding: 24,
+              padding: 0,
               width: '100%',
               maxWidth: 400,
+              overflow: 'hidden'
             }}>
-              <Text style={{
-                color: '#F9FAFB',
-                fontSize: 20,
-                fontWeight: 'bold',
-                marginBottom: 16,
-                textAlign: 'center',
-              }}>
-                Definir Preço Desejado
-              </Text>
-              
-              <Text style={{ color: '#D1D5DB', marginBottom: 16, textAlign: 'center' }}>
-                Você será notificado quando {gameDetails?.name || gameTitle} atingir este preço
-              </Text>
-
+              {/* Cabeçalho do modal */}
               <View style={{
-                backgroundColor: '#374151',
-                borderRadius: 12,
-                padding: 16,
-                marginBottom: 20,
+                backgroundColor: '#111827',
+                paddingHorizontal: 24,
+                paddingVertical: 20,
+                borderBottomWidth: 1,
+                borderBottomColor: '#374151'
               }}>
-                <Text style={{ color: '#9CA3AF', marginBottom: 8 }}>Preço atual:</Text>
-                <Text style={{ color: '#F9FAFB', fontSize: 18, fontWeight: 'bold' }}>
-                  {formatPrice(currentPrice)}
+                <Text style={{
+                  color: '#F9FAFB',
+                  fontSize: 20,
+                  fontWeight: 'bold',
+                  marginBottom: 4,
+                  textAlign: 'center',
+                }}>
+                  {t('watchPrice.title')}
+                </Text>
+                <Text style={{ color: '#D1D5DB', textAlign: 'center', fontSize: 14 }}>
+                  {gameDetails?.name || gameTitle}
                 </Text>
               </View>
-
-              <TextInput
-                style={{
+              
+              {/* Conteúdo principal */}
+              <View style={{ padding: 24 }}>
+                <View style={{
                   backgroundColor: '#374151',
                   borderRadius: 12,
                   padding: 16,
-                  color: '#F9FAFB',
-                  fontSize: 16,
                   marginBottom: 20,
-                }}
-                placeholder="Ex: 29,99"
-                placeholderTextColor="#9CA3AF"
-                value={desiredPrice}
-                onChangeText={setDesiredPrice}
-                keyboardType="numeric"
-              />
+                }}>
+                  <Text style={{ color: '#9CA3AF', marginBottom: 8, fontSize: 14 }}>{t('watchPrice.currentPrice')}</Text>
+                  <Text style={{ color: '#F9FAFB', fontSize: 20, fontWeight: 'bold' }}>
+                    {formatPrice(currentPrice)}
+                  </Text>
+                </View>
 
-              <View style={{ flexDirection: 'row', gap: 12 }}>
-                <TouchableOpacity
-                  onPress={() => setShowWishlistModal(false)}
-                  style={{
-                    flex: 1,
-                    backgroundColor: '#6B7280',
-                    paddingVertical: 12,
-                    borderRadius: 12,
-                    alignItems: 'center',
-                  }}
-                >
-                  <Text style={{ color: 'white', fontWeight: '600' }}>Cancelar</Text>
-                </TouchableOpacity>
+                <View style={{ marginBottom: 20 }}>
+                  <Text style={{ color: '#F9FAFB', fontSize: 16, fontWeight: '600', marginBottom: 16, textAlign: 'center' }}>
+                    {t('watchPrice.whatDoYouWant')}
+                  </Text>
+                  
+                  {/* Opção: Notificar sobre qualquer promoção */}
+                  <TouchableOpacity
+                    onPress={() => {
+                      // Define a opção para qualquer promoção
+                      setWatchOption('any');
+                      setDesiredPrice('');
+                    }}
+                    style={{
+                      backgroundColor: watchOption === 'any' ? '#2D3748' : '#374151',
+                      borderRadius: 12,
+                      padding: 16,
+                      marginBottom: 12,
+                      borderWidth: watchOption === 'any' ? 2 : 1,
+                      borderColor: watchOption === 'any' ? '#3B82F6' : '#4B5563',
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <View style={{
+                        backgroundColor: watchOption === 'any' ? '#3B82F6' : '#4B5563',
+                        borderRadius: 8,
+                        padding: 8,
+                        marginRight: 12
+                      }}>
+                        <Ionicons name="megaphone" size={20} color="#FFFFFF" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ color: '#F9FAFB', fontSize: 16, fontWeight: '600' }}>
+                          {t('watchPrice.notifyAnyPromotion')}
+                        </Text>
+                        <Text style={{ color: '#9CA3AF', fontSize: 14, marginTop: 4 }}>
+                          {t('watchPrice.notifyAnyPromotionDesc')}
+                        </Text>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
 
-                <TouchableOpacity
-                  onPress={handleAddToWishlist}
-                  style={{
-                    flex: 1,
-                    backgroundColor: '#3B82F6',
-                    paddingVertical: 12,
-                    borderRadius: 12,
-                    alignItems: 'center',
-                  }}
-                >
-                  <Text style={{ color: 'white', fontWeight: '600' }}>Adicionar</Text>
-                </TouchableOpacity>
+                  {/* Opção: Definir preço desejado */}
+                  <TouchableOpacity
+                    onPress={() => {
+                      // Define a opção para preço específico
+                      setWatchOption('specific');
+                    }}
+                    style={{
+                      backgroundColor: watchOption === 'specific' ? '#2D3748' : '#374151',
+                      borderRadius: 12,
+                      padding: 16,
+                      borderWidth: watchOption === 'specific' ? 2 : 1,
+                      borderColor: watchOption === 'specific' ? '#3B82F6' : '#4B5563',
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <View style={{
+                        backgroundColor: watchOption === 'specific' ? '#3B82F6' : '#4B5563',
+                        borderRadius: 8,
+                        padding: 8,
+                        marginRight: 12
+                      }}>
+                        <Ionicons name="pricetag" size={20} color="#FFFFFF" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ color: '#F9FAFB', fontSize: 16, fontWeight: '600' }}>
+                          {t('watchPrice.setDesiredPrice')}
+                        </Text>
+                        <Text style={{ color: '#9CA3AF', fontSize: 14, marginTop: 4 }}>
+                          {t('watchPrice.setDesiredPriceDesc')}
+                        </Text>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                  
+                  {/* Campo de entrada de preço - mostrado apenas se a opção específica estiver selecionada */}
+                  {watchOption === 'specific' && (
+                    <View style={{ marginTop: 16 }}>
+                      <Text style={{ color: '#D1D5DB', marginBottom: 8, fontSize: 14 }}>{t('watchPrice.enterDesiredPrice')}</Text>
+                      <TextInput
+                        style={{
+                          backgroundColor: '#374151',
+                          borderRadius: 12,
+                          padding: 16,
+                          color: '#F9FAFB',
+                          fontSize: 16,
+                          borderWidth: 1,
+                          borderColor: '#4B5563',
+                        }}
+                        placeholder={t('watchPrice.pricePlaceholder')}
+                        placeholderTextColor="#9CA3AF"
+                        value={desiredPrice}
+                        onChangeText={setDesiredPrice}
+                        keyboardType="numeric"
+                      />
+                    </View>
+                  )}
+                </View>
+
+                <View style={{ flexDirection: 'row', gap: 12 }}>
+                  <TouchableOpacity
+                    onPress={() => {
+                  setShowWishlistModal(false);
+                  setWatchOption(null); // Resetar a opção selecionada
+                      setDesiredPrice(''); // Limpar o campo de preço
+                    }}
+                    style={{
+                      flex: 1,
+                      backgroundColor: '#6B7280',
+                      paddingVertical: 14,
+                      borderRadius: 12,
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Text style={{ color: 'white', fontWeight: '600', fontSize: 16 }}>{t('watchPrice.cancel')}</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={() => {
+                      if (watchOption === 'any') {
+                        handleAddToWishlistAnyPromotion();
+                      } else if (watchOption === 'specific' && desiredPrice) {
+                        handleAddToWishlist();
+                      } else if (!watchOption) {
+                        // Se nenhuma opção foi selecionada, usar a opção padrão de qualquer promoção
+                        handleAddToWishlistAnyPromotion();
+                      }
+                    }}
+                    style={{
+                      flex: 1,
+                      backgroundColor: '#3B82F6',
+                      paddingVertical: 14,
+                      borderRadius: 12,
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Text style={{ color: 'white', fontWeight: '600', fontSize: 16 }}>{t('watchPrice.watch')}</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
           </View>
@@ -761,7 +1306,210 @@ export const GameDetailsModal: React.FC<GameDetailsProps> = ({
           />
         )}
 
+  {/* Modal para visualização ampliada das capturas de tela */}
+        <Modal
+          visible={showScreenshotModal}
+          animationType="fade"
+          transparent={true}
+          onRequestClose={() => setShowScreenshotModal(false)}
+        >
+          <View style={{ flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.9)' }}>
+            {/* Botão de fechar */}
+            <TouchableOpacity 
+              style={{ position: 'absolute', top: 40, right: 20, zIndex: 10 }}
+              onPress={() => setShowScreenshotModal(false)}
+            >
+              <Ionicons name="close" size={32} color="#FFFFFF" />
+            </TouchableOpacity>
+            
+            {/* Botões de navegação */}
+            <View style={{ 
+              position: 'absolute', 
+              top: '50%', 
+              left: 20, 
+              zIndex: 10,
+              transform: [{ translateY: -25 }] 
+            }}>
+              <TouchableOpacity 
+                onPress={() => {
+                  if (gameDetails?.screenshots && selectedScreenshot) {
+                    const currentIndex = gameDetails.screenshots.findIndex(s => 
+                      s.path_full === selectedScreenshot || s.path_thumbnail === selectedScreenshot
+                    );
+                    const prevIndex = (currentIndex - 1 + gameDetails.screenshots.length) % gameDetails.screenshots.length;
+                    const prevScreenshot = gameDetails.screenshots[prevIndex];
+                    setSelectedScreenshot(prevScreenshot.path_full || prevScreenshot.path_thumbnail);
+                  }
+                }}
+                style={{ backgroundColor: 'rgba(255, 255, 255, 0.2)', borderRadius: 25, padding: 10 }}
+              >
+                <Ionicons name="chevron-back" size={32} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={{ 
+              position: 'absolute', 
+              top: '50%', 
+              right: 20, 
+              zIndex: 10,
+              transform: [{ translateY: -25 }] 
+            }}>
+              <TouchableOpacity 
+                onPress={() => {
+                  if (gameDetails?.screenshots && selectedScreenshot) {
+                    const currentIndex = gameDetails.screenshots.findIndex(s => 
+                      s.path_full === selectedScreenshot || s.path_thumbnail === selectedScreenshot
+                    );
+                    const nextIndex = (currentIndex + 1) % gameDetails.screenshots.length;
+                    const nextScreenshot = gameDetails.screenshots[nextIndex];
+                    setSelectedScreenshot(nextScreenshot.path_full || nextScreenshot.path_thumbnail);
+                  }
+                }}
+                style={{ backgroundColor: 'rgba(255, 255, 255, 0.2)', borderRadius: 25, padding: 10 }}
+              >
+                <Ionicons name="chevron-forward" size={32} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+            
+            {selectedScreenshot && (
+              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 20 }}>
+                <Image
+                  source={{ uri: selectedScreenshot }}
+                  style={{ width: '95%', height: '80%', borderRadius: 8 }}
+                  contentFit="contain"
+                  cachePolicy="disk"
+                  transition={300}
+                />
+              </View>
+            )}
+          </View>
+        </Modal>
+
+        {/* Modal de Upgrade para Premium */}
+        <Modal
+          visible={showUpgradeToPremiumModal}
+          animationType="fade"
+          transparent
+          onRequestClose={() => setShowUpgradeToPremiumModal(false)}
+        >
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+            <View style={{ 
+              width: '100%', 
+              maxWidth: 400, 
+              backgroundColor: '#1F2937', 
+              borderRadius: 20, 
+              padding: 24 
+            }}>
+              {/* Ícone */}
+              <View style={{ alignItems: 'center', marginBottom: 20 }}>
+                <View style={{ 
+                  width: 80, 
+                  height: 80, 
+                  borderRadius: 40, 
+                  backgroundColor: '#EF4444', 
+                  justifyContent: 'center', 
+                  alignItems: 'center',
+                  marginBottom: 16
+                }}>
+                  <Ionicons name="lock-closed" size={40} color="#FFFFFF" />
+                </View>
+                <Text style={{ color: '#FFFFFF', fontSize: 24, fontWeight: 'bold', textAlign: 'center' }}>
+                  Limite Atingido
+                </Text>
+              </View>
+
+              {/* Descrição */}
+              <Text style={{ color: '#9CA3AF', fontSize: 16, textAlign: 'center', lineHeight: 24, marginBottom: 24 }}>
+                Você atingiu o limite de <Text style={{ color: '#FFFFFF', fontWeight: 'bold' }}>5 jogos vigiados</Text> na versão gratuita.
+              </Text>
+
+              <Text style={{ color: '#9CA3AF', fontSize: 16, textAlign: 'center', lineHeight: 24, marginBottom: 24 }}>
+                Com o <Text style={{ color: '#4F46E5', fontWeight: 'bold' }}>Looton Premium</Text>, você pode vigiar <Text style={{ color: '#FFFFFF', fontWeight: 'bold' }}>quantos jogos quiser</Text>!
+              </Text>
+
+              {/* Benefícios */}
+              <View style={{ backgroundColor: '#374151', borderRadius: 12, padding: 16, marginBottom: 24 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                  <Ionicons name="checkmark-circle" size={24} color="#10B981" />
+                  <Text style={{ color: '#E5E7EB', fontSize: 14, marginLeft: 12 }}>
+                    Jogos vigiados ilimitados
+                  </Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                  <Ionicons name="checkmark-circle" size={24} color="#10B981" />
+                  <Text style={{ color: '#E5E7EB', fontSize: 14, marginLeft: 12 }}>
+                    Sem anúncios
+                  </Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Ionicons name="checkmark-circle" size={24} color="#10B981" />
+                  <Text style={{ color: '#E5E7EB', fontSize: 14, marginLeft: 12 }}>
+                    Alertas avançados de preços
+                  </Text>
+                </View>
+              </View>
+
+              {/* Botões */}
+              <TouchableOpacity
+                onPress={async () => {
+                  setShowUpgradeToPremiumModal(false);
+                  
+                  // Abrir tela nativa de assinaturas do Google Play
+                  try {
+                    const url = getGooglePlaySubscriptionDeepLink(SUBSCRIPTION_INFO.MONTHLY_SKU);
+                    
+                    const canOpen = await Linking.canOpenURL(url);
+                    if (canOpen) {
+                      await Linking.openURL(url);
+                    } else {
+                      Alert.alert(
+                        'Assinar Premium',
+                        'Por favor, acesse a Google Play Store para assinar o Looton Premium.',
+                        [{ text: 'OK' }]
+                      );
+                    }
+                  } catch (error) {
+                    console.error('Erro ao abrir Google Play:', error);
+                    Alert.alert(
+                      'Erro',
+                      'Não foi possível abrir a Google Play Store'
+                    );
+                  }
+                }}
+                style={{ 
+                  backgroundColor: '#4F46E5', 
+                  paddingVertical: 16, 
+                  borderRadius: 12,
+                  alignItems: 'center',
+                  marginBottom: 12,
+                  flexDirection: 'row',
+                  justifyContent: 'center',
+                }}
+              >
+                <Ionicons name="logo-google-playstore" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
+                <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: 'bold' }}>
+                  Assinar Premium
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => setShowUpgradeToPremiumModal(false)}
+                style={{ 
+                  paddingVertical: 12,
+                  alignItems: 'center'
+                }}
+              >
+                <Text style={{ color: '#9CA3AF', fontSize: 14 }}>
+                  Agora não
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
         {/* Local wishlist modal for anonymous users (already implemented above via showWishlistModal) */}
+        
+
       </View>
     </Modal>
   );

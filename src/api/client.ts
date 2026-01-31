@@ -1,37 +1,84 @@
-import * as AuthService from '../services/AuthService'
+
 import Constants from 'expo-constants'
 
 // Prefer EXPO_PUBLIC_API_URL when set and not pointing to localhost. Otherwise, try Expo host for device testing.
 export const API_URL = (() => {
   const fromEnv = process.env.EXPO_PUBLIC_API_URL as string | undefined
-  if (fromEnv && !fromEnv.includes('localhost')) return fromEnv
-  try {
-    const hostUri: any = (Constants as any)?.expoConfig?.hostUri
-    if (hostUri) {
-      const host = String(hostUri).split(':')[0]
-      if (host && host !== 'localhost') return `http://${host}:3000`
+
+  // Em modo de desenvolvimento local, usar localhost se não estivermos em produção
+  if (__DEV__ && !process.env.EXPO_PUBLIC_EAS_BUILD) {
+    // Se estiver em desenvolvimento local, verificar se temos uma URL de dev definida
+    const devUrl = process.env.EXPO_PUBLIC_API_URL_DEV || process.env.EXPO_PUBLIC_API_URL_LOCAL
+    if (devUrl) {
+      console.log('🌐 API_URL (dev):', devUrl)
+      return devUrl
     }
-  } catch {}
-  return fromEnv || 'http://localhost:3000'
+
+    // Caso contrário, tentar detectar automaticamente o host local
+    try {
+      const hostUri: any = (Constants as any)?.expoConfig?.hostUri
+      if (hostUri) {
+        const host = String(hostUri).split(':')[0]
+        if (host && host !== 'localhost') {
+          const url = `http://${host}:3000`
+          console.log('🌐 API_URL (auto-detected):', url)
+          return url
+        }
+      }
+    } catch { }
+
+    // Se nada funcionar, retornar localhost para desenvolvimento local
+    console.log('🌐 API_URL (localhost):', 'http://localhost:3000')
+    return 'http://localhost:3000'
+  }
+
+  // Em produção ou durante build EAS, usar a URL configurada explicitamente
+  if (fromEnv && !fromEnv.includes('localhost')) {
+    console.log('🌐 API_URL (production):', fromEnv)
+    return fromEnv
+  }
+
+  // Fallback para produção se nenhuma URL estiver definida
+  if (!fromEnv) {
+    console.error('⚠️ AVISO: EXPO_PUBLIC_API_URL não está definida. A API não funcionará corretamente.')
+    // Retornar uma URL padrão que pode ser substituída por configuração posterior
+    const fallbackUrl = 'https://looton-backend-production.up.railway.app'
+    console.log('🌐 API_URL (fallback):', fallbackUrl)
+    return fallbackUrl
+  }
+
+  console.log('🌐 API_URL (fromEnv):', fromEnv)
+  return fromEnv
 })()
 
 async function buildInit(init?: RequestInit) {
-  const token = await AuthService.loadToken?.()
   const headers: any = init?.headers ? { ...(init?.headers as any) } : {}
-  if (token) headers['Authorization'] = `Bearer ${token}`
   return { ...(init || {}), headers }
 }
 
-async function fetchWithTimeout(input: RequestInfo, init?: RequestInit, timeout = 10000) {
+async function fetchWithTimeout(input: RequestInfo, init?: RequestInit, timeout = 20000) { // Aumentei para 20 segundos
   const controller = new AbortController()
   const id = setTimeout(() => controller.abort(), timeout)
   try {
-    const res = await fetch(input, { ...(init || {}), signal: controller.signal } as any)
+    // Adicionando mais configurações para lidar com serviços Render
+    const res = await fetch(input, {
+      ...(init || {}),
+      signal: controller.signal,
+      headers: {
+        ...((init?.headers as any) || {}),
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+      // Adicionando modo CORS explicitamente
+      mode: 'cors',
+      // Adicionando credenciais se necessário
+      credentials: 'omit'
+    } as any)
     clearTimeout(id)
     return res
   } catch (err: any) {
     clearTimeout(id)
-    if (err.name === 'AbortError') throw new Error('Request timed out')
+    if (err.name === 'AbortError') throw new Error(`Request timed out after ${timeout}ms`)
     throw err
   }
 }
@@ -47,7 +94,7 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!res.ok) {
     let body: any = null
-    try { body = await res.json() } catch (e) {}
+    try { body = await res.json() } catch (e) { }
     const msg = (body && (body.message || body.error)) || `HTTP ${res.status}`
     throw new Error(msg)
   }
@@ -55,46 +102,39 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json()
 }
 
-export async function authRegister(email: string, password: string, username?: string) {
-  try {
-    const deviceId = await AuthService.ensureDeviceId()
-    const body = { email, password, username, deviceId }
-    const res = await fetchWithTimeout(`${API_URL}/auth/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-    if (!res.ok) {
-      let body: any = null
-      try { body = await res.json() } catch (e) {}
-      const msg = (body && (body.message || body.error)) || `HTTP ${res.status}`
-      throw new Error(msg)
-    }
-    return res.json()
-  } catch (err: any) {
-    throw new Error(err.message || 'Network error')
+
+
+// Price History API
+export interface PriceHistoryData {
+  gameId: string
+  gameTitle: string
+  period: string
+  chartData: Array<{
+    date: string
+    prices: Record<string, number>
+  }>
+  currentPrices: Record<string, { price: number; date: string }>
+  statistics: {
+    lowest: number
+    highest: number
+    average: number
+    lowestDate: string
+    lowestStore: string
+    dataPoints: number
+  } | null
+  alerts: {
+    isBestPriceEver: boolean
+    bestPriceAlert: any | null
   }
+  notice?: string // Informação sobre a fonte dos dados
 }
 
-export async function authLogin(email: string, password: string) {
+export async function fetchPriceHistory(gameId: string, days = 90): Promise<PriceHistoryData> {
   try {
-    const deviceId = await AuthService.ensureDeviceId()
-    const res = await fetchWithTimeout(`${API_URL}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password, deviceId }) })
+    const res = await fetchWithTimeout(`${API_URL}/price-history/${gameId}?days=${days}`)
     if (!res.ok) {
       let body: any = null
-      try { body = await res.json() } catch (e) {}
-      const msg = (body && (body.message || body.error)) || `HTTP ${res.status}`
-      throw new Error(msg)
-    }
-    return res.json()
-  } catch (err: any) {
-    throw new Error(err.message || 'Network error')
-  }
-}
-
-export async function authGoogle(idToken: string) {
-  try {
-    const deviceId = await AuthService.ensureDeviceId()
-    const res = await fetchWithTimeout(`${API_URL}/auth/google`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ idToken, deviceId }) })
-    if (!res.ok) {
-      let body: any = null
-      try { body = await res.json() } catch (e) {}
+      try { body = await res.json() } catch (e) { }
       const msg = (body && (body.message || body.error)) || `HTTP ${res.status}`
       throw new Error(msg)
     }

@@ -1,6 +1,5 @@
 import { Favorite, Game, List, ListItem } from '../types'
-
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000'
+import { API_URL } from '../api/client'
 
 export class FavoritesService {
   // Favoritos
@@ -39,7 +38,7 @@ export class FavoritesService {
   }
 
   static async getFavorites(userId: string, filters?: {
-    store?: 'steam' | 'epic'
+    store?: 'steam'
     changed?: 'down' | 'up'
   }): Promise<Favorite[]> {
     const params = new URLSearchParams({ userId })

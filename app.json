@@ -2,68 +2,99 @@
   "expo": {
     "name": "Looton",
     "slug": "looton-app",
-    "version": "0.1.0",
+    "version": "1.8",
     "orientation": "portrait",
     "scheme": "looton",
+    "entryPoint": "index.js",
     "platforms": [
       "ios",
       "android"
     ],
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
-    "splash": {
-      "resizeMode": "contain",
-      "backgroundColor": "#111827"
-    },
+    "newArchEnabled": false,
+    "icon": "./assets/images/logo.png",
     "assetBundlePatterns": [
       "**/*"
     ],
-    "jsEngine": "hermes",
-    "runtimeVersion": {
-      "policy": "sdkVersion"
-    },
+    "runtimeVersion": "1.8",
     "android": {
       "package": "com.nexusdevsystem.looton",
+      "versionCode": 9,
+      "targetSdkVersion": 35,
+      "googleServicesFile": "./google-services.json",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/logo.png",
+        "backgroundColor": "#1F2937"
+      },
       "permissions": [
         "android.permission.RECEIVE_BOOT_COMPLETED",
-        "android.permission.WAKE_LOCK"
-      ]
+        "android.permission.WAKE_LOCK",
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.WAKE_LOCK",
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE"
+      ],
+      "googleMobileAdsAppId": "ca-app-pub-2976862302591431~7964761364",
+      "notification": {
+        "icon": "./assets/images/logo.png",
+        "color": "#3B82F6"
+      }
     },
     "ios": {
-      "bundleIdentifier": "com.nexusdevsystem.looton"
+      "bundleIdentifier": "com.nexusdevsystem.looton",
+      "googleMobileAdsAppId": "ca-app-pub-2976862302591431~7964761364",
+      "icon": "./assets/images/logo.png"
     },
     "web": {
       "bundler": "metro",
-      "output": "static"
+      "output": "single"
     },
     "plugins": [
-      "expo-notifications",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/logo.png",
+          "color": "#3B82F6",
+          "sounds": []
+        }
+      ],
       [
         "expo-build-properties",
         {
           "android": {
-            "newArchEnabled": true
+            "compileSdkVersion": 36,
+            "targetSdkVersion": 35,
+            "buildToolsVersion": "34.0.0",
+            "newArchEnabled": false
           },
           "ios": {
-            "newArchEnabled": true
+            "newArchEnabled": false
           }
         }
-      ]
+      ],
+      [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-2976862302591431~7964761364",
+          "iosAppId": "ca-app-pub-2976862302591431~7964761364"
+        }
+      ],
+      "expo-router"
     ],
-    "experiments": {
-      "typedRoutes": true
-    },
     "extra": {
       "eas": {
         "projectId": "41306841-8939-4568-a1a1-af93af0428d1"
       },
-      "router": {}
+      "EXPO_PUBLIC_API_URL": "https://looton-backend-production.up.railway.app"
     },
     "owner": "nyill",
     "updates": {
       "enabled": true,
       "checkAutomatically": "ON_LOAD",
-      "fallbackToCacheTimeout": 0
+      "fallbackToCacheTimeout": 0,
+      "url": "https://u.expo.dev/41306841-8939-4568-a1a1-af93af0428d1"
     }
   }
 }

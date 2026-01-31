@@ -1,15 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { Platform } from 'react-native'
 import * as Notifications from 'expo-notifications'
-let Device: any = { isDevice: true }
-try {
-  // require at runtime to avoid build-time type issues in environments without expo-device types
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  Device = require('expo-device')
-} catch (e) {
-  // ignore; treat as a non-device or unknown environment
-  Device = { isDevice: true }
-}
+// Simplified device detection - assume always device
+const Device = { isDevice: true }
 
 // Configurar comportamento das notificações
 Notifications.setNotificationHandler({
@@ -21,6 +14,8 @@ Notifications.setNotificationHandler({
     shouldShowList: true,
   }),
 })
+
+
 // Lightweight types and helpers for notification rules and evaluation
 
 export type Currency = string
@@ -144,17 +139,7 @@ export const NotificationService = {
   },
 
   // Send a local immediate notification (appears in the system notification center)
-  async sendLocalNotification(title: string, body: string, data?: any) {
-    try {
-      // trigger: null sends immediately
-      await Notifications.scheduleNotificationAsync({
-        content: { title, body, data },
-        trigger: null as any,
-      })
-    } catch (e) {
-      console.warn('NotificationService.sendLocalNotification failed', e)
-    }
-  },
+  // Função sendLocalNotification removida conforme requisitos - mantendo apenas notificação de oferta do dia
 
   async listWatches(): Promise<WatchRule[]> {
     await loadAll()
@@ -255,45 +240,12 @@ export const NotificationService = {
 
   // Notify matches immediately: builds a short payload and sends a local notification
   async notifyMatchesImmediate(deal: Deal) {
-    try {
-      const res = await this.evaluateDeal(deal)
-      if (res.muted) return
-      if (!res.matches || res.matches.length === 0) return
-
-      // Build a compact message
-      const title = `${deal.game.title} em promoção!`
-      const body = `${deal.store.name} — ${deal.priceFinal.toFixed(2)} (${Math.round(deal.discountPct)}% off)`
-      await this.sendLocalNotification(title, body, { dealId: deal._id })
-    } catch (e) {
-      console.warn('NotificationService.notifyMatchesImmediate error', e)
-    }
+    // Função desativada conforme requisitos - mantendo apenas notificação de oferta do dia
   },
 
   // Schedule a daily digest at a given hour (local time). Call buildDigest with accumulated matches.
   async scheduleDailyDigest(hour = 20, minute = 0) {
-    try {
-      // Cancel existing daily digest (best-effort)
-      const scheduled = await Notifications.getAllScheduledNotificationsAsync()
-      for (const s of scheduled) {
-        if (s.content && s.content.data && s.content.data.__digest) {
-          await Notifications.cancelScheduledNotificationAsync(s.identifier)
-        }
-      }
-
-      const trigger = {
-        hour,
-        minute,
-        repeats: true
-      } as any
-
-      // Schedule a marker notification that the app can later populate by fetching stored matches.
-      await Notifications.scheduleNotificationAsync({
-        content: { title: 'Resumo diário', body: 'Toque para ver as melhores ofertas do dia', data: { __digest: true } },
-        trigger
-      })
-    } catch (e) {
-      console.warn('NotificationService.scheduleDailyDigest failed', e)
-    }
+    // Função desativada conforme requisitos - mantendo apenas notificação de oferta do dia
   },
 
   // Build a digest for a list of matched deals (small summary), returns a payload suitable for a single consolidated notification
@@ -314,135 +266,6 @@ export const NotificationService = {
     const until = Date.now() + days * 24 * 60 * 60 * 1000
     const id = `${targetType}:${targetId}`
     await this.addMute({ id, targetType, targetId, until })
-  },
-
-  // Novos métodos para notificações nativas
-  async requestPermissions(): Promise<boolean> {
-    if (Device.isDevice) {
-      const { status: existingStatus } = await Notifications.getPermissionsAsync()
-      let finalStatus = existingStatus
-      
-      if (existingStatus !== 'granted') {
-        const { status } = await Notifications.requestPermissionsAsync()
-        finalStatus = status
-      }
-      
-      if (finalStatus !== 'granted') {
-        console.log('Permissão de notificação negada')
-        return false
-      }
-
-      if (Platform.OS === 'android') {
-        await Notifications.setNotificationChannelAsync('deals', {
-          name: 'Ofertas de Jogos',
-          importance: Notifications.AndroidImportance.HIGH,
-          vibrationPattern: [0, 250, 250, 250],
-          lightColor: '#3B82F6',
-        })
-
-        await Notifications.setNotificationChannelAsync('favorites', {
-          name: 'Jogos Favoritos',
-          importance: Notifications.AndroidImportance.HIGH,
-          vibrationPattern: [0, 250, 250, 250],
-          lightColor: '#10B981',
-        })
-      }
-
-      return true
-    } else {
-      console.log('Precisa de um dispositivo físico para notificações push')
-      return false
-    }
-  },
-
-  async scheduleNewGameNotification(gameTitle: string, price: number, store: string) {
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: '🎮 Novo jogo disponível!',
-        body: `${gameTitle} por R$ ${price.toFixed(2)} na ${store}`,
-        sound: 'default',
-        data: { type: 'new_game', gameTitle, price, store },
-      },
-      trigger: null,
-    })
-  },
-
-  async scheduleBetterDealNotification(gameTitle: string, oldPrice: number, newPrice: number, store: string) {
-    const discount = Math.round(((oldPrice - newPrice) / oldPrice) * 100)
-    
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: '🔥 Melhor oferta encontrada!',
-        body: `${gameTitle} agora por R$ ${newPrice.toFixed(2)} (-${discount}%) na ${store}`,
-        sound: 'default',
-        data: { type: 'better_deal', gameTitle, oldPrice, newPrice, store, discount },
-      },
-      trigger: null,
-    })
-  },
-
-  async scheduleWishlistPriceNotification(gameTitle: string, targetPrice: number, currentPrice: number, store: string) {
-    const isExactPrice = currentPrice <= targetPrice
-    const percentageClose = Math.round(((currentPrice - targetPrice) / targetPrice) * 100)
-    
-    if (isExactPrice) {
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: '🎯 Preço desejado atingido!',
-          body: `${gameTitle} chegou ao seu preço desejado: R$ ${currentPrice.toFixed(2)} (meta: R$ ${targetPrice.toFixed(2)}) na ${store}`,
-          sound: 'default',
-          data: { type: 'target_price_reached', gameTitle, targetPrice, currentPrice, store },
-        },
-        trigger: null,
-      })
-    } else if (percentageClose <= 10) {
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: '📈 Preço próximo ao desejado!',
-          body: `${gameTitle} está próximo do seu preço desejado: R$ ${currentPrice.toFixed(2)} (meta: R$ ${targetPrice.toFixed(2)}) na ${store}`,
-          sound: 'default',
-          data: { type: 'close_to_target', gameTitle, targetPrice, currentPrice, store, percentageClose },
-        },
-        trigger: null,
-      })
-    }
-  },
-
-  async scheduleLowestPriceNotification(gameTitle: string, price: number, coverUrl?: string) {
-    try {
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: '🔥 MENOR PREÇO HISTÓRICO!',
-          body: `${gameTitle} está com o menor preço da história: R$ ${price.toFixed(2)}! Não perca esta oportunidade!`,
-          sound: 'default',
-          data: { 
-            type: 'lowest_price_ever', 
-            gameTitle, 
-            price, 
-            coverUrl,
-            priority: 'high'
-          },
-        },
-        trigger: null,
-      })
-    } catch (error) {
-      console.error('Erro ao agendar notificação de menor preço:', error)
-    }
-  },
-
-  async scheduleBigDiscountNotification(gameTitle: string, discountPercentage: number, price: number, store: string) {
-    if (discountPercentage >= 70) {
-      const originalPrice = price / (1 - discountPercentage / 100)
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: '⚡ Super desconto!',
-          body: `${gameTitle} com ${discountPercentage}% OFF! De R$ ${originalPrice.toFixed(2)} por R$ ${price.toFixed(2)} na ${store}`,
-          sound: 'default',
-          data: { type: 'big_discount', gameTitle, originalPrice, discountedPrice: price, discountPercentage, store },
-        },
-        trigger: null,
-      })
-    }
   },
 
   async getPushToken(): Promise<string | null> {

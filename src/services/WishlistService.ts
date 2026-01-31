@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { SubscriptionService } from './SubscriptionService';
 
 export interface WishlistItem {
   appId: number;
@@ -6,13 +7,15 @@ export interface WishlistItem {
   currentPrice: number;
   desiredPrice: number;
   coverUrl: string;
+  addedAt: string;
+  notified: boolean;
   store: string;
   url: string;
-  addedAt: string;
-  notified?: boolean;
 }
 
 const WISHLIST_STORAGE_KEY = '@looton_wishlist';
+// const FREE_TIER_LIMIT = 5; // TEMPORARIAMENTE DESABILITADO - Sem limite de jogos vigiados
+const FREE_TIER_LIMIT = 999; // Limite alto temporário (ilimitado na prática)
 
 export class WishlistService {
   // Simple in-memory subscribers for changes to the wishlist
@@ -47,6 +50,15 @@ export class WishlistService {
       
       // Verificar se o jogo já está na wishlist
       const existingIndex = wishlist.findIndex(w => w.appId === item.appId);
+      
+      // TEMPORARIAMENTE DESABILITADO - Sem limite de jogos vigiados
+      // if (existingIndex === -1) {
+      //   const isPremium = await SubscriptionService.isPremium();
+      //   
+      //   if (!isPremium && wishlist.length >= FREE_TIER_LIMIT) {
+      //     throw new Error('LIMIT_REACHED');
+      //   }
+      // }
       
       const wishlistItem: WishlistItem = {
         ...item,
@@ -116,6 +128,22 @@ export class WishlistService {
     } catch (error) {
       console.error('Erro ao buscar item da wishlist:', error);
       return null;
+    }
+  }
+
+  static async updateCurrentPrice(appId: number, newPrice: number): Promise<void> {
+    try {
+      const wishlist = await this.getWishlist();
+      const itemIndex = wishlist.findIndex(w => w.appId === appId);
+      
+      if (itemIndex >= 0) {
+        wishlist[itemIndex].currentPrice = newPrice;
+        await AsyncStorage.setItem(WISHLIST_STORAGE_KEY, JSON.stringify(wishlist));
+        this.notifyChange()
+      }
+    } catch (error) {
+      console.error('Erro ao atualizar preço atual:', error);
+      throw error;
     }
   }
 
