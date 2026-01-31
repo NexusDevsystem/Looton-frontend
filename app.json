@@ -92,7 +92,7 @@
       "eas": {
         "projectId": "41306841-8939-4568-a1a1-af93af0428d1"
       },
-      "EXPO_PUBLIC_API_URL": "https://looton-backend.onrender.com"
+      "EXPO_PUBLIC_API_URL": "https://looton-backend-production.up.railway.app"
     },
     "owner": "nyill",
     "updates": {
