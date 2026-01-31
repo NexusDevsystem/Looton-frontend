@@ -59,7 +59,7 @@ eas build --platform android --profile preview
 
 - [x] **Versão atualizada** (app.json: version 1.8, versionCode 9)
 - [x] **google-services.json** presente
-- [x] **API_URL configurada** (https://looton-backend.onrender.com)
+- [x] **API_URL configurada** (https://looton-backend-production.up.railway.app)
 - [x] **Notificações testadas** ✅
 - [x] **Redis Cloud conectado** ✅
 - [ ] **Testar app em device físico**
@@ -124,7 +124,7 @@ eas build --platform android --profile production
 | **Version** | 1.8 |
 | **Version Code** | 9 |
 | **Target SDK** | 35 |
-| **Backend URL** | https://looton-backend.onrender.com |
+| **Backend URL** | https://looton-backend-production.up.railway.app |
 
 ---
 

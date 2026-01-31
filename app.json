@@ -3,7 +3,7 @@
     "name": "Looton",
     "slug": "looton-app",
     "version": "1.8",
-    "orientation": "default",
+    "orientation": "portrait",
     "scheme": "looton",
     "entryPoint": "index.js",
     "platforms": [
@@ -19,11 +19,9 @@
     "runtimeVersion": "1.8",
     "android": {
       "package": "com.nexusdevsystem.looton",
-      "versionCode": 10,
+      "versionCode": 9,
       "targetSdkVersion": 35,
       "googleServicesFile": "./google-services.json",
-      "screenOrientation": "fullSensor",
-      "resizeableActivity": true,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/logo.png",
         "backgroundColor": "#1F2937"
@@ -69,9 +67,7 @@
             "compileSdkVersion": 36,
             "targetSdkVersion": 35,
             "buildToolsVersion": "34.0.0",
-            "newArchEnabled": false,
-            "enableProguardInReleaseBuilds": false,
-            "enableShrinkResourcesInReleaseBuilds": false
+            "newArchEnabled": false
           },
           "ios": {
             "newArchEnabled": false
@@ -85,8 +81,7 @@
           "iosAppId": "ca-app-pub-2976862302591431~7964761364"
         }
       ],
-      "expo-router",
-      "./plugins/withAndroidManifestFix.js"
+      "expo-router"
     ],
     "extra": {
       "eas": {

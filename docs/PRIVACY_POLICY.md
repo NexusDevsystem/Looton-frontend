@@ -101,7 +101,7 @@ Serviço complementar de notificações que processa tokens e gerencia o envio d
 
 ### 5.1 Dados no Servidor Backend
 
-**Local de hospedagem:** Render Cloud (https://looton-backend.onrender.com)
+**Local de hospedagem:** Railway Cloud (https://looton-backend-production.up.railway.app)
 
 **Dados armazenados:**
 - Tokens de notificação push (em memória, TTL de 24 horas)
